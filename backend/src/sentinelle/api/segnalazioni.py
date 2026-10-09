@@ -1,0 +1,93 @@
+import json
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from ..config import DIR_FOTO
+from ..db import engine
+from ..fonti import meteo
+from ..rischio import rischio_meteo
+from ..verifica import PESI, calcola_priorita, raccogli_contesto
+
+router = APIRouter()
+
+SELEZIONE = ("SELECT id, utente_id, tipo, ST_Y(geom) AS lat, ST_X(geom) AS lon, foto, priorita, "
+             "motivazioni, stato, creata_il FROM segnalazione")
+
+
+def _json(r) -> dict:
+    return {"id": r.id, "utente_id": r.utente_id, "tipo": r.tipo, "lat": r.lat, "lon": r.lon,
+            "foto_url": f"/foto/{r.foto}" if r.foto else None, "priorita": r.priorita,
+            "motivazioni": r.motivazioni, "stato": r.stato, "creata_il": r.creata_il.isoformat()}
+
+
+@router.post("/segnalazioni")
+def crea_segnalazione(utente_id: int = Form(), tipo: str = Form(), lat: float = Form(), lon: float = Form(),
+                      foto: UploadFile | None = File(None)):
+    if tipo not in ("fuoco", "area_a_rischio"):
+        raise HTTPException(422, "tipo non valido")
+    nome_foto = None
+    if foto and foto.filename:
+        DIR_FOTO.mkdir(exist_ok=True)
+        nome_foto = uuid.uuid4().hex + Path(foto.filename).suffix.lower()
+        (DIR_FOTO / nome_foto).write_bytes(foto.file.read())
+    with Session(engine) as s:
+        esito = calcola_priorita(raccogli_contesto(s, lat, lon), PESI)
+        nuovo = s.execute(text(
+            "INSERT INTO segnalazione (utente_id, tipo, geom, foto, priorita, motivazioni) "
+            "VALUES (:u, :t, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :p, CAST(:m AS jsonb)) RETURNING id"),
+            {"u": utente_id, "t": tipo, "lon": lon, "lat": lat, "f": nome_foto, "p": esito.priorita,
+             "m": json.dumps(esito.motivazioni)}).scalar()
+        s.commit()
+        return _json(s.execute(text(SELEZIONE + " WHERE id = :i"), {"i": nuovo}).one())
+
+
+@router.get("/segnalazioni")
+def elenco(stato: str = "nuova"):
+    with engine.connect() as c:
+        righe = c.execute(text(SELEZIONE + " WHERE stato = :s ORDER BY priorita DESC, creata_il DESC"),
+                          {"s": stato}).all()
+    return [_json(r) for r in righe]
+
+
+def _cambia_stato(id: int, nuovo: str) -> dict:
+    with Session(engine) as s:
+        r = s.execute(text("UPDATE segnalazione SET stato = :n WHERE id = :i RETURNING tipo, utente_id"),
+                      {"n": nuovo, "i": id}).one_or_none()
+        if r is None:
+            raise HTTPException(404, "segnalazione non trovata")
+        if nuovo == "confermata" and r.tipo == "fuoco":
+            s.execute(text("UPDATE utente SET punti = punti + 50 WHERE id = :u"), {"u": r.utente_id})
+        s.commit()
+        return _json(s.execute(text(SELEZIONE + " WHERE id = :i"), {"i": id}).one())
+
+
+@router.post("/segnalazioni/{id}/conferma")
+def conferma(id: int):
+    return _cambia_stato(id, "confermata")
+
+
+@router.post("/segnalazioni/{id}/archivia")
+def archivia(id: int):
+    return _cambia_stato(id, "archiviata")
+
+
+@router.get("/rischio")
+def rischio(lat: float, lon: float):
+    m = meteo(lat, lon)
+    if m is None:
+        return {"valore": 0.0, "livello": "basso", "meteo": None}
+    v = rischio_meteo(m)
+    return {"valore": v, "livello": "basso" if v < 0.33 else "medio" if v < 0.66 else "alto", "meteo": vars(m)}
+
+
+@router.get("/foto/{nome}")
+def foto(nome: str):
+    percorso = DIR_FOTO / Path(nome).name
+    if not percorso.is_file():
+        raise HTTPException(404)
+    return FileResponse(percorso)

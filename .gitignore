@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+node_modules/
+.nuxt/
+.output/
+dist/
+.claude/settings.local.json
+
+# dati geografici pesanti (~280 MB): si rigenerano con scripts/scarica_dati.py o si condividono come dump
+dati/*.geojson
+backend/foto/

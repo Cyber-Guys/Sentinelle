@@ -1,0 +1,6 @@
+hotspot = 0.30
+meteo = 0.25
+suolo = 0.15
+pericolo = 0.10
+vicine = 0.10
+storico = 0.10

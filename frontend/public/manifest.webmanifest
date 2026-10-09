@@ -1,0 +1,9 @@
+{
+  "name": "Sentinelle",
+  "short_name": "Sentinelle",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#fafaf7",
+  "theme_color": "#ea580c",
+  "icons": []
+}

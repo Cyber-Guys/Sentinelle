@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# Avvisa quando un commit tocca il codice senza aggiornare STATO.md.
+# Avvisa, non blocca: refusi e rinomine non spostano lo stato del lavoro, e un
+# hook che blocca verrebbe disattivato.
+#
+# Attivazione (una volta per clone):
+#   git config core.hooksPath .githooks
+
+# "Codice" = tutto cio' che non e' documentazione o configurazione degli agenti.
+codice=$(git diff --cached --name-only --diff-filter=ACMR \
+	| grep -vE '^(docs/|STATO\.md$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|README\.md$|\.githooks/|\.gitignore$|\.env\.example$)' \
+	| head -1)
+stato=$(git diff --cached --name-only --diff-filter=ACMR | grep -c '^STATO\.md$')
+
+if [ -n "$codice" ] && [ "$stato" -eq 0 ]; then
+	printf '\n\033[33mSTATO.md non aggiornato\033[0m\n'
+	printf 'Il commit tocca il codice ma non lo stato del lavoro: chi riprende\n'
+	printf 'partira'"'"' da informazioni vecchie. Se e'"'"' un refuso o una rinomina, ignora.\n\n'
+fi
+
+exit 0

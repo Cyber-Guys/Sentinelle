@@ -1,0 +1,17 @@
+pyproject.toml
+src/sentinelle/__init__.py
+src/sentinelle/config.py
+src/sentinelle/db.py
+src/sentinelle/main.py
+src/sentinelle.egg-info/PKG-INFO
+src/sentinelle.egg-info/SOURCES.txt
+src/sentinelle.egg-info/dependency_links.txt
+src/sentinelle.egg-info/requires.txt
+src/sentinelle.egg-info/top_level.txt
+src/sentinelle/api/__init__.py
+src/sentinelle/api/storico.py
+src/sentinelle/fonti/__init__.py
+src/sentinelle/fonti/cache.py
+src/sentinelle/fonti/corine.py
+src/sentinelle/fonti/firms.py
+src/sentinelle/fonti/meteo.py
