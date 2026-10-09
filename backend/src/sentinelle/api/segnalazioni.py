@@ -10,10 +10,14 @@ from sqlalchemy.orm import Session
 from ..config import DIR_FOTO
 from ..db import engine
 from ..fonti import meteo
+from ..gioco import oggi
 from ..rischio import rischio_meteo
 from ..verifica import PESI, calcola_priorita, raccogli_contesto
 
 router = APIRouter()
+
+PUNTI_AREA = 10
+PUNTI_AREA_LIMITE = 3
 
 SELEZIONE = ("SELECT id, utente_id, tipo, ST_Y(geom) AS lat, ST_X(geom) AS lon, foto, priorita, "
              "motivazioni, stato, creata_il FROM segnalazione")
@@ -42,8 +46,19 @@ def crea_segnalazione(utente_id: int = Form(), tipo: str = Form(), lat: float = 
             "VALUES (:u, :t, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :p, CAST(:m AS jsonb)) RETURNING id"),
             {"u": utente_id, "t": tipo, "lon": lon, "lat": lat, "f": nome_foto, "p": esito.priorita,
              "m": json.dumps(esito.motivazioni)}).scalar()
+        punti_ottenuti = 0
+        if tipo == "area_a_rischio":
+            # +10 subito, al massimo 3 segnalazioni al giorno (ora locale) che danno punti
+            oggi_n = s.execute(text(
+                "SELECT count(*) FROM segnalazione WHERE utente_id = :u AND tipo = 'area_a_rischio' "
+                "AND (creata_il AT TIME ZONE 'Europe/Rome')::date = :g"), {"u": utente_id, "g": oggi()}).scalar()
+            if oggi_n <= PUNTI_AREA_LIMITE:  # include quella appena inserita
+                punti_ottenuti = PUNTI_AREA
+                s.execute(text("UPDATE utente SET punti = punti + :p WHERE id = :u"),
+                          {"p": punti_ottenuti, "u": utente_id})
         s.commit()
-        return _json(s.execute(text(SELEZIONE + " WHERE id = :i"), {"i": nuovo}).one())
+        return {**_json(s.execute(text(SELEZIONE + " WHERE id = :i"), {"i": nuovo}).one()),
+                "punti_ottenuti": punti_ottenuti}
 
 
 @router.get("/segnalazioni")

@@ -1,0 +1,34 @@
+[[missione]]
+codice = "quiz_rischio"
+titolo = "Quiz del rischio di oggi"
+descrizione = "Tre domande di prevenzione: +5 punti per ogni risposta giusta"
+punti = 15
+tipo = "quiz"
+
+[[missione]]
+codice = "punto_acqua"
+titolo = "Punto d'acqua"
+descrizione = "Segnala un punto d'acqua utile ai mezzi antincendio"
+punti = 15
+tipo = "posizione"
+
+[[missione]]
+codice = "sterpaglie"
+titolo = "Sterpaglie secche"
+descrizione = "Mappa un terreno incolto con sterpaglie secche"
+punti = 20
+tipo = "posizione"
+
+[[missione]]
+codice = "rifiuti_strada"
+titolo = "Rifiuti a bordo strada"
+descrizione = "Mappa rifiuti infiammabili a bordo strada"
+punti = 15
+tipo = "posizione"
+
+[[missione]]
+codice = "esplora_comune"
+titolo = "Esplora il tuo comune"
+descrizione = "Scopri gli incendi degli ultimi anni nel tuo comune"
+punti = 10
+tipo = "esplora"

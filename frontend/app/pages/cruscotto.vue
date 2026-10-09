@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { Flame, Check, Ban, Radio } from '@lucide/vue'
+import { Flame, Check, Ban, Radio, Droplets, Leaf, Trash2, Layers } from '@lucide/vue'
 
 const { chiama, urlFoto } = useApi()
 
@@ -10,6 +10,15 @@ const errore = ref('')
 const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
 let timer: ReturnType<typeof setInterval> | undefined
+
+const mostraMappature = ref(false)
+const TIPI_MAPPATURA = [
+  { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', colore: '#0284c7', icona: Droplets },
+  { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', colore: '#ca8a04', icona: Leaf },
+  { codice: 'rifiuti_strada', etichetta: 'Rifiuti a bordo strada', colore: '#7c3aed', icona: Trash2 },
+]
+const COLORE_MAPPATURA: any = ['match', ['get', 'codice'], ...TIPI_MAPPATURA.flatMap((t) => [t.codice, t.colore]), '#6b7068']
+const nMappature = ref(0)
 
 const scheda = computed(() => coda.value.find((s) => s.id === selezionata.value) ?? null)
 
@@ -40,6 +49,7 @@ async function aggiorna() {
 }
 
 watch(selezionata, aggiornaMappa)
+watch(mostraMappature, (v) => mappa?.setLayoutProperty('mappature', 'visibility', v ? 'visible' : 'none'))
 
 onMounted(() => {
   mappa = new maplibregl.Map({ container: contenitore.value!, style: stileOsm, center: [9.0, 40.05], zoom: 7.3 })
@@ -48,6 +58,13 @@ onMounted(() => {
     const m = mappa!
     m.addSource('hotspot', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
     m.addLayer({ id: 'hotspot', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 6, 'circle-color': '#7c2d12', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } })
+    m.addSource('mappature', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+    m.addLayer({ id: 'mappature', type: 'circle', source: 'mappature', layout: { visibility: 'none' }, paint: { 'circle-radius': 7, 'circle-color': COLORE_MAPPATURA, 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } })
+    m.on('click', 'mappature', (ev) => {
+      const p = ev.features?.[0]?.properties
+      if (p) new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>${p.titolo}</b><br>${p.utente}<br>${ora(p.completata_il)}`).addTo(m)
+    })
+    chiama<any>('/mappature').then((g) => { nMappature.value = g.features.length; (m.getSource('mappature') as maplibregl.GeoJSONSource).setData(g) }).catch(() => {})
     m.addSource('coda', { type: 'geojson', data: geojsonCoda() })
     m.addLayer({ id: 'coda', type: 'circle', source: 'coda', paint: {
       'circle-radius': ['case', ['==', ['get', 'selezionata'], 1], 15, 10],
@@ -119,6 +136,14 @@ async function azione(tipo: 'conferma' | 'archivia') {
       </section>
     </aside>
 
-    <div ref="contenitore" class="flex-1" />
+    <div class="relative flex-1">
+      <div class="absolute inset-0"><div ref="contenitore" class="h-full w-full" /></div>
+      <div class="absolute bottom-6 left-3 space-y-1.5 rounded-xl bg-carta/95 p-2.5 text-xs shadow">
+        <button type="button" class="flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold" :class="mostraMappature ? 'bg-bosco text-white' : 'border border-bordo text-testo-2'" @click="mostraMappature = !mostraMappature"><Layers class="size-4" /> Mappature dei cittadini ({{ nMappature }})</button>
+        <ul v-if="mostraMappature" class="space-y-1">
+          <li v-for="t in TIPI_MAPPATURA" :key="t.codice" class="flex items-center gap-1.5"><span class="flex size-5 items-center justify-center rounded-full" :style="{ background: t.colore }"><component :is="t.icona" class="size-3 text-white" /></span>{{ t.etichetta }}</li>
+        </ul>
+      </div>
+    </div>
   </main>
 </template>

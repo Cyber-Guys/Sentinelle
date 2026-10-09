@@ -39,6 +39,8 @@ with psycopg.connect(URL) as con, con.cursor() as cur:
     # DB esistenti: colonna e indice per la geometria semplificata (i nuovi ambienti li hanno da schema.sql)
     cur.execute("ALTER TABLE incendio_storico ADD COLUMN IF NOT EXISTS geom_semplice geometry(MultiPolygon,4326)")
     cur.execute("CREATE INDEX IF NOT EXISTS incendio_storico_geom_semplice_idx ON incendio_storico USING gist (geom_semplice)")
+    # tabelle del gioco (sezione "-- gioco:" di schema.sql, IF NOT EXISTS) prima del TRUNCATE ... CASCADE
+    cur.execute((Path(__file__).resolve().parent.parent / "infra" / "schema.sql").read_text().split("-- gioco:", 1)[1])
     cur.execute("TRUNCATE comune, incendio_storico, pericolo_aib, utente, segnalazione RESTART IDENTITY CASCADE")
 
     for f in json.loads((DATI / "comuni.geojson").read_text())["features"]:

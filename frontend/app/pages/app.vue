@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { Flame, Plus, X, MapPin, LocateFixed, Camera, Star } from '@lucide/vue'
+import { Flame, Plus, X, MapPin, LocateFixed, Camera } from '@lucide/vue'
+import type { Scheda } from '~/components/BarraNavigazione.vue'
 
 const { chiama, urlFoto } = useApi()
 
-const CENTRI: Record<string, [number, number]> = {
-  SERRAMANNA: [8.92, 39.42],
-  VILLASOR: [8.94, 39.38],
-}
+const CENTRI = CENTRI_COMUNI
 
 const utenti = ref<Utente[]>([])
 const utente = ref<Utente | null>(null)
@@ -20,6 +18,13 @@ const foto = ref<File | null>(null)
 const pos = ref<{ lat: number; lon: number } | null>(null)
 const inCorso = ref(false)
 const esito = ref<Segnalazione | null>(null)
+
+const scheda = ref<Scheda>('mappa')
+const missione = ref<Missione | null>(null) // missione `posizione` in attesa del punto sulla mappa
+const toast = ref<{ id: number; testo: string } | null>(null)
+const nuovoLivello = ref<string | null>(null)
+let tToast: ReturnType<typeof setTimeout> | undefined
+let tLivello: ReturnType<typeof setTimeout> | undefined
 
 const FILTRI = [
   { id: '2025', etichetta: '2025', da: 2025 },
@@ -49,10 +54,11 @@ onMounted(async () => {
   } catch (e: any) { errore.value = 'Server non raggiungibile: ' + e.message }
 })
 
-onBeforeUnmount(() => { clearTimeout(timer); mappa?.remove() })
+onBeforeUnmount(() => { clearTimeout(timer); clearTimeout(tToast); clearTimeout(tLivello); mappa?.remove() })
 
 async function scegli(u: Utente) {
   utente.value = u
+  chiama<Utente>(`/utenti/${u.id}`).then((d) => (utente.value = d)).catch(() => {})
   try { localStorage.setItem('utenteId', String(u.id)) } catch {}
   rischio.value = null
   chiama<Rischio>(`/rischio?lat=${centro.value[1]}&lon=${centro.value[0]}`).then((r) => (rischio.value = r)).catch(() => {})
@@ -62,7 +68,7 @@ async function scegli(u: Utente) {
 
 function cambiaUtente() {
   mappa?.remove(); mappa = null; marcatore = null
-  utente.value = null; pannello.value = false; esito.value = null
+  utente.value = null; pannello.value = false; esito.value = null; missione.value = null; scheda.value = 'mappa'
   try { localStorage.removeItem('utenteId') } catch {}
 }
 
@@ -82,13 +88,13 @@ function avviaMappa() {
     m.addLayer({ id: 'hotspot', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 8, 'circle-color': '#f97316', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } })
     m.on('click', 'storico-riempimento', (ev) => {
       const p = ev.features?.[0]?.properties
-      if (!p || pannello.value) return
+      if (!p || pannello.value || missione.value) return
       new maplibregl.Popup().setLngLat(ev.lngLat)
         .setHTML(`<b>${p.data ?? 'data n.d.'}</b> (${p.anno})<br>${p.ettari_totali != null ? Number(p.ettari_totali).toFixed(1) + ' ettari' : 'ettari n.d.'}`)
         .addTo(m)
     })
     m.on('click', (ev) => {
-      if (!pannello.value) return
+      if (!pannello.value && !missione.value) return
       impostaPos(ev.lngLat.lat, ev.lngLat.lng)
     })
     m.on('moveend', pianificaStorico)
@@ -146,6 +152,57 @@ async function chiudi() {
   await nextTick(); mappa?.resize()
 }
 
+// aggiorna header e mostra toast/overlay dopo un'azione che da' punti
+function applicaEsito(r: { punti_ottenuti: number; punti: number; livello: Livello }) {
+  if (!utente.value) return
+  const vecchio = utente.value.livello?.nome
+  utente.value = { ...utente.value, punti: r.punti, livello: r.livello }
+  if (r.punti_ottenuti > 0) {
+    toast.value = { id: Date.now(), testo: `+${r.punti_ottenuti} punti` }
+    clearTimeout(tToast); tToast = setTimeout(() => (toast.value = null), 2500)
+  }
+  if (vecchio && vecchio !== r.livello.nome) {
+    nuovoLivello.value = r.livello.nome
+    clearTimeout(tLivello); tLivello = setTimeout(() => (nuovoLivello.value = null), 3000)
+  }
+}
+
+watch(scheda, async (s) => {
+  if (s === 'mappa') { await nextTick(); mappa?.resize() }
+})
+
+// missione `posizione`: passa alla mappa in modalita' "scegli punto"
+async function scegliPunto(m: Missione) {
+  missione.value = m; pos.value = null; foto.value = null; errore.value = ''
+  marcatore?.remove(); pannello.value = false
+  scheda.value = 'mappa'
+  await nextTick(); mappa?.resize()
+}
+
+async function annullaMissione() {
+  missione.value = null; pos.value = null; marcatore?.remove(); errore.value = ''
+  scheda.value = 'missioni'
+}
+
+async function confermaMissione() {
+  if (!utente.value || !pos.value || !missione.value) return
+  inCorso.value = true; errore.value = ''
+  const f = new FormData()
+  f.append('utente_id', String(utente.value.id))
+  f.append('lat', String(pos.value.lat))
+  f.append('lon', String(pos.value.lon))
+  if (foto.value) f.append('foto', foto.value)
+  try {
+    const r = await chiama<EsitoMissione>(`/missioni/${missione.value.id}/completa`, { method: 'POST', body: f })
+    marcatore?.remove(); pos.value = null; missione.value = null
+    scheda.value = 'missioni'
+    applicaEsito(r)
+  } catch (e: any) {
+    errore.value = String(e.message).startsWith('409') ? 'Hai raggiunto il limite di oggi per questa missione.' : 'Invio non riuscito: ' + e.message
+  }
+  inCorso.value = false
+}
+
 async function invia() {
   if (!utente.value || !pos.value) return
   inCorso.value = true; errore.value = ''
@@ -157,8 +214,10 @@ async function invia() {
   if (foto.value) f.append('foto', foto.value)
   try {
     esito.value = await chiama<Segnalazione>('/segnalazioni', { method: 'POST', body: f })
-    utenti.value = await chiama<Utente[]>('/utenti')
-    utente.value = utenti.value.find((u) => u.id === utente.value!.id) ?? utente.value
+    if (esito.value.punti_ottenuti > 0) {
+      const d = await chiama<Utente>(`/utenti/${utente.value.id}`)
+      applicaEsito({ punti_ottenuti: esito.value.punti_ottenuti, punti: d.punti, livello: d.livello! })
+    }
   } catch (e: any) { errore.value = 'Invio non riuscito: ' + e.message }
   inCorso.value = false
 }
@@ -178,20 +237,22 @@ async function invia() {
     </section>
 
     <template v-else>
-      <header class="flex items-center justify-between gap-2 border-b border-bordo bg-carta px-4 py-2">
-        <button class="text-left" @click="cambiaUtente">
-          <span class="block font-bold leading-tight">{{ utente.nome }}</span>
-          <span class="block text-xs text-testo-2">{{ utente.comune }}</span>
-        </button>
-        <span class="flex items-center gap-1 rounded-full bg-bosco-chiaro px-3 py-1 text-sm font-bold text-bosco"><Star class="size-4" /> {{ utente.punti }}</span>
-        <span class="flex items-center gap-1.5 rounded-full border border-bordo px-3 py-1 text-xs">
-          Rischio oggi
-          <span v-if="rischio" class="rounded-full px-2 py-0.5 font-bold text-white capitalize" :class="coloreRischio">{{ rischio.livello }}</span>
-          <span v-else class="text-testo-2">…</span>
-        </span>
+      <header class="space-y-1.5 border-b border-bordo bg-carta px-4 py-2">
+        <div class="flex items-center justify-between gap-2">
+          <button class="text-left" @click="cambiaUtente">
+            <span class="block font-bold leading-tight">{{ utente.nome }}</span>
+            <span class="block text-xs capitalize text-testo-2">{{ utente.comune.toLowerCase() }}</span>
+          </button>
+          <span class="flex items-center gap-1.5 rounded-full border border-bordo px-3 py-1 text-xs">
+            Rischio oggi
+            <span v-if="rischio" class="rounded-full px-2 py-0.5 font-bold text-white capitalize" :class="coloreRischio">{{ rischio.livello }}</span>
+            <span v-else class="text-testo-2">…</span>
+          </span>
+        </div>
+        <IndicatoreLivello :punti="utente.punti" :livello="utente.livello" />
       </header>
 
-      <div class="relative flex-1 min-h-[180px] flex flex-col">
+      <div v-show="scheda === 'mappa'" class="relative flex-1 min-h-[180px] flex flex-col">
         <div ref="contenitore" class="flex-1" />
         <div class="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-carta/95 p-1 text-xs shadow">
           <button v-for="f in FILTRI" :key="f.id" type="button" class="rounded-full px-2.5 py-1 font-semibold" :class="filtro === f.id ? 'bg-fuoco text-white' : 'text-testo-2'" @click="filtro = f.id">{{ f.etichetta }}</button>
@@ -199,11 +260,30 @@ async function invia() {
         <span v-if="caricando" class="absolute left-2 top-11 rounded-full bg-carta/95 px-2.5 py-1 text-xs text-testo-2 shadow">caricamento…</span>
       </div>
 
-      <div v-if="!pannello" class="p-4 bg-carta border-t border-bordo">
+      <section v-if="scheda === 'mappa' && missione" class="space-y-2 border-t border-bordo bg-carta p-4">
+        <p class="font-bold">{{ missione.titolo }}: scegli il punto</p>
+        <p class="flex items-center gap-1 text-sm" :class="pos ? 'text-bosco font-semibold' : 'text-testo-2'">
+          <MapPin class="size-4" /> {{ pos ? `Punto scelto: ${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : 'Tocca la mappa per indicare il punto' }}
+        </p>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" class="flex items-center justify-center gap-1 rounded-xl border border-bordo p-2.5 text-sm font-semibold" @click="usaGps"><LocateFixed class="size-4" /> Usa GPS</button>
+          <label class="flex items-center justify-center gap-1 rounded-xl border border-dashed border-bordo p-2.5 text-sm">
+            <Camera class="size-4 shrink-0 text-testo-2" /><span class="truncate">{{ foto ? foto.name : 'Foto (facoltativa)' }}</span>
+            <input type="file" accept="image/*" capture="environment" class="hidden" @change="foto = ($event.target as HTMLInputElement).files?.[0] ?? null" />
+          </label>
+        </div>
+        <p v-if="errore" class="text-sm text-alta">{{ errore }}</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" class="rounded-xl border border-bordo py-3 font-semibold" @click="annullaMissione">Annulla</button>
+          <button type="button" class="primario py-3 disabled:opacity-50" :disabled="!pos || inCorso" @click="confermaMissione">{{ inCorso ? 'Invio…' : `Conferma (+${missione.punti})` }}</button>
+        </div>
+      </section>
+
+      <div v-else-if="scheda === 'mappa' && !pannello" class="p-4 bg-carta border-t border-bordo">
         <button class="primario w-full py-5 text-2xl flex items-center justify-center gap-2" @click="apri"><Plus class="size-7" /> Segnala</button>
       </div>
 
-      <section v-else class="max-h-[58vh] overflow-y-auto border-t border-bordo bg-carta p-4 space-y-3">
+      <section v-else-if="scheda === 'mappa'" class="max-h-[58vh] overflow-y-auto border-t border-bordo bg-carta p-4 space-y-3">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold">{{ esito ? 'Segnalazione inviata' : 'Nuova segnalazione' }}</h2>
           <button aria-label="Chiudi" class="p-1" @click="chiudi"><X /></button>
@@ -249,6 +329,12 @@ async function invia() {
           <button class="primario w-full py-4 text-lg disabled:opacity-50" :disabled="!pos || inCorso">{{ inCorso ? 'Invio…' : 'Invia segnalazione' }}</button>
         </form>
       </section>
+
+      <div v-if="scheda === 'missioni'" class="flex-1 overflow-y-auto"><SchedaMissioni :utente="utente" :centro="centro" @esito="applicaEsito" @posizione="scegliPunto" /></div>
+      <div v-if="scheda === 'classifica'" class="flex-1 overflow-y-auto"><SchedaClassifica :comune="utente.comune" :nome-utente="utente.nome" /></div>
+
+      <BarraNavigazione v-model="scheda" />
+      <ToastPunti :toast="toast" :nuovo-livello="nuovoLivello" />
     </template>
   </main>
 </template>

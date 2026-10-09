@@ -16,3 +16,11 @@ CREATE INDEX ON incendio_storico USING gist (geom);
 CREATE INDEX ON incendio_storico USING gist (geom_semplice);
 CREATE INDEX ON pericolo_aib USING gist (geom);
 CREATE INDEX ON segnalazione USING gist (geom);
+-- gioco: missioni e completamenti (idempotente; eseguita anche da carica_dati, semina_demo e avvio app)
+CREATE TABLE IF NOT EXISTS missione (id serial PRIMARY KEY, codice text UNIQUE NOT NULL,
+  titolo text NOT NULL, descrizione text NOT NULL, punti int NOT NULL,
+  tipo text NOT NULL CHECK (tipo IN ('quiz','posizione','esplora')));
+CREATE TABLE IF NOT EXISTS missione_completata (id serial PRIMARY KEY,
+  utente_id int NOT NULL REFERENCES utente, missione_id int NOT NULL REFERENCES missione,
+  punti int NOT NULL, geom geometry(Point,4326), foto text,
+  completata_il timestamptz NOT NULL DEFAULT now());

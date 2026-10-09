@@ -17,3 +17,6 @@ impostazioni = Impostazioni()
 DIR_OFFLINE = RADICE / "dati" / "offline"
 DIR_FOTO = RADICE / "backend" / "foto"
 FILE_PESI = RADICE / "backend" / "config" / "pesi.toml"
+FILE_MISSIONI = RADICE / "backend" / "config" / "missioni.toml"
+FILE_QUIZ = RADICE / "backend" / "config" / "quiz.toml"
+FILE_SCHEMA = RADICE / "infra" / "schema.sql"

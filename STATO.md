@@ -16,13 +16,19 @@ cruscotto, conferma con punti. Mappa storico con filtro anno (default 2025),
 colore per anno e geometrie semplificate precalcolate. Prossimo passo: piano 2, gamification (missioni,
 livelli, classifica comuni), poi rifinitura della demo.
 
+Gamification completata (`docs/piani/2026-10-09-gamification.md`): schede
+Mappa/Missioni/Classifica, quiz del giorno (12 domande in
+`backend/config/quiz.toml`), missioni di posizione, livelli, classifica comuni,
+layer "mappature dei cittadini" nel cruscotto. Dati di gioco simulati con
+`scripts/semina_demo.py`. Prossimo passo: rifinitura della demo e pitch.
+
 ## Chi fa cosa
 
 Ognuno modifica solo la propria riga.
 
 | Persona | Branch | Task corrente | Piano |
 |---|---|---|---|
-| Alessandro | main | piano gamification | — |
+| Alessandro | main | rifinitura demo e pitch | — |
 | Nicholas | — | — | — |
 | Andrea | — | — | — |
 | Nicola | — | — | — |

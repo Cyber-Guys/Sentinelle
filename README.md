@@ -29,6 +29,8 @@ cd frontend && npm install && npm run dev
 
 - Prova end-to-end: `conda run -n sentinelle python scripts/prova_percorso.py`
 - Test della priorita': `cd backend && conda run -n sentinelle pytest -q`
-- Riportare la demo a zero: `docker exec -i infra-db-1 psql -U sentinelle < scripts/reset_demo.sql`
+- Prova del gioco: `conda run -n sentinelle python scripts/prova_gioco.py`
+- Riportare la demo a zero e seminare classifica e mappature simulate:
+  `docker exec -i infra-db-1 psql -U sentinelle < scripts/reset_demo.sql && conda run -n sentinelle python scripts/semina_demo.py`
 - Senza rete: `MODALITA_OFFLINE=1` per il backend (FIRMS, meteo e Corine da `dati/offline/`).
 - Hook: `git config core.hooksPath .githooks`
