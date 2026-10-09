@@ -38,9 +38,16 @@ export const CENTRI_COMUNI: Record<string, [number, number]> = {
 }
 export type Segnalazione = {
   id: number; utente_id: number; tipo: 'fuoco' | 'area_a_rischio'; lat: number; lon: number
-  foto_url: string | null; priorita: number; motivazioni: string[]; stato: string; creata_il: string
-  punti_ottenuti?: number
+  foto_url: string | null; priorita: number; motivazioni: string[]; fattori: Fattore[]; comune: string | null
+  stato: string; creata_il: string; punti_ottenuti?: number
 }
+// un termine della priorita': valore 0..1, peso effettivo (rinormalizzato), contributo in punti 0..100
+export type Fattore = {
+  chiave: 'hotspot' | 'meteo' | 'suolo' | 'pericolo' | 'vicine' | 'storico'; etichetta: string
+  valore: number; peso: number; contributo: number; testo: string; disponibile: boolean
+}
+// 'SAN GAVINO MONREALE' -> 'San Gavino Monreale', "SANT'ANTIOCO" -> "Sant'Antioco"
+export const nomeComune = (c?: string | null) => (c ?? '').toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase())
 export type Rischio = { valore: number; livello: 'basso' | 'medio' | 'alto'; meteo: unknown }
 
 export const coloreAlta = '#ff6a2b'

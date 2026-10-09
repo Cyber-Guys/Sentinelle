@@ -27,7 +27,7 @@ const righe = computed(() => [
   <div class="relative">
     <button
       type="button"
-      class="pillola flex h-12 items-center gap-2 py-1 pr-3.5 pl-2.5"
+      class="pillola flex h-11 items-center gap-2 py-1 pr-3 pl-2.5 transition-colors hover:bg-vetro-forte"
       :aria-expanded="errore ? undefined : aperto"
       :aria-label="errore ? 'Rischio di oggi non disponibile: tocca per riprovare' : rischio ? `Rischio incendio di oggi ${rischio.livello}: mostra i dettagli` : 'Rischio incendio di oggi: caricamento'"
       @click="errore ? emit('riprova') : (aperto = !aperto)"
@@ -37,18 +37,18 @@ const righe = computed(() => [
         <path v-if="rischio" d="M3 18a14 14 0 0 1 28 0" fill="none" :stroke="colore" stroke-width="3.5" stroke-linecap="round" :stroke-dasharray="`${tratto} 100`" />
       </svg>
       <span class="text-left leading-none">
-        <span class="block text-[.6rem] font-semibold uppercase tracking-wide text-testo-3">Rischio</span>
-        <span v-if="rischio" class="mt-0.5 block text-[.86rem] font-bold capitalize" :style="{ color: colore }">{{ rischio.livello }}</span>
+        <span class="etichetta block !text-[.58rem]">Rischio</span>
+        <span v-if="rischio" class="mt-0.5 block text-[.84rem] font-semibold capitalize" :style="{ color: colore }">{{ rischio.livello }}</span>
         <span v-else-if="errore" class="mt-0.5 block text-[.8rem] font-semibold text-testo-2">Riprova</span>
         <span v-else class="scheletro mt-1 block h-3 w-11" aria-hidden="true" />
       </span>
     </button>
 
     <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0 -translate-y-1" leave-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1">
-      <div v-if="aperto && rischio" class="sospeso absolute right-0 top-14 z-30 w-60 p-4">
+      <div v-if="aperto && rischio" class="sospeso absolute right-0 top-[3.25rem] z-30 w-60 p-4">
         <div class="flex items-baseline justify-between">
           <span class="etichetta">Indice di oggi</span>
-          <span class="cifre text-2xl font-bold" :style="{ color: colore }">{{ Math.round(rischio.valore * 100) }}<span class="text-sm text-testo-3">/100</span></span>
+          <span class="cifre text-xl font-semibold" :style="{ color: colore }">{{ Math.round(rischio.valore * 100) }}<span class="text-sm text-testo-3">/100</span></span>
         </div>
         <ul class="mt-3 space-y-2 text-[.84rem]">
           <li v-for="r in righe" :key="r.etichetta" class="flex items-center gap-2">

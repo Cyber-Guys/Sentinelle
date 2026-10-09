@@ -1,10 +1,10 @@
 # Domande di prevenzione generiche. "corretta" e' l'indice (da 0) in "opzioni".
 
 [[domanda]]
-domanda = "Vedi un incendio boschivo. Qual e' la prima cosa da fare?"
+domanda = "Vedi un incendio boschivo. Qual è la prima cosa da fare?"
 opzioni = ["Provare a spegnerlo da solo con un secchio", "Filmarlo e pubblicarlo sui social", "Chiamare subito il 1515 (Corpo Forestale) o il 112", "Aspettare di capire se si estende"]
 corretta = 2
-spiegazione = "Dare l'allarme subito, con la posizione piu' precisa possibile, e' la cosa che aiuta di piu'."
+spiegazione = "Dare l'allarme subito, con la posizione più precisa possibile, è la cosa che aiuta di più."
 
 [[domanda]]
 domanda = "Il fuoco si avvicina mentre sei a piedi. Come ti muovi?"
@@ -14,15 +14,15 @@ spiegazione = "Il fuoco sale veloce lungo i pendii e con il vento: ci si allonta
 
 [[domanda]]
 domanda = "Come si spegne correttamente un mozzicone di sigaretta?"
-opzioni = ["Lo si butta dal finestrino, tanto e' spento", "Lo si lascia sul bordo della strada", "Lo si getta nell'erba umida", "Lo si schiaccia bene e lo si getta in un contenitore, mai nella vegetazione"]
+opzioni = ["Lo si butta dal finestrino, tanto è spento", "Lo si lascia sul bordo della strada", "Lo si getta nell'erba umida", "Lo si schiaccia bene e lo si getta in un contenitore, mai nella vegetazione"]
 corretta = 3
-spiegazione = "Un mozzicone gettato in strada o nell'erba secca puo' innescare un incendio: va spento e smaltito nei rifiuti."
+spiegazione = "Un mozzicone gettato in strada o nell'erba secca può innescare un incendio: va spento e smaltito nei rifiuti."
 
 [[domanda]]
-domanda = "Dove e' piu' sicuro accendere un barbecue in estate?"
+domanda = "Dove è più sicuro accendere un barbecue in estate?"
 opzioni = ["Sotto gli alberi, per fare ombra", "Solo in aree attrezzate e consentite, lontano dalla vegetazione, con acqua a portata di mano", "Ai margini di un campo di stoppie", "Ovunque, se non tira vento"]
 corretta = 1
-spiegazione = "In periodo di rischio il fuoco va acceso solo dove e' permesso, lontano da erba secca e con acqua pronta."
+spiegazione = "In periodo di rischio il fuoco va acceso solo dove è permesso, lontano da erba secca e con acqua pronta."
 
 [[domanda]]
 domanda = "A cosa serve una fascia tagliafuoco?"
@@ -31,26 +31,26 @@ corretta = 1
 spiegazione = "Una fascia priva di vegetazione secca rallenta il fuoco e offre una base sicura a chi lo contrasta."
 
 [[domanda]]
-domanda = "Quando il rischio di incendio e' piu' alto?"
+domanda = "Quando il rischio di incendio è più alto?"
 opzioni = ["Con clima fresco e umido", "Subito dopo un temporale", "Di notte con pioggia leggera", "Con caldo, vegetazione secca e vento forte"]
 corretta = 3
-spiegazione = "Temperatura alta, aria secca e vento fanno propagare il fuoco molto piu' in fretta."
+spiegazione = "Temperatura alta, aria secca e vento fanno propagare il fuoco molto più in fretta."
 
 [[domanda]]
-domanda = "Quali informazioni sono piu' utili quando segnali un incendio?"
+domanda = "Quali informazioni sono più utili quando segnali un incendio?"
 opzioni = ["Dove si trova (comune, strada, punti di riferimento), cosa brucia e se ci sono persone o case vicine", "Solo il tuo nome", "Il numero di auto che passano", "Una foto scattata da vicino, a ogni costo"]
 corretta = 0
 spiegazione = "Posizione e situazione permettono di inviare i mezzi giusti. Mai avvicinarsi per una foto."
 
 [[domanda]]
 domanda = "Un incendio minaccia la tua casa e ti viene detto di evacuare. Cosa fai?"
-opzioni = ["Resto a difendere la casa con il tubo da giardino", "Aspetto che il fuoco arrivi al cancello", "Seguo le indicazioni delle autorita' e lascio la zona senza perdere tempo", "Torno indietro a prendere gli oggetti dimenticati"]
+opzioni = ["Resto a difendere la casa con il tubo da giardino", "Aspetto che il fuoco arrivi al cancello", "Seguo le indicazioni delle autorità e lascio la zona senza perdere tempo", "Torno indietro a prendere gli oggetti dimenticati"]
 corretta = 2
 spiegazione = "La vita viene prima delle cose: l'evacuazione va fatta presto e secondo le indicazioni ricevute."
 
 [[domanda]]
-domanda = "Perche' le sterpaglie secche vicino a case e strade sono un problema?"
-opzioni = ["Perche' non sono belle da vedere", "Perche' attirano gli insetti", "Non sono un problema", "Perche' bruciano facilmente e portano il fuoco verso abitazioni e vie di fuga"]
+domanda = "Perché le sterpaglie secche vicino a case e strade sono un problema?"
+opzioni = ["Perché non sono belle da vedere", "Perché attirano gli insetti", "Non sono un problema", "Perché bruciano facilmente e portano il fuoco verso abitazioni e vie di fuga"]
 corretta = 3
 spiegazione = "Il combustibile vicino a case e strade fa avvicinare il fuoco: tenerlo sotto controllo riduce il rischio."
 
@@ -61,8 +61,8 @@ corretta = 0
 spiegazione = "Vegetazione fitta e strade senza uscita sono trappole: serve sempre una via di fuga libera."
 
 [[domanda]]
-domanda = "Quale comportamento e' sempre da evitare in un bosco o in campagna in estate?"
-opzioni = ["Camminare sui sentieri", "Portare con se' una borraccia d'acqua", "Accendere fuochi, lanciare petardi o usare fiamme libere fuori dalle aree consentite", "Tenere il telefono carico"]
+domanda = "Quale comportamento è sempre da evitare in un bosco o in campagna in estate?"
+opzioni = ["Camminare sui sentieri", "Portare con sé una borraccia d'acqua", "Accendere fuochi, lanciare petardi o usare fiamme libere fuori dalle aree consentite", "Tenere il telefono carico"]
 corretta = 2
 spiegazione = "Fiamme libere e fuochi d'artificio in campagna sono una causa tipica di incendi: da evitare."
 

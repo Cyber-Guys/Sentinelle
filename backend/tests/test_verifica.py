@@ -34,3 +34,22 @@ def test_una_motivazione_per_termine():
     assert len(calcola_priorita(c, PESI).motivazioni) == 6
     c2 = Contesto(None, None, None, "Medio", 0, 0)
     assert len(calcola_priorita(c2, PESI).motivazioni) == 6
+
+
+def test_fattori_strutturati_e_contributi():
+    c = Contesto(3.0, METEO_CALMO, (211, "Seminativi in aree non irrigue"), "Medioalto", 1, 25)
+    e = calcola_priorita(c, PESI)
+    assert [f["chiave"] for f in e.fattori] == ["hotspot", "meteo", "suolo", "pericolo", "vicine", "storico"]
+    assert abs(sum(f["contributo"] for f in e.fattori) - e.priorita) <= 1
+    assert abs(sum(f["peso"] for f in e.fattori) - 1) < 1e-3
+    assert "Pericolo regionale: medio-alto" in e.motivazioni
+    assert any("umidità 95%" in m for m in e.motivazioni)
+
+
+def test_fattore_non_disponibile_peso_zero():
+    c = Contesto(None, None, None, None, 0, 0)
+    e = calcola_priorita(c, PESI)
+    off = [f for f in e.fattori if not f["disponibile"]]
+    assert {f["chiave"] for f in off} == {"hotspot", "meteo", "suolo"}
+    assert all(f["peso"] == 0 and f["contributo"] == 0 for f in off)
+    assert "Nessun'altra segnalazione entro 2 km nell'ultima ora" in e.motivazioni

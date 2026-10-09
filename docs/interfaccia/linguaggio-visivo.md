@@ -8,6 +8,11 @@ Sardegna con un fuoco all'orizzonte**.
 
 ## Principi
 
+- **Professionale, non giocattolo.** Strumento operativo (riferimenti: Linear, Vercel, Waze
+  notte): forme tondeggianti con raggi concentrici (vedi "Raggi"), bagliori solo dove servono (niente aloni
+  attorno a loghi e pulsanti), pesi tipografici asciutti (titoli 600, cifre grandi 600), densita'
+  da strumento, controlli alti 32-44 px. Header e controlli hanno larghezza intrinseca; fogli e
+  pannelli hanno larghezza massima (440-480 px) e crescono col contenuto.
 - **Scuro per primo.** Il tema scuro e' il default e quello curato di piu';
   il chiaro e' un'alternativa dignitosa, attivata da un interruttore.
 - **Atmosfera sotto tutto.** Fondo quasi nero blu-notte; in basso un bagliore
@@ -28,7 +33,7 @@ Sardegna con un fuoco all'orizzonte**.
 - **Cifre come contenuto.** Punti, priorita', ettari in caratteri grandi,
   `tabular-nums`. Stati sempre colore + parola/icona, mai colore da solo.
 - **Movimento sobrio.** Transizioni 150-250 ms, numeri che contano verso il
-  valore nuovo, pulsazione lenta sui marker di fuoco. Tutto spento con
+  valore nuovo, pin pulsanti sulla mappa (vedi "Pin pulsanti"). Tutto spento con
   `prefers-reduced-motion`.
 - **Icone** solo `@lucide/vue`.
 
@@ -49,7 +54,48 @@ Scala della priorita' (anche per il rischio): bassa `macchia`, media `ambra`,
 alta `brace`, sempre con l'etichetta. Incendi storici: da ambra tenue (vecchi)
 a brace (recenti).
 
-Raggi: 10 / 14 / 20 px, pillole 999 px. Font di sistema (SF Pro su Apple).
+Font di sistema (SF Pro su Apple).
+
+## Raggi concentrici
+
+Token in `tema.css` (`@theme`, utility Tailwind `rounded-l|m|s`):
+
+| Token | Valore | Dove |
+|---|---|---|
+| `--radius-l` | 22 px | contenitori: fogli `sospeso`, riquadri `vetro`, coda e scheda del cruscotto, card della home, popup della mappa |
+| `--radius-m` | 10 px | elementi dentro un contenitore: righe, campi, tessere, vetro annidato, foto |
+| `--radius-s` | 6 px | secondo livello: icone in riquadro dentro una tessera, scheletri |
+| `--radius-ctrl` / `--radius-pill` | 999 px | pillole: navigazione, filtri anni, header utente, rischio, tema, legenda e controlli mappa, Segnala, pulsanti `primario` e `secondario`, badge |
+
+- **Regola:** raggio interno = raggio del contenitore - padding che li separa. Per questo fogli
+  e coda hanno padding 12 px (22 - 12 = 10 = `--radius-m`). Se il risultato scende sotto 6 si usa 6.
+- **Vetro annidato:** `:where(.sospeso, .vetro) .vetro` prende da solo `--radius-m` (tessere
+  delle missioni, righe della classifica, `StatoErrore` nella coda).
+- **Pillole dentro pillole:** stessa regola (filtri anni: pillola esterna con 3 px di padding,
+  bottoni interni `rounded-full`); il campo posizione del foglio e' una pillola col pulsante GPS dentro.
+- Azioni = pillole; superfici (tessere, campi, righe) = concentriche. Niente raggi scritti a mano
+  nei componenti, salvo i loghi (`rounded-[32%]`, squircle che scala con la misura).
+
+## Pin pulsanti
+
+Linguaggio comune dei punti sulla mappa: punto pieno con bordo scuro (chiaro nel tema chiaro) +
+alone che si muove. Colore per significato, sempre accompagnato da testo altrove (coda, legenda, foglio).
+
+| Dove | Colore | Movimento |
+|---|---|---|
+| Segnalazioni nuove (cruscotto) | priorita': `macchia` / `ambra` / `brace` | onda che si allarga e svanisce, 2,6 s |
+| Segnalazione selezionata (cruscotto) | colore della priorita' | in piu' un anello (solo bordo) piu' rapido, 1,6 s; punto piu' grande con bordo chiaro |
+| Hotspot satellitari (app e cruscotto) | `brace` | respiro lento (cresce e cala), 3,8 s; punto piccolo |
+| Punto scelto nell'app | fuoco `brace`, area a rischio `ambra`, missione `posizione` `macchia` | onda 2,6 s |
+| Posizione dell'utente ("tu sei qui") | `cielo` (`.pin-cielo`) | onda; oggi non mostrata: il GPS imposta il punto scelto |
+
+- **Layer MapLibre** (coda, hotspot): `animaAloni()` in `useMappa.ts`, un solo
+  `requestAnimationFrame` per mappa che aggiorna raggio/opacita' dei layer di alone: il costo non
+  cresce col numero di pin. Nell'app parte solo se ci sono hotspot (niente ridisegno a vuoto).
+- **Marker HTML** (punto scelto): classe `.pin` (+ `.pin-ambra|macchia|cielo`) in `tema.css`, onda
+  in CSS (`scale` + `opacity`, solo compositor).
+- **Reduced-motion:** niente animazione; i valori statici dei layer e la base di `.pin::before`
+  sono un alone fisso, quindi il pin resta leggibile.
 
 ## Interruttore del tema
 
@@ -65,8 +111,13 @@ cruscotto. Lo stile della mappa base cambia insieme al tema.
 - **Indicatore del rischio di oggi**: arco/gauge con valore, livello in parola
   e le grandezze meteo che lo determinano (vento, umidita', giorni senza
   pioggia), come `WidgetTempo` di CIA.
-- **Scheda segnalazione**: priorita' come numero grande dentro un anello
-  colorato, motivazioni come righe con icona.
+- **Scomposizione della priorita'** (`ScomposizionePriorita.vue`, app e cruscotto): cifra grande
+  + livello in parola + scala sottile 0-100 con soglie 30/60; poi una riga per fattore (icona,
+  etichetta, testo del valore, barra del contributo, punti a destra in cifre tabulari). Le barre
+  hanno scala comune (100% = contributo massimo del fattore piu' pesante): traccia chiara = massimo
+  del fattore, riempimento = punti apportati, colore per intensita' del valore. Fattori non
+  disponibili in grigio con "n.d.". Dati da `fattori` della segnalazione (backend `verifica.py`);
+  le segnalazioni vecchie senza fattori mostrano le motivazioni.
 
 ## Emerso in implementazione
 
@@ -110,4 +161,15 @@ cruscotto. Lo stile della mappa base cambia insieme al tema.
 - **Glifi della mappa**: in `public/basemap/fonts` ci sono solo gli intervalli latini; la rotta
   `server/routes/basemap/fonts/[...intervallo].ts` risponde pbf vuoto agli altri (arabo e
   tifinagh delle etichette nordafricane a zoom 6), altrimenti console piena di avvisi.
-- Mappa scura: terra `#11151c`, mare `#0a1729` (blu-notte), verde appena piu' chiaro della terra.
+- **Stile mappa (Waze notte)**: in `useMappa.ts` si sovrascrivono solo i colori del flavor Protomaps.
+  Terra blu-ardesia `#1a2130`, mare blu-notte `#0a1426`, linea di costa `#2b4568` (layer `costa`
+  aggiunto sopra l'acqua), strade in gerarchia (autostrade `#8f9cb6`, principali `#66728b`, minori
+  `#2b3343`-`#323b4d`), etichette chiare con alone scuro, verde/urbano appena accennati. Lo storico
+  (ambra -> brace) e' l'unico colore caldo sulla carta. Chiaro: terra `#f1efe9`, mare `#b4cfe6`,
+  vegetazione desaturata.
+- **Niente bande allo zoom out**: `background` dello stile = colore del mare; `limitaMappa()` imposta
+  `maxBounds` (lat dentro l'estratto 38.77-41.33, lon 5.6-12.3 dove c'e' solo mare aperto) e uno
+  zoom minimo ricalcolato a ogni resize perche' i limiti riempiano sempre la finestra (verificato a
+  375x812, 1440x900, 2560x1440).
+- **Cruscotto**: la coda cresce col contenuto e si ferma sopra la barra in basso (legenda a sinistra,
+  attribuzione e zoom in riga a destra, stessa altezza 36 px); la scheda dettaglio fa lo stesso a destra.

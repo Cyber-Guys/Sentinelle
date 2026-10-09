@@ -36,10 +36,10 @@ def _conteggi(s: Session, utente_id: int, missione_id: int) -> tuple[int, int]:
 def _limite(tipo: str, oggi_n: int, totale: int) -> str | None:
     """Motivo per cui la missione non e' disponibile, None se lo e'."""
     if tipo == "esplora":
-        return "Gia' completata" if totale >= 1 else None
+        return "Già completata" if totale >= 1 else None
     massimo = LIMITI_GIORNALIERI[tipo]
     if oggi_n >= massimo:
-        return "Gia' fatta oggi" if massimo == 1 else f"Limite di {massimo} al giorno raggiunto"
+        return "Già fatta oggi" if massimo == 1 else f"Limite di {massimo} al giorno raggiunto"
     return None
 
 

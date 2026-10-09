@@ -19,14 +19,16 @@ router = APIRouter()
 PUNTI_AREA = 10
 PUNTI_AREA_LIMITE = 3
 
-SELEZIONE = ("SELECT id, utente_id, tipo, ST_Y(geom) AS lat, ST_X(geom) AS lon, foto, priorita, "
-             "motivazioni, stato, creata_il FROM segnalazione")
+SELEZIONE = ("SELECT s.id, s.utente_id, s.tipo, ST_Y(s.geom) AS lat, ST_X(s.geom) AS lon, s.foto, s.priorita, "
+             "s.motivazioni, s.fattori, s.stato, s.creata_il, "
+             "(SELECT c.nome FROM comune c WHERE ST_Intersects(c.geom, s.geom) LIMIT 1) AS comune "
+             "FROM segnalazione s")
 
 
 def _json(r) -> dict:
     return {"id": r.id, "utente_id": r.utente_id, "tipo": r.tipo, "lat": r.lat, "lon": r.lon,
             "foto_url": f"/foto/{r.foto}" if r.foto else None, "priorita": r.priorita,
-            "motivazioni": r.motivazioni, "stato": r.stato, "creata_il": r.creata_il.isoformat()}
+            "motivazioni": r.motivazioni, "fattori": r.fattori or [], "comune": r.comune, "stato": r.stato, "creata_il": r.creata_il.isoformat()}
 
 
 @router.post("/segnalazioni")
@@ -42,10 +44,11 @@ def crea_segnalazione(utente_id: int = Form(), tipo: str = Form(), lat: float = 
     with Session(engine) as s:
         esito = calcola_priorita(raccogli_contesto(s, lat, lon), PESI)
         nuovo = s.execute(text(
-            "INSERT INTO segnalazione (utente_id, tipo, geom, foto, priorita, motivazioni) "
-            "VALUES (:u, :t, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :p, CAST(:m AS jsonb)) RETURNING id"),
+            "INSERT INTO segnalazione (utente_id, tipo, geom, foto, priorita, motivazioni, fattori) "
+            "VALUES (:u, :t, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :p, CAST(:m AS jsonb), "
+            "CAST(:fa AS jsonb)) RETURNING id"),
             {"u": utente_id, "t": tipo, "lon": lon, "lat": lat, "f": nome_foto, "p": esito.priorita,
-             "m": json.dumps(esito.motivazioni)}).scalar()
+             "m": json.dumps(esito.motivazioni), "fa": json.dumps(esito.fattori)}).scalar()
         punti_ottenuti = 0
         if tipo == "area_a_rischio":
             # +10 subito, al massimo 3 segnalazioni al giorno (ora locale) che danno punti
@@ -57,14 +60,14 @@ def crea_segnalazione(utente_id: int = Form(), tipo: str = Form(), lat: float = 
                 s.execute(text("UPDATE utente SET punti = punti + :p WHERE id = :u"),
                           {"p": punti_ottenuti, "u": utente_id})
         s.commit()
-        return {**_json(s.execute(text(SELEZIONE + " WHERE id = :i"), {"i": nuovo}).one()),
+        return {**_json(s.execute(text(SELEZIONE + " WHERE s.id = :i"), {"i": nuovo}).one()),
                 "punti_ottenuti": punti_ottenuti}
 
 
 @router.get("/segnalazioni")
 def elenco(stato: str = "nuova"):
     with engine.connect() as c:
-        righe = c.execute(text(SELEZIONE + " WHERE stato = :s ORDER BY priorita DESC, creata_il DESC"),
+        righe = c.execute(text(SELEZIONE + " WHERE s.stato = :s ORDER BY s.priorita DESC, s.creata_il DESC"),
                           {"s": stato}).all()
     return [_json(r) for r in righe]
 
@@ -78,7 +81,7 @@ def _cambia_stato(id: int, nuovo: str) -> dict:
         if nuovo == "confermata" and r.tipo == "fuoco":
             s.execute(text("UPDATE utente SET punti = punti + 50 WHERE id = :u"), {"u": r.utente_id})
         s.commit()
-        return _json(s.execute(text(SELEZIONE + " WHERE id = :i"), {"i": id}).one())
+        return _json(s.execute(text(SELEZIONE + " WHERE s.id = :i"), {"i": id}).one())
 
 
 @router.post("/segnalazioni/{id}/conferma")

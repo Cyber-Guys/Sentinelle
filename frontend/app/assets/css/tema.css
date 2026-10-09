@@ -19,7 +19,7 @@ html[data-tema='scuro'] {
   --testo-3: #8a867e;
   --vetro: rgba(255, 255, 255, 0.045);
   --vetro-forte: rgba(255, 255, 255, 0.075);
-  --vetro-mappa: rgba(11, 14, 20, 0.72);
+  --vetro-mappa: rgba(12, 16, 24, 0.8);
   --bordo: rgba(255, 255, 255, 0.08);
   --bordo-luce: rgba(255, 255, 255, 0.16);
   --brace: #ff6a2b;
@@ -27,12 +27,11 @@ html[data-tema='scuro'] {
   --ambra: #f5b83d;
   --macchia: #3fb37f;
   --cielo: #5aa9e6;
-  --ombra: 0 24px 60px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.3);
-  --ombra-pillola: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --ombra: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.25);
+  --ombra-pillola: 0 4px 14px -6px rgba(0, 0, 0, 0.55);
   --atmosfera:
-    radial-gradient(90% 55% at 50% 118%, rgba(255, 90, 31, 0.22), transparent 62%),
-    radial-gradient(55% 30% at 18% 108%, rgba(232, 53, 31, 0.12), transparent 70%),
-    radial-gradient(80% 45% at 50% -12%, rgba(63, 179, 127, 0.1), transparent 64%),
+    radial-gradient(90% 55% at 50% 118%, rgba(255, 90, 31, 0.11), transparent 62%),
+    radial-gradient(80% 45% at 50% -12%, rgba(63, 179, 127, 0.05), transparent 64%),
     linear-gradient(180deg, #0a0f15 0%, #07090d 55%, #0b0806 100%);
 }
 
@@ -46,7 +45,7 @@ html[data-tema='chiaro'] {
   --testo-3: #6d6960;
   --vetro: rgba(255, 255, 255, 0.62);
   --vetro-forte: rgba(255, 255, 255, 0.82);
-  --vetro-mappa: rgba(255, 255, 255, 0.8);
+  --vetro-mappa: rgba(255, 255, 255, 0.86);
   --bordo: rgba(20, 20, 10, 0.08);
   --bordo-luce: rgba(20, 20, 10, 0.14);
   /* nel chiaro le tinte usate come testo scendono di luminosita' per il contrasto */
@@ -55,11 +54,11 @@ html[data-tema='chiaro'] {
   --ambra: #956207;
   --macchia: #277752;
   --cielo: #2a72ad;
-  --ombra: 0 24px 50px -16px rgba(60, 40, 20, 0.28), 0 0 0 1px rgba(20, 20, 10, 0.04);
-  --ombra-pillola: 0 6px 20px -8px rgba(60, 40, 20, 0.25);
+  --ombra: 0 16px 36px -14px rgba(40, 30, 20, 0.22), 0 0 0 1px rgba(20, 20, 10, 0.04);
+  --ombra-pillola: 0 3px 12px -6px rgba(40, 30, 20, 0.22);
   --atmosfera:
-    radial-gradient(90% 50% at 50% 120%, rgba(255, 106, 43, 0.16), transparent 62%),
-    radial-gradient(80% 45% at 50% -12%, rgba(47, 143, 99, 0.1), transparent 64%),
+    radial-gradient(90% 50% at 50% 120%, rgba(255, 106, 43, 0.08), transparent 62%),
+    radial-gradient(80% 45% at 50% -12%, rgba(47, 143, 99, 0.05), transparent 64%),
     linear-gradient(180deg, #f3f2ec 0%, #f6f4ef 60%, #f8efe6 100%);
 }
 
@@ -86,9 +85,14 @@ html[data-tema='chiaro'] {
 }
 
 @theme {
-  --radius-s: 10px;
-  --radius-m: 14px;
-  --radius-l: 20px;
+  /*
+    Raggi concentrici: contenitore 22, interno = contenitore - padding che li separa
+    (22 - 12 = 10), secondo livello 6. Controlli e pulsanti sono pillole.
+  */
+  --radius-l: 22px;
+  --radius-m: 10px;
+  --radius-s: 6px;
+  --radius-ctrl: 999px;
   --radius-pill: 999px;
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
@@ -164,8 +168,13 @@ body::after {
   background: var(--vetro);
   border: 1px solid var(--bordo);
   border-top-color: var(--bordo-luce);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-l);
   backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* Vetro dentro un contenitore (foglio, coda, altro vetro): raggio interno concentrico. */
+:where(.sospeso, .vetro) .vetro {
+  border-radius: var(--radius-m);
 }
 
 /* Sopra la mappa il vetro e' piu' denso: le etichette della carta non devono leggersi attraverso. */
@@ -173,7 +182,7 @@ body::after {
   background: var(--vetro-mappa);
   border: 1px solid var(--bordo);
   border-top-color: var(--bordo-luce);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-ctrl);
   backdrop-filter: blur(20px) saturate(160%);
   box-shadow: var(--ombra-pillola);
 }
@@ -188,13 +197,14 @@ body::after {
 
 /* L'unico accento pieno della schermata. */
 @utility primario {
-  background: linear-gradient(135deg, #f45a1e, #d92d17);
+  background: linear-gradient(180deg, #f2581d, #dc3a18);
   color: #fff;
-  font-weight: 700;
-  border-radius: var(--radius-pill);
+  font-weight: 600;
+  border-radius: var(--radius-ctrl);
   box-shadow:
-    0 10px 30px -8px rgba(255, 90, 31, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 6px 16px -8px rgba(232, 70, 25, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
   transition: scale 0.12s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   &:disabled {
     opacity: 0.45;
@@ -207,8 +217,8 @@ body::after {
   border: 1px solid var(--bordo);
   border-top-color: var(--bordo-luce);
   color: var(--testo);
-  font-weight: 600;
-  border-radius: var(--radius-pill);
+  font-weight: 550;
+  border-radius: var(--radius-ctrl);
   transition: background-color 0.15s ease, scale 0.12s ease;
   &:hover:not(:disabled) {
     background: color-mix(in srgb, var(--vetro-forte) 60%, var(--bordo-luce));
@@ -218,8 +228,8 @@ body::after {
 @utility etichetta {
   color: var(--testo-3);
   font-size: 0.66rem;
-  font-weight: 650;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
@@ -269,11 +279,49 @@ body::after {
   animation: pulsa 2.4s ease-in-out infinite;
 }
 
+/*
+  PIN PULSANTI: punto pieno con bordo + onda che si allarga e svanisce.
+  Stesso disegno dei layer animati della mappa (`animaAloni` in useMappa.ts).
+  Colore per significato: --pin = brace/ambra/macchia (priorita', tipo), cielo (utente).
+  Con reduced-motion l'onda resta ferma come alone fisso.
+*/
+@keyframes pin-onda {
+  from { scale: 1; opacity: 0.55; }
+  to { scale: 3; opacity: 0; }
+}
+.pin {
+  --pin: var(--brace);
+  position: relative;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+.pin::before,
+.pin::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--pin);
+}
+.pin::before {
+  scale: 2;
+  opacity: 0.22;
+  animation: pin-onda 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+.pin::after {
+  border: 3px solid var(--fondo-3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.pin-ambra { --pin: var(--ambra); }
+.pin-macchia { --pin: var(--macchia); }
+.pin-cielo { --pin: var(--cielo); }
+
 /* MapLibre: controlli e popup nello stesso vetro */
 .maplibregl-ctrl-group {
   background: var(--vetro-mappa) !important;
   border: 1px solid var(--bordo);
-  border-radius: var(--radius-m) !important;
+  border-radius: var(--radius-ctrl) !important;
   backdrop-filter: blur(20px);
   box-shadow: var(--ombra-pillola) !important;
   overflow: hidden;
@@ -294,9 +342,9 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
   background: var(--fondo-3) !important;
   color: var(--testo);
   border: 1px solid var(--bordo-luce);
-  border-radius: var(--radius-m) !important;
+  border-radius: var(--radius-l) !important;
   box-shadow: var(--ombra) !important;
-  padding: 10px 14px !important;
+  padding: 12px 16px !important;
   font: 13px/1.4 var(--font-sans);
 }
 .maplibregl-popup-tip { display: none !important; }
@@ -304,8 +352,8 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
   color: var(--testo-2);
   width: 28px;
   height: 28px;
-  top: 4px !important;
-  right: 4px !important;
+  top: 6px !important;
+  right: 6px !important;
   border-radius: 999px;
   font-size: 18px;
   line-height: 1;
@@ -325,4 +373,5 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
   }
   :active { scale: none !important; }
   .scheletro { background: var(--vetro-forte); }
+  .pin::before { animation: none; }
 }

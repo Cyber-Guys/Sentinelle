@@ -91,17 +91,17 @@ async function completaEsplora() {
 </script>
 
 <template>
-  <div class="p-4">
-    <p v-if="errore" class="mb-3 rounded-[var(--radius-m)] border border-brace/40 bg-brace/10 p-3 text-sm text-brace" role="alert">{{ errore }}</p>
+  <div class="p-3">
+    <p v-if="errore" class="mb-3 rounded-m border border-brace/40 bg-brace/10 p-3 text-sm text-brace" role="alert">{{ errore }}</p>
 
     <!-- elenco -->
     <template v-if="!attiva">
       <p class="etichetta">Oggi</p>
-      <h2 class="mt-0.5 mb-3 text-xl font-semibold tracking-tight">Missioni di prevenzione</h2>
+      <h2 class="mt-0.5 mb-3 text-lg font-semibold tracking-tight">Missioni di prevenzione</h2>
       <StatoErrore v-if="erroreElenco" :messaggio="erroreElenco" @riprova="carica" />
       <ul v-else-if="caricamento" class="space-y-2" aria-busy="true" aria-label="Caricamento delle missioni">
         <li v-for="k in 4" :key="k" class="vetro flex items-center gap-3 p-3">
-          <span class="scheletro size-11 shrink-0 !rounded-[12px]" />
+          <span class="scheletro size-9 shrink-0" />
           <span class="flex-1 space-y-2"><span class="scheletro block h-3.5 w-36" /><span class="scheletro block h-2.5 w-48 max-w-full" /></span>
           <span class="scheletro h-6 w-11 !rounded-full" />
         </li>
@@ -110,14 +110,14 @@ async function completaEsplora() {
       <ul v-else class="space-y-2">
         <li v-for="m in missioni" :key="m.id">
           <button type="button" class="vetro flex w-full items-center gap-3 p-3 text-left transition-colors" :class="m.disponibile ? 'hover:bg-vetro-forte active:bg-vetro-forte' : 'opacity-75'" :disabled="!m.disponibile" @click="apri(m)">
-            <span class="flex size-11 shrink-0 items-center justify-center rounded-[12px] ring-1" :class="m.disponibile ? 'bg-brace/12 text-brace ring-brace/25' : 'bg-macchia/12 text-macchia ring-macchia/25'">
-              <Check v-if="!m.disponibile" class="size-5" aria-hidden="true" /><component :is="ICONE[m.codice] ?? Compass" v-else class="size-5" aria-hidden="true" />
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-s ring-1" :class="m.disponibile ? 'bg-brace/12 text-brace ring-brace/25' : 'bg-macchia/12 text-macchia ring-macchia/25'">
+              <Check v-if="!m.disponibile" class="size-4" aria-hidden="true" /><component :is="ICONE[m.codice] ?? Compass" v-else class="size-4" aria-hidden="true" />
             </span>
             <span class="min-w-0 flex-1 leading-tight">
-              <span class="block font-semibold">{{ m.titolo }}</span>
+              <span class="block text-[.9rem] font-semibold">{{ m.titolo }}</span>
               <span class="mt-0.5 block text-[.78rem]" :class="m.disponibile ? 'text-testo-2' : 'text-macchia'">{{ m.disponibile ? m.descrizione : (m.motivo ?? 'Completata') }}</span>
             </span>
-            <span class="cifre flex shrink-0 items-center gap-1 rounded-full bg-ambra/12 px-2 py-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3 fill-current" aria-hidden="true" />{{ m.punti }}</span>
+            <span class="cifre flex shrink-0 items-center gap-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3 fill-current" aria-hidden="true" />{{ m.punti }}</span>
           </button>
         </li>
       </ul>
@@ -128,7 +128,7 @@ async function completaEsplora() {
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="etichetta">Quiz · +{{ attiva.punti }} punti</p>
-          <h2 class="mt-0.5 text-lg font-semibold">{{ attiva.titolo }}</h2>
+          <h2 class="mt-0.5 text-base font-semibold">{{ attiva.titolo }}</h2>
         </div>
         <button type="button" aria-label="Chiudi il quiz" class="secondario tocco flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
       </div>
@@ -138,30 +138,30 @@ async function completaEsplora() {
         </div>
         <template v-if="domande.length && risposte.length < domande.length">
           <p class="cifre text-[.78rem] font-semibold text-testo-2">Domanda {{ passo + 1 }} di {{ domande.length }}</p>
-          <p class="text-[1.15rem] font-semibold leading-snug">{{ domande[passo]!.domanda }}</p>
+          <p class="text-[1.05rem] font-semibold leading-snug">{{ domande[passo]!.domanda }}</p>
           <div class="space-y-2">
             <button v-for="(o, i) in domande[passo]!.opzioni" :key="i" type="button" class="vetro flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-vetro-forte active:bg-vetro-forte" @click="rispondi(i)">
-              <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-vetro-forte text-[.78rem] font-bold text-testo-2 ring-1 ring-bordo-luce">{{ String.fromCharCode(65 + i) }}</span>
+              <span class="flex size-6 shrink-0 items-center justify-center rounded-s bg-vetro-forte text-[.72rem] font-semibold text-testo-2 ring-1 ring-bordo-luce">{{ String.fromCharCode(65 + i) }}</span>
               <span class="text-[.92rem]">{{ o }}</span>
             </button>
           </div>
         </template>
         <template v-else-if="domande.length">
           <div class="vetro flex flex-col items-center gap-2 p-5 text-center">
-            <CircleCheck class="size-9 text-macchia" aria-hidden="true" />
+            <CircleCheck class="size-7 text-macchia" aria-hidden="true" />
             <p class="font-semibold">Hai risposto a tutte le domande</p>
             <p class="text-sm text-testo-2">Consegna per vedere il risultato e le spiegazioni.</p>
           </div>
-          <button class="primario flex h-14 w-full items-center justify-center gap-2 text-lg" :disabled="inCorso" @click="consegna"><Loader2 v-if="inCorso" class="size-5 animate-spin" />{{ inCorso ? 'Invio…' : 'Consegna' }}</button>
+          <button class="primario flex h-12 w-full items-center justify-center gap-2 text-[.95rem]" :disabled="inCorso" @click="consegna"><Loader2 v-if="inCorso" class="size-5 animate-spin" />{{ inCorso ? 'Invio…' : 'Consegna' }}</button>
         </template>
         <p v-else class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</p>
       </template>
       <template v-else>
         <div class="vetro flex items-center gap-4 p-4">
-          <p class="cifre text-5xl font-bold tracking-tight">{{ giuste }}<span class="text-2xl text-testo-3">/{{ risultato.esiti?.length }}</span></p>
+          <p class="cifre text-4xl font-semibold tracking-tight">{{ giuste }}<span class="text-2xl text-testo-3">/{{ risultato.esiti?.length }}</span></p>
           <div class="leading-tight">
             <p class="font-semibold">{{ giuste === risultato.esiti?.length ? 'Tutte giuste!' : 'Risposte giuste' }}</p>
-            <p class="cifre mt-1 inline-flex items-center gap-1 rounded-full bg-ambra/15 px-2.5 py-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ risultato.punti_ottenuti }} punti</p>
+            <p class="cifre mt-1 inline-flex items-center gap-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ risultato.punti_ottenuti }} punti</p>
           </div>
         </div>
         <div v-for="e in risultato.esiti" :key="e.indice" class="vetro space-y-1.5 p-3 text-[.86rem]">
@@ -174,7 +174,7 @@ async function completaEsplora() {
           <p v-if="!e.giusta" class="pl-6 text-macchia">Corretta: {{ domande[e.indice]?.opzioni[e.corretta] }}</p>
           <p class="pl-6 text-testo-2">{{ e.spiegazione }}</p>
         </div>
-        <button class="secondario h-12 w-full" @click="chiudi">Fatto</button>
+        <button class="secondario h-10 w-full text-sm" @click="chiudi">Fatto</button>
       </template>
     </section>
 
@@ -183,7 +183,7 @@ async function completaEsplora() {
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="etichetta">Esplora · +{{ attiva.punti }} punti</p>
-          <h2 class="mt-0.5 text-lg font-semibold">Incendi a <span class="capitalize">{{ utente.comune.toLowerCase() }}</span></h2>
+          <h2 class="mt-0.5 text-base font-semibold">Incendi a {{ nomeComune(utente.comune) }}</h2>
         </div>
         <button type="button" aria-label="Chiudi" class="secondario tocco flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
       </div>
@@ -191,8 +191,8 @@ async function completaEsplora() {
       <p v-else-if="!righe.length" class="vetro p-4 text-sm text-testo-2">Nessun incendio registrato in archivio per il tuo comune.</p>
       <template v-else>
         <div class="grid grid-cols-2 gap-2">
-          <div class="vetro p-3"><p class="etichetta">Incendi dal 2015</p><p class="cifre mt-1 text-3xl font-bold">{{ totIncendi }}</p></div>
-          <div class="vetro p-3"><p class="etichetta">Ettari bruciati</p><p class="cifre mt-1 text-3xl font-bold">{{ totEttari.toFixed(0) }}<span class="text-base text-testo-3"> ha</span></p></div>
+          <div class="vetro p-3"><p class="etichetta">Incendi dal 2015</p><p class="cifre mt-1 text-2xl font-semibold">{{ totIncendi }}</p></div>
+          <div class="vetro p-3"><p class="etichetta">Ettari bruciati</p><p class="cifre mt-1 text-2xl font-semibold">{{ totEttari.toFixed(0) }}<span class="text-base text-testo-3"> ha</span></p></div>
         </div>
         <ul class="vetro space-y-2.5 p-3">
           <li v-for="r in righe" :key="r.anno" class="text-[.82rem]">
@@ -202,7 +202,7 @@ async function completaEsplora() {
         </ul>
         <p class="text-[.75rem] text-testo-3">Dati storici regionali (CFVA), per anno.</p>
       </template>
-      <button class="primario flex h-14 w-full items-center justify-center gap-2 text-lg" :disabled="inCorso || caricandoStat" @click="completaEsplora"><Loader2 v-if="inCorso" class="size-5 animate-spin" />{{ inCorso ? 'Invio…' : `Completa · +${attiva.punti} punti` }}</button>
+      <button class="primario flex h-12 w-full items-center justify-center gap-2 text-[.95rem]" :disabled="inCorso || caricandoStat" @click="completaEsplora"><Loader2 v-if="inCorso" class="size-5 animate-spin" />{{ inCorso ? 'Invio…' : `Completa · +${attiva.punti} punti` }}</button>
     </section>
   </div>
 </template>

@@ -9,12 +9,12 @@ const { tema, alterna } = useTema()
   <button
     v-if="compatto"
     type="button"
-    class="pillola flex size-12 shrink-0 items-center justify-center"
+    class="pillola flex size-11 shrink-0 items-center justify-center transition-colors hover:bg-vetro-forte"
     :aria-label="tema === 'scuro' ? 'Tema scuro attivo: passa al chiaro' : 'Tema chiaro attivo: passa allo scuro'"
     @click="alterna"
   >
-    <Moon v-if="tema === 'scuro'" class="size-5 text-ambra" aria-hidden="true" />
-    <Sun v-else class="size-5 text-brace" aria-hidden="true" />
+    <Moon v-if="tema === 'scuro'" class="size-[18px] text-ambra" aria-hidden="true" />
+    <Sun v-else class="size-[18px] text-brace" aria-hidden="true" />
   </button>
   <button
     v-else

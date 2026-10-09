@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { Flame, X, MapPin, LocateFixed, Camera, Satellite, Wind, Trees, TriangleAlert, Users, History, Info, ChevronRight, Star, Loader2, ArrowLeft } from '@lucide/vue'
+import { aggiungiHotspot, animaAloni, ALONE_HOTSPOT } from '~/composables/useMappa'
+import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
 
 const { chiama, urlFoto } = useApi()
@@ -39,21 +40,12 @@ const filtro = ref<(typeof FILTRI)[number]['id']>('2025')
 const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
 let marcatore: maplibregl.Marker | null = null
+let fermaAloni = () => {}
 
 const centro = computed<[number, number]>(() => CENTRI[utente.value?.comune ?? ''] ?? [8.9, 40.1])
 const { tema } = useTema()
 
-// icona per ogni motivazione della priorita' (riconosciuta dal testo)
-function iconaMotivo(m: string) {
-  const t = m.toLowerCase()
-  if (t.includes('hotspot') || t.includes('satellit')) return Satellite
-  if (t.includes('meteo') || t.includes('vento')) return Wind
-  if (t.includes('suolo')) return Trees
-  if (t.includes('pericolo')) return TriangleAlert
-  if (t.includes('segnalazion')) return Users
-  if (t.includes('storic')) return History
-  return Info
-}
+const oraBreve = (iso: string) => new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 // '2025-06-08' -> '8 giugno 2025' (le date dell'archivio arrivano come stringa ISO o assenti)
 const dataLunga = (d?: string) => {
   const t = d ? new Date(d) : null
@@ -73,7 +65,7 @@ async function caricaUtenti() {
 }
 onMounted(caricaUtenti)
 
-onBeforeUnmount(() => { clearTimeout(tToast); clearTimeout(tLivello); mappa?.remove() })
+onBeforeUnmount(() => { clearTimeout(tToast); clearTimeout(tLivello); fermaAloni(); mappa?.remove() })
 
 async function scegli(u: Utente) {
   utente.value = u
@@ -90,7 +82,7 @@ function caricaRischio() {
 }
 
 function cambiaUtente() {
-  mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO
+  fermaAloni(); mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO
   utente.value = null; pannello.value = false; esito.value = null; missione.value = null; scheda.value = 'mappa'
   try { localStorage.removeItem('utenteId') } catch {}
 }
@@ -102,9 +94,10 @@ function avviaMappa() {
   if (!contenitore.value) return
   registraPmtiles()
   mappa = new maplibregl.Map({
-    container: contenitore.value, style: stileMappa(tema.value), center: centro.value, zoom: 12, minZoom: 6,
+    container: contenitore.value, style: stileMappa(tema.value), center: centro.value, zoom: 12,
     attributionControl: false, locale: LOCALE_MAPPA,
   })
+  limitaMappa(mappa)
   mappa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
   mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right')
   // sorgenti e layer si (ri)aggiungono a ogni stile caricato: anche dopo il cambio tema
@@ -116,14 +109,18 @@ function avviaMappa() {
       const p = ev.features?.[0]?.properties
       if (!p || pannello.value || missione.value) return
       new maplibregl.Popup({ maxWidth: '220px' }).setLngLat(ev.lngLat)
-        .setHTML(`<div class="popup-titolo">Incendio del ${p.anno}</div><div style="font-weight:650;margin-top:2px">${dataLunga(p.data)}</div><div style="font-variant-numeric:tabular-nums;color:var(--testo-2)">${p.ettari != null ? Number(p.ettari).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' ettari' : 'Superficie non nota'}${p.comune ? ' · <span style="text-transform:capitalize">' + String(p.comune).toLowerCase() + '</span>' : ''}</div>`)
+        .setHTML(`<div class="popup-titolo">Incendio del ${p.anno}</div><div style="font-weight:650;margin-top:2px">${dataLunga(p.data)}</div><div style="font-variant-numeric:tabular-nums;color:var(--testo-2)">${p.ettari != null ? Number(p.ettari).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' ettari' : 'Superficie non nota'}${p.comune ? ' · ' + nomeComune(String(p.comune)) : ''}</div>`)
         .addTo(m)
     })
     m.on('click', (ev) => {
       if (!pannello.value && !missione.value) return
       impostaPos(ev.lngLat.lat, ev.lngLat.lng)
     })
-    chiama<any>('/hotspot').then((g) => { datiHotspot = g; (m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
+    chiama<any>('/hotspot').then((g) => {
+      datiHotspot = g; (m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g)
+      // l'alone respira solo se ci sono hotspot: niente ridisegno continuo della mappa a vuoto
+      if (g?.features?.length) { fermaAloni(); fermaAloni = animaAloni(m, [ALONE_HOTSPOT]) }
+    }).catch(() => {})
   })
 }
 
@@ -134,9 +131,7 @@ function aggiungiLivelli() {
   m.addSource('storico', { type: 'vector', url: 'pmtiles:///tiles/storico.pmtiles' })
   m.addLayer({ id: 'storico-riempimento', type: 'fill', source: 'storico', 'source-layer': 'incendi', filter: filtroAnni(), paint: { 'fill-color': c.storico, 'fill-opacity': c.opacitaStorico } })
   m.addLayer({ id: 'storico-linea', type: 'line', source: 'storico', 'source-layer': 'incendi', filter: filtroAnni(), paint: { 'line-color': c.storico, 'line-width': 0.7, 'line-opacity': 0.55 } })
-  m.addSource('hotspot', { type: 'geojson', data: datiHotspot })
-  m.addLayer({ id: 'hotspot-alone', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 16, 'circle-color': c.brace, 'circle-opacity': 0.18, 'circle-blur': 0.6 } })
-  m.addLayer({ id: 'hotspot', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 6, 'circle-color': c.brace, 'circle-stroke-color': c.bordo, 'circle-stroke-width': 2 } })
+  aggiungiHotspot(m, c, datiHotspot)
 }
 
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
@@ -146,15 +141,21 @@ const filtroAnni = () => ['>=', ['get', 'anno'], FILTRI.find((f) => f.id === fil
 // filtro anni istantaneo: i dati sono gia' nei tile
 watch(filtro, () => { for (const id of ['storico-riempimento', 'storico-linea']) if (mappa?.getLayer(id)) mappa.setFilter(id, filtroAnni()) })
 
+// punto scelto: pin pulsante (`.pin` in tema.css) del colore del significato:
+// fuoco brace, area a rischio ambra, missione di mappatura macchia
+function coloraPin() {
+  const c = marcatore?.getElement().classList
+  c?.add('pin')
+  c?.toggle('pin-macchia', !!missione.value)
+  c?.toggle('pin-ambra', !missione.value && tipo.value === 'area_a_rischio')
+}
+watch([tipo, missione], coloraPin)
+
 function impostaPos(lat: number, lon: number) {
   pos.value = { lat, lon }
   if (!mappa) return
-  if (!marcatore) {
-    const el = document.createElement('div')
-    el.className = 'segnaposto'
-    el.innerHTML = '<span></span><i></i>'
-    marcatore = new maplibregl.Marker({ element: el, anchor: 'center' })
-  }
+  if (!marcatore) marcatore = new maplibregl.Marker({ element: document.createElement('div'), anchor: 'center' })
+  coloraPin()
   marcatore.setLngLat([lon, lat]).addTo(mappa)
 }
 
@@ -256,22 +257,19 @@ async function invia() {
     <!-- scelta utente: schermata d'ingresso -->
     <section v-if="!utente" class="mx-auto flex h-dvh max-w-md flex-col overflow-y-auto px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-8">
       <div class="flex items-center justify-between">
-        <NuxtLink to="/" class="pillola flex size-10 items-center justify-center" aria-label="Torna all'inizio"><ArrowLeft class="size-[18px] text-testo-2" /></NuxtLink>
+        <NuxtLink to="/" class="pillola flex size-10 items-center justify-center" aria-label="Torna all'inizio"><ArrowLeft class="size-4 text-testo-2" /></NuxtLink>
         <InterruttoreTema />
       </div>
 
       <div class="mt-10 flex flex-col items-center text-center">
-        <span class="relative flex size-20 items-center justify-center">
-          <span class="absolute inset-0 rounded-full bg-[radial-gradient(closest-side,rgba(255,106,43,.45),transparent)] blur-md" aria-hidden="true" />
-          <span class="relative flex size-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-[#ff9a3d] to-[#d92d17] shadow-[0_12px_30px_-8px_rgba(255,90,31,.6),inset_0_1px_0_rgba(255,255,255,.3)]">
-            <Flame class="size-9 text-white" aria-hidden="true" />
-          </span>
+        <span class="flex size-12 items-center justify-center rounded-[32%] bg-gradient-to-b from-[#f2581d] to-[#d33515] shadow-[0_6px_18px_-8px_rgba(255,90,31,.6),inset_0_1px_0_rgba(255,255,255,.2)]">
+          <Flame class="size-6 text-white" aria-hidden="true" />
         </span>
-        <h1 class="mt-5 font-[family-name:var(--font-display)] text-[2.1rem] font-bold tracking-tight">Sentinelle</h1>
-        <p class="mt-1.5 max-w-[17rem] text-[.95rem] text-testo-2">Occhi accesi sulla Sardegna. Segnala, previeni, proteggi il tuo comune.</p>
+        <h1 class="mt-4 font-[family-name:var(--font-display)] text-[1.75rem] font-semibold tracking-tight">Sentinelle</h1>
+        <p class="mt-1 max-w-[18rem] text-[.9rem] text-testo-2">Occhi accesi sulla Sardegna. Segnala, previeni, proteggi il tuo comune.</p>
       </div>
 
-      <p class="etichetta mt-10 mb-2.5 px-1">Chi sei?</p>
+      <p class="etichetta mt-8 mb-2 px-1">Chi sei?</p>
       <StatoErrore v-if="erroreUtenti" :messaggio="erroreUtenti" @riprova="caricaUtenti" />
       <ul v-else-if="caricamentoUtenti" class="vetro divide-y divide-bordo overflow-hidden !p-0" aria-busy="true" aria-label="Caricamento delle sentinelle">
         <li v-for="k in 5" :key="k" class="flex items-center gap-3 px-4 py-3">
@@ -284,12 +282,12 @@ async function invia() {
       <ul v-else class="vetro divide-y divide-bordo overflow-hidden !p-0">
         <li v-for="u in utenti" :key="u.id">
           <button class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-vetro-forte active:bg-vetro-forte" @click="scegli(u)">
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-vetro-forte text-[.8rem] font-bold ring-1 ring-bordo-luce">{{ iniziali(u.nome) }}</span>
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-vetro-forte text-[.74rem] font-semibold ring-1 ring-bordo-luce">{{ iniziali(u.nome) }}</span>
             <span class="min-w-0 flex-1 leading-tight">
               <span class="block truncate font-semibold">{{ u.nome }}</span>
-              <span class="block text-[.78rem] capitalize text-testo-2">{{ u.comune.toLowerCase() }}</span>
+              <span class="block text-[.76rem] text-testo-2">{{ nomeComune(u.comune) }}</span>
             </span>
-            <span class="cifre flex items-center gap-1 text-[.9rem] font-semibold"><Star class="size-3.5 fill-ambra text-ambra" aria-hidden="true" />{{ u.punti }}</span>
+            <span class="cifre flex items-center gap-1 text-[.86rem] font-medium text-testo-2"><Star class="size-3.5 fill-ambra text-ambra" aria-hidden="true" />{{ u.punti }}</span>
             <ChevronRight class="size-4 text-testo-3" aria-hidden="true" />
           </button>
         </li>
@@ -303,101 +301,104 @@ async function invia() {
       <!-- header: pillole fluttuanti -->
       <header class="pointer-events-none absolute inset-x-0 top-0 z-20 px-3 pt-[max(.75rem,env(safe-area-inset-top))]">
         <div class="flex items-start gap-2">
-          <button type="button" class="pillola pointer-events-auto flex h-12 min-w-0 flex-1 items-center pr-3 pl-1 text-left" aria-label="Il tuo profilo: tocca per cambiare utente" @click="cambiaUtente">
+          <!-- larghezza intrinseca: la pillola segue il contenuto, non la finestra -->
+          <button type="button" class="pillola pointer-events-auto flex h-11 max-w-[min(18rem,calc(100vw-9.5rem))] min-w-0 items-center pr-3 pl-1 text-left transition-colors hover:bg-vetro-forte" aria-label="Il tuo profilo: tocca per cambiare utente" @click="cambiaUtente">
             <IndicatoreLivello :nome="utente.nome" :punti="utente.punti" :livello="utente.livello" />
           </button>
+          <span class="flex-1" />
           <IndicatoreRischio class="pointer-events-auto" :rischio="rischio" :errore="rischioErrore" @riprova="caricaRischio" />
           <InterruttoreTema compatto class="pointer-events-auto" />
         </div>
         <div v-if="scheda === 'mappa' && !missione" class="mt-2 flex items-center gap-2">
-          <div class="pillola pointer-events-auto flex items-center gap-0.5 p-1 text-[.76rem]" role="group" aria-label="Incendi storici">
-            <button v-for="f in FILTRI" :key="f.id" type="button" class="tocco h-9 rounded-full px-3 font-semibold transition-colors" :class="filtro === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2'" :aria-pressed="filtro === f.id" @click="filtro = f.id">{{ f.etichetta }}</button>
+          <div class="pillola pointer-events-auto flex items-center gap-0.5 p-[3px] text-[.74rem]" role="group" aria-label="Incendi storici">
+            <span class="etichetta hidden pr-1.5 pl-2 sm:inline">Incendi storici</span>
+            <button v-for="f in FILTRI" :key="f.id" type="button" class="tocco h-8 rounded-full px-3 font-medium transition-colors" :class="filtro === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'" :aria-pressed="filtro === f.id" @click="filtro = f.id">{{ f.etichetta }}</button>
           </div>
         </div>
       </header>
 
       <!-- missione `posizione`: scegli il punto -->
       <Transition name="foglio">
-        <section v-if="scheda === 'mappa' && missione" class="sospeso fixed inset-x-2 bottom-[5.5rem] z-20 space-y-3 p-4">
+        <section v-if="scheda === 'mappa' && missione" class="sospeso fixed inset-x-2 bottom-[5.25rem] z-20 mx-auto max-w-[440px] space-y-3 p-3">
           <div>
             <p class="etichetta">Missione · +{{ missione.punti }} punti</p>
-            <p class="mt-0.5 text-lg font-semibold">{{ missione.titolo }}</p>
+            <p class="mt-0.5 text-base font-semibold">{{ missione.titolo }}</p>
           </div>
-          <p class="flex items-center gap-2 rounded-[var(--radius-m)] border p-3 text-sm" :class="pos ? 'border-macchia/40 bg-macchia/10 font-semibold text-macchia' : 'border-bordo bg-vetro text-testo-2'">
+          <p class="flex items-center gap-2 rounded-m border p-3 text-sm" :class="pos ? 'border-macchia/40 bg-macchia/10 font-semibold text-macchia' : 'border-bordo bg-vetro text-testo-2'">
             <MapPin class="size-4 shrink-0" aria-hidden="true" />
             <span class="cifre">{{ pos ? `Punto scelto: ${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : 'Tocca la mappa per indicare il punto' }}</span>
           </p>
           <div class="grid grid-cols-2 gap-2">
-            <button type="button" class="secondario flex h-11 items-center justify-center gap-1.5 text-sm" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> Usa GPS</button>
-            <label class="secondario flex h-11 items-center justify-center gap-1.5 border-dashed px-3 text-sm">
+            <button type="button" class="secondario flex h-10 items-center justify-center gap-1.5 text-sm" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> Usa GPS</button>
+            <label class="secondario flex h-10 items-center justify-center gap-1.5 border-dashed px-3 text-sm">
               <Camera class="size-4 shrink-0 text-testo-2" aria-hidden="true" /><span class="truncate">{{ foto ? foto.name : 'Foto' }}</span>
               <input type="file" accept="image/*" capture="environment" class="sr-only" @change="foto = ($event.target as HTMLInputElement).files?.[0] ?? null" />
             </label>
           </div>
           <p v-if="errore" class="text-sm text-brace" role="alert">{{ errore }}</p>
           <div class="grid grid-cols-[auto_1fr] gap-2">
-            <button type="button" class="secondario h-12 px-5" @click="annullaMissione">Annulla</button>
-            <button type="button" class="primario h-12" :disabled="!pos || inCorso" @click="confermaMissione">{{ inCorso ? 'Invio…' : `Conferma · +${missione.punti}` }}</button>
+            <button type="button" class="secondario h-11 px-5 text-sm" @click="annullaMissione">Annulla</button>
+            <button type="button" class="primario h-11 text-sm" :disabled="!pos || inCorso" @click="confermaMissione">{{ inCorso ? 'Invio…' : `Conferma · +${missione.punti}` }}</button>
           </div>
         </section>
       </Transition>
 
       <!-- l'unico accento pieno -->
       <Transition name="foglio">
-        <button v-if="scheda === 'mappa' && !pannello && !missione" type="button" class="primario fixed bottom-[5.75rem] left-1/2 z-20 flex h-14 w-[min(19rem,calc(100%-2.5rem))] -translate-x-1/2 items-center justify-center gap-2 text-lg" @click="apri">
-          <Flame class="size-6" aria-hidden="true" /> Segnala
+        <button v-if="scheda === 'mappa' && !pannello && !missione" type="button" class="primario fixed bottom-[5.5rem] left-1/2 z-20 flex h-12 w-[min(16rem,calc(100%-2.5rem))] -translate-x-1/2 items-center justify-center gap-2 text-[.98rem]" @click="apri">
+          <Flame class="size-5" aria-hidden="true" /> Segnala
         </button>
       </Transition>
 
       <!-- segnalazione ed esito -->
       <Transition name="foglio">
-        <section v-if="scheda === 'mappa' && pannello && !missione" class="sospeso fixed inset-x-2 bottom-[5.5rem] z-20 max-h-[62dvh] overflow-y-auto p-4" aria-labelledby="titolo-pannello">
-          <div class="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <p class="etichetta">{{ esito ? 'Segnalazione inviata' : 'Nuova segnalazione' }}</p>
-              <h2 id="titolo-pannello" class="mt-0.5 text-lg font-semibold">{{ esito ? 'Grazie, è in coda agli operatori' : 'Cosa vedi?' }}</h2>
+        <section v-if="scheda === 'mappa' && pannello && !missione" class="sospeso fixed inset-x-2 bottom-[5.25rem] z-20 mx-auto max-h-[calc(100dvh-11rem)] max-w-[440px] overflow-y-auto p-3" aria-labelledby="titolo-pannello">
+          <!-- esito: intestazione compatta -->
+          <div v-if="esito" class="mb-4 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="flex items-center gap-1.5 text-[.74rem] font-medium text-macchia">
+                <CircleCheck class="size-3.5" aria-hidden="true" /> Inviata · in coda agli operatori
+              </p>
+              <h2 id="titolo-pannello" class="mt-1 text-base font-semibold">{{ esito.tipo === 'fuoco' ? 'Fuoco o fumo' : 'Area a rischio' }}</h2>
+              <p class="cifre mt-0.5 truncate text-[.76rem] text-testo-2">
+                #{{ esito.id }} · {{ oraBreve(esito.creata_il) }}<template v-if="esito.comune"> · {{ nomeComune(esito.comune) }}</template> · {{ esito.lat.toFixed(4) }}, {{ esito.lon.toFixed(4) }}
+              </p>
             </div>
-            <button type="button" aria-label="Chiudi" class="secondario tocco flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
+            <button type="button" aria-label="Chiudi" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="chiudi"><X class="size-4" /></button>
+          </div>
+          <div v-else class="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p class="etichetta">Nuova segnalazione</p>
+              <h2 id="titolo-pannello" class="mt-0.5 text-base font-semibold">Cosa vedi?</h2>
+            </div>
+            <button type="button" aria-label="Chiudi" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="chiudi"><X class="size-4" /></button>
           </div>
 
           <!-- esito -->
           <div v-if="esito" class="space-y-4">
-            <div class="flex items-center gap-4">
-              <AnelloPriorita :valore="esito.priorita" :dimensione="104" :spessore="2.6" />
-              <div class="min-w-0">
-                <p class="etichetta">Priorità stimata</p>
-                <p class="text-2xl font-bold" :style="{ color: varPriorita(esito.priorita) }">{{ etichettaPriorita(esito.priorita) }}</p>
-                <p v-if="esito.punti_ottenuti > 0" class="cifre mt-1.5 inline-flex items-center gap-1 rounded-full bg-ambra/15 px-2.5 py-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ esito.punti_ottenuti }} punti</p>
-              </div>
+            <ScomposizionePriorita :priorita="esito.priorita" :fattori="esito.fattori" :motivazioni="esito.motivazioni" />
+            <div class="flex items-center gap-3">
+              <p v-if="(esito.punti_ottenuti ?? 0) > 0" class="cifre flex items-center gap-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ esito.punti_ottenuti }} punti</p>
+              <button type="button" class="secondario ml-auto h-9 px-5 text-sm" @click="chiudi">Fatto</button>
             </div>
-            <div>
-              <p class="etichetta mb-1.5">Perché questa priorità</p>
-              <ul class="vetro divide-y divide-bordo !p-0 text-[.86rem]">
-                <li v-for="m in esito.motivazioni" :key="m" class="flex items-start gap-3 px-3 py-2.5">
-                  <component :is="iconaMotivo(m)" class="mt-0.5 size-4 shrink-0 text-testo-3" aria-hidden="true" />
-                  <span class="text-testo-2">{{ m }}</span>
-                </li>
-              </ul>
-            </div>
-            <button type="button" class="secondario h-12 w-full" @click="chiudi">Fatto</button>
           </div>
 
           <!-- modulo -->
           <form v-else class="space-y-3" @submit.prevent="invia">
             <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo di segnalazione">
-              <button type="button" role="radio" :aria-checked="tipo === 'fuoco'" class="flex flex-col items-start gap-2 rounded-[var(--radius-m)] border p-3 text-left transition-colors" :class="tipo === 'fuoco' ? 'border-brace/60 bg-brace/12 ring-1 ring-brace/40' : 'border-bordo bg-vetro'" @click="tipo = 'fuoco'">
-                <Flame class="size-6" :class="tipo === 'fuoco' ? 'text-brace' : 'text-testo-3'" aria-hidden="true" />
-                <span class="text-[.92rem] font-semibold leading-tight">Fuoco o fumo</span>
+              <button type="button" role="radio" :aria-checked="tipo === 'fuoco'" class="flex flex-col items-start gap-1.5 rounded-m border p-3 text-left transition-colors" :class="tipo === 'fuoco' ? 'border-brace/60 bg-brace/12 ' : 'border-bordo bg-vetro hover:bg-vetro-forte'" @click="tipo = 'fuoco'">
+                <Flame class="size-5" :class="tipo === 'fuoco' ? 'text-brace' : 'text-testo-3'" aria-hidden="true" />
+                <span class="text-[.88rem] font-semibold leading-tight">Fuoco o fumo</span>
                 <span class="text-[.72rem] text-testo-2">Lo vedi adesso</span>
               </button>
-              <button type="button" role="radio" :aria-checked="tipo === 'area_a_rischio'" class="flex flex-col items-start gap-2 rounded-[var(--radius-m)] border p-3 text-left transition-colors" :class="tipo === 'area_a_rischio' ? 'border-ambra/60 bg-ambra/12 ring-1 ring-ambra/40' : 'border-bordo bg-vetro'" @click="tipo = 'area_a_rischio'">
-                <TriangleAlert class="size-6" :class="tipo === 'area_a_rischio' ? 'text-ambra' : 'text-testo-3'" aria-hidden="true" />
-                <span class="text-[.92rem] font-semibold leading-tight">Area a rischio</span>
+              <button type="button" role="radio" :aria-checked="tipo === 'area_a_rischio'" class="flex flex-col items-start gap-1.5 rounded-m border p-3 text-left transition-colors" :class="tipo === 'area_a_rischio' ? 'border-ambra/60 bg-ambra/12 ' : 'border-bordo bg-vetro hover:bg-vetro-forte'" @click="tipo = 'area_a_rischio'">
+                <TriangleAlert class="size-5" :class="tipo === 'area_a_rischio' ? 'text-ambra' : 'text-testo-3'" aria-hidden="true" />
+                <span class="text-[.88rem] font-semibold leading-tight">Area a rischio</span>
                 <span class="text-[.72rem] text-testo-2">Sterpaglie, rifiuti…</span>
               </button>
             </div>
 
-            <div class="flex items-center gap-2 rounded-[var(--radius-m)] border p-1.5 pl-3" :class="pos ? 'border-macchia/40 bg-macchia/10' : 'border-bordo bg-vetro'">
+            <div class="flex items-center gap-2 rounded-full border p-1.5 pl-4" :class="pos ? 'border-macchia/40 bg-macchia/10' : 'border-bordo bg-vetro'">
               <MapPin class="size-4 shrink-0" :class="pos ? 'text-macchia' : 'text-testo-3'" aria-hidden="true" />
               <span class="cifre min-w-0 flex-1 text-[.82rem] leading-tight" :class="pos ? 'font-semibold text-macchia' : 'text-testo-2'">
                 {{ pos ? `${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : 'Tocca la mappa per indicare il punto' }}
@@ -405,8 +406,8 @@ async function invia() {
               <button type="button" class="secondario tocco flex h-9 shrink-0 items-center gap-1.5 px-3 text-[.8rem]" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> GPS</button>
             </div>
 
-            <label class="flex items-center gap-3 rounded-[var(--radius-m)] border border-dashed border-bordo-luce bg-vetro p-3 text-sm">
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-vetro-forte"><Camera class="size-[18px] text-testo-2" aria-hidden="true" /></span>
+            <label class="flex items-center gap-3 rounded-m border border-dashed border-bordo-luce bg-vetro p-3 text-sm">
+              <span class="flex size-8 shrink-0 items-center justify-center rounded-s bg-vetro-forte"><Camera class="size-4 text-testo-2" aria-hidden="true" /></span>
               <span class="min-w-0 leading-tight">
                 <span class="block truncate font-semibold">{{ foto ? foto.name : 'Aggiungi una foto' }}</span>
                 <span class="block text-[.72rem] text-testo-2">{{ foto ? 'Tocca per cambiarla' : 'Facoltativa, aiuta gli operatori' }}</span>
@@ -415,8 +416,8 @@ async function invia() {
             </label>
 
             <p v-if="errore" class="text-sm text-brace" role="alert">{{ errore }}</p>
-            <button class="primario flex h-14 w-full items-center justify-center gap-2 text-lg" :disabled="!pos || inCorso">
-              <Loader2 v-if="inCorso" class="size-5 animate-spin" aria-hidden="true" />{{ inCorso ? 'Invio…' : 'Invia segnalazione' }}
+            <button class="primario flex h-12 w-full items-center justify-center gap-2 text-[.95rem]" :disabled="!pos || inCorso">
+              <Loader2 v-if="inCorso" class="size-4 animate-spin" aria-hidden="true" />{{ inCorso ? 'Invio…' : 'Invia segnalazione' }}
             </button>
           </form>
         </section>
@@ -424,12 +425,12 @@ async function invia() {
 
       <!-- missioni e classifica: fogli sopra la mappa -->
       <Transition name="foglio">
-        <section v-if="scheda === 'missioni'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.75rem)] bottom-[5.5rem] z-20 overflow-y-auto">
+        <section v-if="scheda === 'missioni'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] bottom-[5.25rem] z-20 mx-auto max-w-[480px] overflow-y-auto sm:bottom-auto sm:max-h-[calc(100dvh-9.75rem)]">
           <SchedaMissioni :utente="utente" @esito="applicaEsito" @posizione="scegliPunto" />
         </section>
       </Transition>
       <Transition name="foglio">
-        <section v-if="scheda === 'classifica'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.75rem)] bottom-[5.5rem] z-20 overflow-y-auto">
+        <section v-if="scheda === 'classifica'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] bottom-[5.25rem] z-20 mx-auto max-w-[480px] overflow-y-auto sm:bottom-auto sm:max-h-[calc(100dvh-9.75rem)]">
           <SchedaClassifica :comune="utente.comune" :nome-utente="utente.nome" />
         </section>
       </Transition>
@@ -450,7 +451,4 @@ async function invia() {
 .foglio-leave-active { transition: opacity .14s ease-in, transform .14s ease-in; }
 .foglio-enter-from { opacity: 0; transform: translateY(28px); }
 .foglio-leave-to { opacity: 0; transform: translateY(10px); }
-.segnaposto { position: relative; width: 22px; height: 22px; }
-.segnaposto span { position: absolute; inset: 0; border-radius: 999px; background: linear-gradient(135deg, #ff9a3d, #e8351f); border: 3px solid var(--fondo-3); box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 18px rgba(255,106,43,.7); }
-.segnaposto i { position: absolute; inset: -10px; border-radius: 999px; border: 2px solid #ff6a2b; animation: pulsa 2.4s ease-in-out infinite; }
 </style>

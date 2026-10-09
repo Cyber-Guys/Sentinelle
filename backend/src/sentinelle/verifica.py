@@ -1,7 +1,7 @@
 import math
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import text
 
@@ -15,7 +15,7 @@ PERICOLO = {"Basso": 0.0, "Mediobasso": 0.25, "Medio": 0.5, "Medioalto": 0.75, "
 
 @dataclass(frozen=True)
 class Contesto:
-    hotspot_km: float | None          # None = fonte giu'
+    hotspot_km: float | None          # None = fonte non disponibile
     meteo: Meteo | None
     classe_suolo: tuple[int, str] | None
     pericolo_aib: str | None          # None = fuori layer
@@ -27,6 +27,13 @@ class Contesto:
 class Esito:
     priorita: int
     motivazioni: list[str]
+    fattori: list[dict] = field(default_factory=list)
+
+
+ETICHETTE = {"hotspot": "Hotspot satellitare", "meteo": "Meteo", "suolo": "Uso del suolo",
+             "pericolo": "Pericolo regionale", "vicine": "Segnalazioni vicine", "storico": "Incendi storici"}
+CLASSI_PERICOLO = {"Basso": "basso", "Mediobasso": "medio-basso", "Medio": "medio",
+                   "Medioalto": "medio-alto", "Alto": "alto"}
 
 
 def _virgola(x: float) -> str:
@@ -47,8 +54,24 @@ def _vegetazione(codice: int) -> float:
     return 0.0
 
 
+def _vicine(n: int) -> str:
+    if n == 0:
+        return "Nessun'altra segnalazione entro 2 km nell'ultima ora"
+    if n == 1:
+        return "1 altra segnalazione entro 2 km nell'ultima ora"
+    return f"{n} altre segnalazioni entro 2 km nell'ultima ora"
+
+
+def _storici(n: int) -> str:
+    if n == 0:
+        return "Nessun incendio storico entro 1 km (2005-2025)"
+    if n == 1:
+        return "1 incendio storico entro 1 km (2005-2025)"
+    return f"{n} incendi storici entro 1 km (2005-2025)"
+
+
 def calcola_priorita(c: Contesto, pesi: dict[str, float]) -> Esito:
-    termini: list[tuple[str, float | None, str]] = []  # (nome, valore 0..1 o None, motivazione)
+    termini: list[tuple[str, float | None, str]] = []  # (chiave, valore 0..1 o None, testo del valore)
 
     if c.hotspot_km is None:
         termini.append(("hotspot", None, "Satellite non disponibile"))
@@ -61,30 +84,43 @@ def calcola_priorita(c: Contesto, pesi: dict[str, float]) -> Esito:
         termini.append(("meteo", None, "Meteo non disponibile"))
     else:
         m = c.meteo
+        g = m.giorni_senza_pioggia
+        pioggia = "pioggia recente" if g == 0 else "1 giorno senza pioggia" if g == 1 else f"{g} giorni senza pioggia"
         termini.append(("meteo", rischio_meteo(m),
-                        f"Meteo: raffiche {m.raffiche_kmh:.0f} km/h, umidita' {m.umidita:.0f}%, "
-                        f"{m.giorni_senza_pioggia} giorni senza pioggia"))
+                        f"Raffiche {m.raffiche_kmh:.0f} km/h · umidità {m.umidita:.0f}% · {pioggia}"))
 
     if c.classe_suolo is None:
         termini.append(("suolo", None, "Uso del suolo non disponibile"))
     else:
         codice, desc = c.classe_suolo
-        termini.append(("suolo", _vegetazione(codice), f"Uso del suolo: {desc}"))
+        termini.append(("suolo", _vegetazione(codice), desc[:1].upper() + desc[1:]))
 
     if c.pericolo_aib is None:
         termini.append(("pericolo", 0.0, "Fuori dalle zone di pericolo AIB"))
     else:
-        termini.append(("pericolo", PERICOLO.get(c.pericolo_aib, 0.0), f"Pericolo AIB: {c.pericolo_aib}"))
+        classe = CLASSI_PERICOLO.get(c.pericolo_aib, c.pericolo_aib.lower())
+        termini.append(("pericolo", PERICOLO.get(c.pericolo_aib, 0.0), f"{classe[:1].upper()}{classe[1:]} · carta del pericolo AIB"))
 
-    termini.append(("vicine", min(c.segnalazioni_vicine / 3, 1.0),
-                    f"{c.segnalazioni_vicine} altre segnalazioni entro 2 km nell'ultima ora"))
-    termini.append(("storico", min(c.incendi_storici / 5, 1.0),
-                    f"{c.incendi_storici} incendi storici entro 1 km (2005-2025)"))
+    termini.append(("vicine", min(c.segnalazioni_vicine / 3, 1.0), _vicine(c.segnalazioni_vicine)))
+    termini.append(("storico", min(c.incendi_storici / 5, 1.0), _storici(c.incendi_storici)))
 
-    attivi = [(n, v) for n, v, _ in termini if v is not None]
-    somma_pesi = sum(pesi[n] for n, _ in attivi)
-    punteggio = sum(pesi[n] * v for n, v in attivi) / somma_pesi if somma_pesi else 0.0
-    return Esito(round(100 * punteggio), [m for _, _, m in termini])
+    somma_pesi = sum(pesi[n] for n, v, _ in termini if v is not None)
+    fattori, motivazioni = [], []
+    for n, v, testo in termini:
+        peso = pesi[n] / somma_pesi if v is not None and somma_pesi else 0.0
+        fattori.append({"chiave": n, "etichetta": ETICHETTE[n], "valore": round(v or 0.0, 3),
+                        "peso": round(peso, 4), "contributo": round(100 * peso * (v or 0.0), 1),
+                        "testo": testo, "disponibile": v is not None})
+        if n == "meteo" and v is not None:
+            motivazioni.append(f"Meteo: {testo[0].lower()}{testo[1:]}")
+        elif n == "suolo" and v is not None:
+            motivazioni.append(f"Uso del suolo: {testo[0].lower()}{testo[1:]}")
+        elif n == "pericolo" and c.pericolo_aib is not None:
+            motivazioni.append(f"Pericolo regionale: {CLASSI_PERICOLO.get(c.pericolo_aib, c.pericolo_aib.lower())}")
+        else:
+            motivazioni.append(testo)
+    punteggio = sum(pesi[n] * v for n, v, _ in termini if v is not None) / somma_pesi if somma_pesi else 0.0
+    return Esito(round(100 * punteggio), motivazioni, fattori)
 
 
 def _distanza_km(lat1, lon1, lat2, lon2) -> float:

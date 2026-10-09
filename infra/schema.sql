@@ -24,3 +24,5 @@ CREATE TABLE IF NOT EXISTS missione_completata (id serial PRIMARY KEY,
   utente_id int NOT NULL REFERENCES utente, missione_id int NOT NULL REFERENCES missione,
   punti int NOT NULL, geom geometry(Point,4326), foto text,
   completata_il timestamptz NOT NULL DEFAULT now());
+-- scomposizione della priorita' per fattore (vuota per le segnalazioni precedenti)
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT '[]'::jsonb;

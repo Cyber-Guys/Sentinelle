@@ -19,15 +19,14 @@ defineEmits<{ chiudiLivello: [] }>()
   <Transition name="livello">
     <div v-if="nuovoLivello" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 backdrop-blur-sm" role="status" aria-live="polite" @click="$emit('chiudiLivello')">
       <div class="livello-scheda sospeso relative mx-6 flex w-full max-w-xs flex-col items-center overflow-hidden px-8 pt-9 pb-7 text-center">
-        <div class="pointer-events-none absolute inset-x-0 -bottom-24 h-48 bg-[radial-gradient(closest-side,rgba(255,106,43,.35),transparent)]" aria-hidden="true" />
-        <span class="relative flex size-20 items-center justify-center">
+                <span class="relative flex size-16 items-center justify-center">
           <span class="pulsa absolute inset-0 rounded-full ring-2 ring-[#ff8a3d]" aria-hidden="true" />
-          <span class="relative flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-[#ffb347] to-[#e8351f] shadow-[0_0_40px_rgba(255,106,43,.5)]">
-            <Trophy class="size-10 text-white" aria-hidden="true" />
+          <span class="relative flex size-16 items-center justify-center rounded-full bg-gradient-to-b from-[#f7953a] to-[#dc3a18]">
+            <Trophy class="size-8 text-white" aria-hidden="true" />
           </span>
         </span>
         <p class="etichetta relative mt-5">Nuovo livello</p>
-        <p class="relative mt-1 text-3xl font-bold tracking-tight">{{ nuovoLivello.nome }}</p>
+        <p class="relative mt-1 text-2xl font-semibold tracking-tight">{{ nuovoLivello.nome }}</p>
         <p v-if="nuovoLivello.punti > 0" class="cifre relative mt-3 inline-flex items-center gap-1 rounded-full bg-ambra/15 px-3 py-1 text-sm font-semibold text-ambra">
           <Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ nuovoLivello.punti }} punti
         </p>
@@ -42,6 +41,6 @@ defineEmits<{ chiudiLivello: [] }>()
 .livello-enter-active { transition: opacity .3s ease-out; }
 .livello-leave-active { transition: opacity .25s ease-in; }
 .livello-enter-from, .livello-leave-to { opacity: 0; }
-.livello-enter-active .livello-scheda { transition: transform .45s cubic-bezier(.34, 1.4, .64, 1); }
-.livello-enter-from .livello-scheda { transform: scale(.88) translateY(12px); }
+.livello-enter-active .livello-scheda { transition: transform .45s cubic-bezier(.22, 1, .36, 1); }
+.livello-enter-from .livello-scheda { transform: scale(.96) translateY(8px); }
 </style>
