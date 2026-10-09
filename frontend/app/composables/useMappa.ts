@@ -1,4 +1,5 @@
-import maplibregl, { type Map as MappaLibre } from 'maplibre-gl'
+import maplibregl, { type Map as MappaLibre, type StyleSpecification } from 'maplibre-gl'
+import { layers, namedFlavor } from '@protomaps/basemaps'
 import { Protocol } from 'pmtiles'
 import type { Tema } from './useTema'
 
@@ -10,13 +11,48 @@ export function registraPmtiles() {
   pmtilesOk = true
 }
 
-// Mappa base vettoriale CARTO, una per tema
-export const stileMappa = (t: Tema) =>
-  t === 'scuro'
-    ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-    : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+// Mappa base Protomaps, tutta in locale: tile (public/tiles/sardegna.pmtiles), font e sprite (public/basemap/).
+// Una per tema; flavor ritoccati sui token (fondo blu-notte, acqua, strade).
+const FLAVOR = {
+  scuro: {
+    base: 'dark',
+    ritocchi: {
+      background: '#07090d', earth: '#11151c', water: '#0a1729', buildings: '#0d1117',
+      minor_a: '#1d222c', minor_b: '#1d222c', minor_service: '#171b23', link: '#262c38', major: '#2a303d', highway: '#343b4a',
+      park_a: '#101c17', park_b: '#101c17', wood_a: '#111b16', wood_b: '#111b16', scrub_a: '#121c17', scrub_b: '#121c17',
+      boundaries: '#3a4357',
+    },
+  },
+  chiaro: {
+    base: 'light',
+    ritocchi: { background: '#f6f4ef', earth: '#efece5', water: '#c4d9e8', major: '#ffffff', highway: '#ffffff' },
+  },
+} as const
 
-// Lo stile CARTO porta gia' l'attribuzione OSM + CARTO: la si mostra compatta (pulsante "i"),
+export const stileMappa = (t: Tema): StyleSpecification => {
+  const { base, ritocchi } = FLAVOR[t]
+  const origine = typeof location !== 'undefined' ? location.origin : ''
+  return {
+    version: 8,
+    glyphs: `${origine}/basemap/fonts/{fontstack}/{range}.pbf`,
+    sprite: `${origine}/basemap/sprites/${base}`,
+    sources: {
+      protomaps: { type: 'vector', url: 'pmtiles:///tiles/sardegna.pmtiles', attribution: '\u00a9 <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>, <a href="https://protomaps.com">Protomaps</a>' },
+    },
+    layers: layers('protomaps', { ...namedFlavor(base), ...ritocchi }, { lang: 'it' }) as any,
+  }
+}
+
+// Testi dei controlli MapLibre in italiano (letti dagli screen reader)
+export const LOCALE_MAPPA = {
+  'NavigationControl.ZoomIn': 'Ingrandisci',
+  'NavigationControl.ZoomOut': 'Riduci',
+  'NavigationControl.ResetBearing': 'Orienta a nord',
+  'AttributionControl.ToggleAttribution': 'Mostra o nascondi le fonti della mappa',
+  'Popup.Close': 'Chiudi',
+}
+
+// L'attribuzione (OSM + Protomaps) arriva dalla sorgente: la si mostra compatta (pulsante "i"),
 // chiusa al primo caricamento per non coprire i controlli.
 export function chiudiAttribuzione(m: MappaLibre) {
   m.once('load', () => m.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'))

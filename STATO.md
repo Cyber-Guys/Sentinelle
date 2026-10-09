@@ -24,7 +24,10 @@ layer "mappature dei cittadini" nel cruscotto. Dati di gioco simulati con
 (`docs/interfaccia/linguaggio-visivo.md`), storico servito come PMTiles
 statico (`frontend/public/tiles/storico.pmtiles`, `scripts/genera_tiles.py`),
 PostGIS nativo arm64, fonti esterne in parallelo
-(`docs/esperimenti/2026-10-09-prestazioni.md`). Prossimo passo: pitch.
+(`docs/esperimenti/2026-10-09-prestazioni.md`). Mappa base offline Protomaps
+(`frontend/public/tiles/sardegna.pmtiles`, 57 MB), proxy `/api` e
+`scripts/tunnel.sh` per HTTPS da telefono, stati di errore/caricamento/vuoto,
+micro-animazioni, contrasti AA. Prossimo passo: prova su telefono vero, pitch.
 
 ## Chi fa cosa
 
@@ -73,6 +76,9 @@ Ognuno modifica solo la propria riga.
 - [ ] Decidere i ruoli (stack deciso).
 
 ## Aperto
+
+- Su emulazione mobile un tap sulla mappa a volte la rimpicciolisce: verificare
+  su telefono vero.
 
 - Errore in console di `@lucide/vue` (useLucideProps): icone funzionanti, da
   risolvere.

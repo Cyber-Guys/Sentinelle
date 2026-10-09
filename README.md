@@ -27,6 +27,10 @@ cd frontend && npm install && npm run dev
 
 - App cittadino: http://localhost:3000/app (a larghezza telefono)
 - Cruscotto operatori: http://localhost:3000/cruscotto
+- Il browser chiama sempre `/api/**` (stessa origine): Nitro lo inoltra al backend su :8000 (`routeRules` in `nuxt.config.ts`; per un backend altrove: `NUXT_PUBLIC_API_BASE_URL`).
+- Dal telefono vero (GPS e fotocamera vogliono HTTPS): `scripts/tunnel.sh` (richiede `brew install cloudflared qrencode`) apre un tunnel Cloudflare verso :3000 e stampa URL e QR code di `/app`. Ctrl+C lo chiude.
+- Mappa base Protomaps offline: tile in `frontend/public/tiles/sardegna.pmtiles` (OSM, zoom 0-14, ~57 MB), font e sprite in `frontend/public/basemap/`. Nessuna richiesta esterna. Per rigenerare i tile (`brew install pmtiles`; scegliere la build piu' recente su https://maps.protomaps.com/builds/):
+  `pmtiles extract https://build.protomaps.com/20261009.pmtiles frontend/public/tiles/sardegna.pmtiles --bbox=7.9,38.75,10.0,41.35 --maxzoom=14`
 
 ## Utili
 

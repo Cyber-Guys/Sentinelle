@@ -16,7 +16,7 @@ html[data-tema='scuro'] {
   --fondo-3: #121722;
   --testo: #f3f1ec;
   --testo-2: #a7a39a;
-  --testo-3: #7a766d;
+  --testo-3: #8a867e;
   --vetro: rgba(255, 255, 255, 0.045);
   --vetro-forte: rgba(255, 255, 255, 0.075);
   --vetro-mappa: rgba(11, 14, 20, 0.72);
@@ -43,17 +43,17 @@ html[data-tema='chiaro'] {
   --fondo-3: #ffffff;
   --testo: #1a1a17;
   --testo-2: #5b5850;
-  --testo-3: #807c72;
+  --testo-3: #6d6960;
   --vetro: rgba(255, 255, 255, 0.62);
   --vetro-forte: rgba(255, 255, 255, 0.82);
   --vetro-mappa: rgba(255, 255, 255, 0.8);
   --bordo: rgba(20, 20, 10, 0.08);
   --bordo-luce: rgba(20, 20, 10, 0.14);
   /* nel chiaro le tinte usate come testo scendono di luminosita' per il contrasto */
-  --brace: #d9481a;
-  --brace-scuro: #c22e17;
-  --ambra: #b07510;
-  --macchia: #2b8259;
+  --brace: #c43f14;
+  --brace-scuro: #b02a12;
+  --ambra: #956207;
+  --macchia: #277752;
   --cielo: #2a72ad;
   --ombra: 0 24px 50px -16px rgba(60, 40, 20, 0.28), 0 0 0 1px rgba(20, 20, 10, 0.04);
   --ombra-pillola: 0 6px 20px -8px rgba(60, 40, 20, 0.25);
@@ -141,6 +141,13 @@ body::after {
   label:has(input[type='file']) {
     cursor: pointer;
   }
+  /* pressione: scala leggera (proprieta' `scale`, non tocca transform/translate delle utility) */
+  :where(button, a, label:has(input[type='file'])) {
+    transition: scale 0.12s ease;
+  }
+  :where(button, a, label:has(input[type='file'])):active:not(:disabled) {
+    scale: 0.98;
+  }
 }
 
 /*
@@ -188,10 +195,7 @@ body::after {
   box-shadow:
     0 10px 30px -8px rgba(255, 90, 31, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-  &:active:not(:disabled) {
-    transform: scale(0.98);
-  }
+  transition: scale 0.12s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   &:disabled {
     opacity: 0.45;
     box-shadow: none;
@@ -205,7 +209,7 @@ body::after {
   color: var(--testo);
   font-weight: 600;
   border-radius: var(--radius-pill);
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, scale 0.12s ease;
   &:hover:not(:disabled) {
     background: color-mix(in srgb, var(--vetro-forte) 60%, var(--bordo-luce));
   }
@@ -229,6 +233,31 @@ body::after {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Area di tocco minima 44px senza ingrandire il disegno (pulsanti piccoli dell'app). */
+@utility tocco {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    translate: -50% -50%;
+  }
+}
+
+/* Scheletro di caricamento: forma del contenuto che arriva, luce che scorre lenta. */
+@keyframes scorre {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@utility scheletro {
+  border-radius: var(--radius-s);
+  background: linear-gradient(90deg, var(--vetro-forte) 30%, var(--bordo-luce) 50%, var(--vetro-forte) 70%) 0 0 / 200% 100%;
+  animation: scorre 1.6s ease-in-out infinite;
 }
 
 /* Movimento sobrio */
@@ -271,7 +300,21 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
   font: 13px/1.4 var(--font-sans);
 }
 .maplibregl-popup-tip { display: none !important; }
-.maplibregl-popup-close-button { color: var(--testo-2); padding: 0 6px; font-size: 16px; }
+.maplibregl-popup-close-button {
+  color: var(--testo-2);
+  width: 28px;
+  height: 28px;
+  top: 4px !important;
+  right: 4px !important;
+  border-radius: 999px;
+  font-size: 18px;
+  line-height: 1;
+}
+.maplibregl-popup-close-button:hover { background: var(--vetro-forte) !important; color: var(--testo); }
+.maplibregl-popup-content :where(.popup-titolo) { color: var(--testo-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 650; padding-right: 22px; }
+.maplibregl-ctrl button:focus-visible { outline: 2px solid var(--cielo) !important; outline-offset: -2px; box-shadow: none !important; }
+@keyframes popup-entra { from { opacity: 0; translate: 0 4px; } }
+.maplibregl-popup-content { animation: popup-entra 0.18s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   body::after { display: none; }
@@ -280,4 +323,6 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+  :active { scale: none !important; }
+  .scheletro { background: var(--vetro-forte); }
 }

@@ -7,6 +7,8 @@ const { chiama } = useApi()
 
 const missioni = ref<Missione[]>([])
 const errore = ref('')
+const caricamento = ref(true)
+const erroreElenco = ref('')
 const attiva = ref<Missione | null>(null)
 const inCorso = ref(false)
 
@@ -23,8 +25,11 @@ const caricandoStat = ref(false)
 const ICONE: Record<string, any> = { quiz_rischio: HelpCircle, punto_acqua: Droplets, sterpaglie: Leaf, rifiuti_strada: Trash2, esplora_comune: Compass }
 
 async function carica() {
+  erroreElenco.value = ''
+  if (!missioni.value.length) caricamento.value = true
   try { missioni.value = await chiama<Missione[]>(`/missioni?utente_id=${props.utente.id}`) }
-  catch (e: any) { errore.value = 'Missioni non disponibili: ' + e.message }
+  catch (e) { erroreElenco.value = messaggioErrore(e, 'caricare le missioni') }
+  caricamento.value = false
 }
 onMounted(carica)
 defineExpose({ carica })
@@ -36,7 +41,7 @@ async function apri(m: Missione) {
   attiva.value = m; risultato.value = null
   if (m.tipo === 'quiz') {
     try { domande.value = await chiama<DomandaQuiz[]>('/quiz/oggi'); risposte.value = []; passo.value = 0 }
-    catch (e: any) { errore.value = 'Quiz non disponibile: ' + e.message; attiva.value = null }
+    catch (e) { errore.value = messaggioErrore(e, 'aprire il quiz'); attiva.value = null }
   } else await statistiche()
 }
 
@@ -52,7 +57,7 @@ async function completa(m: Missione, extra: Record<string, string> = {}) {
     emit('esito', r)
     return r
   } catch (e: any) {
-    errore.value = String(e.message).startsWith('409') ? 'Missione già completata (limite raggiunto).' : 'Operazione non riuscita: ' + e.message
+    errore.value = String(e.message).startsWith('409') ? 'Missione già completata (limite raggiunto).' : messaggioErrore(e, 'completare la missione')
   } finally { inCorso.value = false }
 }
 
@@ -71,7 +76,7 @@ async function statistiche() {
   try {
     const g = await chiama<{ per_anno: { anno: number; incendi: number; ettari: number }[] }>(`/storico/statistiche?comune=${encodeURIComponent(props.utente.comune)}&anno_da=2015`)
     righe.value = [...g.per_anno].sort((a, b) => b.anno - a.anno)
-  } catch (e: any) { errore.value = 'Statistiche non disponibili' }
+  } catch (e) { errore.value = messaggioErrore(e, 'caricare le statistiche') }
   caricandoStat.value = false
 }
 const giuste = computed(() => risultato.value?.esiti?.filter((e) => e.giusta).length ?? 0)
@@ -93,7 +98,16 @@ async function completaEsplora() {
     <template v-if="!attiva">
       <p class="etichetta">Oggi</p>
       <h2 class="mt-0.5 mb-3 text-xl font-semibold tracking-tight">Missioni di prevenzione</h2>
-      <ul class="space-y-2">
+      <StatoErrore v-if="erroreElenco" :messaggio="erroreElenco" @riprova="carica" />
+      <ul v-else-if="caricamento" class="space-y-2" aria-busy="true" aria-label="Caricamento delle missioni">
+        <li v-for="k in 4" :key="k" class="vetro flex items-center gap-3 p-3">
+          <span class="scheletro size-11 shrink-0 !rounded-[12px]" />
+          <span class="flex-1 space-y-2"><span class="scheletro block h-3.5 w-36" /><span class="scheletro block h-2.5 w-48 max-w-full" /></span>
+          <span class="scheletro h-6 w-11 !rounded-full" />
+        </li>
+      </ul>
+      <p v-else-if="!missioni.length" class="vetro p-5 text-center text-sm text-testo-2">Nessuna missione per oggi. Torna domani.</p>
+      <ul v-else class="space-y-2">
         <li v-for="m in missioni" :key="m.id">
           <button type="button" class="vetro flex w-full items-center gap-3 p-3 text-left transition-colors" :class="m.disponibile ? 'hover:bg-vetro-forte active:bg-vetro-forte' : 'opacity-75'" :disabled="!m.disponibile" @click="apri(m)">
             <span class="flex size-11 shrink-0 items-center justify-center rounded-[12px] ring-1" :class="m.disponibile ? 'bg-brace/12 text-brace ring-brace/25' : 'bg-macchia/12 text-macchia ring-macchia/25'">
@@ -106,7 +120,6 @@ async function completaEsplora() {
             <span class="cifre flex shrink-0 items-center gap-1 rounded-full bg-ambra/12 px-2 py-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3 fill-current" aria-hidden="true" />{{ m.punti }}</span>
           </button>
         </li>
-        <li v-if="!missioni.length && !errore" class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</li>
       </ul>
     </template>
 
@@ -117,7 +130,7 @@ async function completaEsplora() {
           <p class="etichetta">Quiz · +{{ attiva.punti }} punti</p>
           <h2 class="mt-0.5 text-lg font-semibold">{{ attiva.titolo }}</h2>
         </div>
-        <button type="button" aria-label="Chiudi il quiz" class="secondario flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
+        <button type="button" aria-label="Chiudi il quiz" class="secondario tocco flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
       </div>
       <template v-if="!risultato">
         <div v-if="domande.length" class="flex gap-1.5" aria-hidden="true">
@@ -172,7 +185,7 @@ async function completaEsplora() {
           <p class="etichetta">Esplora · +{{ attiva.punti }} punti</p>
           <h2 class="mt-0.5 text-lg font-semibold">Incendi a <span class="capitalize">{{ utente.comune.toLowerCase() }}</span></h2>
         </div>
-        <button type="button" aria-label="Chiudi" class="secondario flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
+        <button type="button" aria-label="Chiudi" class="secondario tocco flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
       </div>
       <p v-if="caricandoStat" class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</p>
       <p v-else-if="!righe.length" class="vetro p-4 text-sm text-testo-2">Nessun incendio registrato in archivio per il tuo comune.</p>

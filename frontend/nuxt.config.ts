@@ -8,7 +8,13 @@ export default defineNuxtConfig({
   modules: ['reka-ui/nuxt'],
   css: ['maplibre-gl/dist/maplibre-gl.css', '~/assets/css/tema.css'],
   devServer: { host: '::', port: 3000 },
-  vite: { plugins: [tailwindcss()], optimizeDeps: { include: ['vue', 'maplibre-gl'] } },
+  vite: {
+    plugins: [tailwindcss()],
+    optimizeDeps: { include: ['vue', 'maplibre-gl'] },
+    server: { allowedHosts: ['.trycloudflare.com'] }, // tunnel per il telefono (scripts/tunnel.sh)
+  },
+  // stessa origine: il browser chiama /api/**, Nitro inoltra al backend (niente CORS, funziona dal tunnel HTTPS)
+  routeRules: { '/api/**': { proxy: 'http://localhost:8000/**' } },
   app: {
     head: {
       htmlAttrs: { lang: 'it' },
@@ -25,6 +31,6 @@ export default defineNuxtConfig({
     },
   },
   runtimeConfig: {
-    public: { apiBaseUrl: 'http://localhost:8000' }, // NUXT_PUBLIC_API_BASE_URL
+    public: { apiBaseUrl: '/api' }, // NUXT_PUBLIC_API_BASE_URL
   },
 })

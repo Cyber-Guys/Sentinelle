@@ -2,7 +2,8 @@
 import { Wind, Droplet, SunMedium, Thermometer } from '@lucide/vue'
 import type { Rischio } from '~/composables/useApi'
 
-const props = defineProps<{ rischio: Rischio | null }>()
+const props = defineProps<{ rischio: Rischio | null; errore?: boolean }>()
+const emit = defineEmits<{ riprova: [] }>()
 const aperto = ref(false)
 
 type Meteo = { vento_kmh?: number; raffiche_kmh?: number; umidita?: number; temperatura?: number; giorni_senza_pioggia?: number }
@@ -27,9 +28,9 @@ const righe = computed(() => [
     <button
       type="button"
       class="pillola flex h-12 items-center gap-2 py-1 pr-3.5 pl-2.5"
-      :aria-expanded="aperto"
-      aria-label="Rischio incendio di oggi: mostra i dettagli"
-      @click="aperto = !aperto"
+      :aria-expanded="errore ? undefined : aperto"
+      :aria-label="errore ? 'Rischio di oggi non disponibile: tocca per riprovare' : rischio ? `Rischio incendio di oggi ${rischio.livello}: mostra i dettagli` : 'Rischio incendio di oggi: caricamento'"
+      @click="errore ? emit('riprova') : (aperto = !aperto)"
     >
       <svg width="28" height="18" viewBox="0 0 34 21" aria-hidden="true">
         <path d="M3 18a14 14 0 0 1 28 0" fill="none" stroke="var(--bordo-luce)" stroke-width="3.5" stroke-linecap="round" />
@@ -38,7 +39,8 @@ const righe = computed(() => [
       <span class="text-left leading-none">
         <span class="block text-[.6rem] font-semibold uppercase tracking-wide text-testo-3">Rischio</span>
         <span v-if="rischio" class="mt-0.5 block text-[.86rem] font-bold capitalize" :style="{ color: colore }">{{ rischio.livello }}</span>
-        <span v-else class="mt-0.5 block text-[.86rem] text-testo-3">…</span>
+        <span v-else-if="errore" class="mt-0.5 block text-[.8rem] font-semibold text-testo-2">Riprova</span>
+        <span v-else class="scheletro mt-1 block h-3 w-11" aria-hidden="true" />
       </span>
     </button>
 

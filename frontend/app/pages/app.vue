@@ -10,7 +10,10 @@ const CENTRI = CENTRI_COMUNI
 const utenti = ref<Utente[]>([])
 const utente = ref<Utente | null>(null)
 const rischio = ref<Rischio | null>(null)
+const rischioErrore = ref(false)
 const errore = ref('')
+const caricamentoUtenti = ref(true)
+const erroreUtenti = ref('')
 
 const pannello = ref(false)
 const tipo = ref<'fuoco' | 'area_a_rischio'>('fuoco')
@@ -22,7 +25,7 @@ const esito = ref<Segnalazione | null>(null)
 const scheda = ref<Scheda>('mappa')
 const missione = ref<Missione | null>(null) // missione `posizione` in attesa del punto sulla mappa
 const toast = ref<{ id: number; testo: string } | null>(null)
-const nuovoLivello = ref<string | null>(null)
+const nuovoLivello = ref<{ nome: string; punti: number } | null>(null)
 let tToast: ReturnType<typeof setTimeout> | undefined
 let tLivello: ReturnType<typeof setTimeout> | undefined
 
@@ -51,16 +54,24 @@ function iconaMotivo(m: string) {
   if (t.includes('storic')) return History
   return Info
 }
+// '2025-06-08' -> '8 giugno 2025' (le date dell'archivio arrivano come stringa ISO o assenti)
+const dataLunga = (d?: string) => {
+  const t = d ? new Date(d) : null
+  return t && !isNaN(+t) ? t.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Data non nota'
+}
 const iniziali = (n: string) => n.replace(/\(.*?\)/g, '').trim().split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase()
 
-onMounted(async () => {
+async function caricaUtenti() {
+  caricamentoUtenti.value = true; erroreUtenti.value = ''
   try {
     utenti.value = await chiama<Utente[]>('/utenti')
     const salvato = (() => { try { return Number(localStorage.getItem('utenteId')) } catch { return 0 } })()
     const trovato = utenti.value.find((u) => u.id === salvato)
     if (trovato) await scegli(trovato)
-  } catch (e: any) { errore.value = 'Server non raggiungibile: ' + e.message }
-})
+  } catch (e) { erroreUtenti.value = messaggioErrore(e, 'caricare le sentinelle') }
+  caricamentoUtenti.value = false
+}
+onMounted(caricaUtenti)
 
 onBeforeUnmount(() => { clearTimeout(tToast); clearTimeout(tLivello); mappa?.remove() })
 
@@ -68,10 +79,14 @@ async function scegli(u: Utente) {
   utente.value = u
   chiama<Utente>(`/utenti/${u.id}`).then((d) => (utente.value = d)).catch(() => {})
   try { localStorage.setItem('utenteId', String(u.id)) } catch {}
-  rischio.value = null
-  chiama<Rischio>(`/rischio?lat=${centro.value[1]}&lon=${centro.value[0]}`).then((r) => (rischio.value = r)).catch(() => {})
+  caricaRischio()
   await nextTick()
   avviaMappa()
+}
+
+function caricaRischio() {
+  rischio.value = null; rischioErrore.value = false
+  chiama<Rischio>(`/rischio?lat=${centro.value[1]}&lon=${centro.value[0]}`).then((r) => (rischio.value = r)).catch(() => (rischioErrore.value = true))
 }
 
 function cambiaUtente() {
@@ -88,7 +103,7 @@ function avviaMappa() {
   registraPmtiles()
   mappa = new maplibregl.Map({
     container: contenitore.value, style: stileMappa(tema.value), center: centro.value, zoom: 12, minZoom: 6,
-    attributionControl: false,
+    attributionControl: false, locale: LOCALE_MAPPA,
   })
   mappa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
   mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right')
@@ -101,7 +116,7 @@ function avviaMappa() {
       const p = ev.features?.[0]?.properties
       if (!p || pannello.value || missione.value) return
       new maplibregl.Popup({ maxWidth: '220px' }).setLngLat(ev.lngLat)
-        .setHTML(`<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--testo-3);font-weight:650">Incendio ${p.anno}</div><div style="font-weight:650;margin-top:2px">${p.data ?? 'data n.d.'}</div><div style="font-variant-numeric:tabular-nums;color:var(--testo-2)">${p.ettari != null ? Number(p.ettari).toFixed(1) + ' ettari' : 'ettari n.d.'}${p.comune ? ' · ' + p.comune : ''}</div>`)
+        .setHTML(`<div class="popup-titolo">Incendio del ${p.anno}</div><div style="font-weight:650;margin-top:2px">${dataLunga(p.data)}</div><div style="font-variant-numeric:tabular-nums;color:var(--testo-2)">${p.ettari != null ? Number(p.ettari).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' ettari' : 'Superficie non nota'}${p.comune ? ' · <span style="text-transform:capitalize">' + String(p.comune).toLowerCase() + '</span>' : ''}</div>`)
         .addTo(m)
     })
     m.on('click', (ev) => {
@@ -169,13 +184,14 @@ function applicaEsito(r: { punti_ottenuti: number; punti: number; livello: Livel
   if (!utente.value) return
   const vecchio = utente.value.livello?.nome
   utente.value = { ...utente.value, punti: r.punti, livello: r.livello }
-  if (r.punti_ottenuti > 0) {
+  // salto di livello: il riquadro grande porta anche i punti, niente toast sovrapposto
+  if (vecchio && vecchio !== r.livello.nome) {
+    toast.value = null
+    nuovoLivello.value = { nome: r.livello.nome, punti: r.punti_ottenuti }
+    clearTimeout(tLivello); tLivello = setTimeout(() => (nuovoLivello.value = null), 3600)
+  } else if (r.punti_ottenuti > 0) {
     toast.value = { id: Date.now(), testo: `+${r.punti_ottenuti} punti` }
     clearTimeout(tToast); tToast = setTimeout(() => (toast.value = null), 2500)
-  }
-  if (vecchio && vecchio !== r.livello.nome) {
-    nuovoLivello.value = r.livello.nome
-    clearTimeout(tLivello); tLivello = setTimeout(() => (nuovoLivello.value = null), 3000)
   }
 }
 
@@ -210,7 +226,7 @@ async function confermaMissione() {
     scheda.value = 'missioni'
     applicaEsito(r)
   } catch (e: any) {
-    errore.value = String(e.message).startsWith('409') ? 'Hai raggiunto il limite di oggi per questa missione.' : 'Invio non riuscito: ' + e.message
+    errore.value = String(e.message).startsWith('409') ? 'Hai raggiunto il limite di oggi per questa missione.' : messaggioErrore(e, 'inviare la missione')
   }
   inCorso.value = false
 }
@@ -230,7 +246,7 @@ async function invia() {
       const d = await chiama<Utente>(`/utenti/${utente.value.id}`)
       applicaEsito({ punti_ottenuti: esito.value.punti_ottenuti, punti: d.punti, livello: d.livello! })
     }
-  } catch (e: any) { errore.value = 'Invio non riuscito: ' + e.message }
+  } catch (e) { errore.value = messaggioErrore(e, 'inviare la segnalazione') }
   inCorso.value = false
 }
 </script>
@@ -256,8 +272,16 @@ async function invia() {
       </div>
 
       <p class="etichetta mt-10 mb-2.5 px-1">Chi sei?</p>
-      <p v-if="errore" class="mb-3 flex items-center gap-2 rounded-[var(--radius-m)] border border-brace/40 bg-brace/10 p-3 text-sm text-brace" role="alert"><TriangleAlert class="size-4 shrink-0" /> {{ errore }}</p>
-      <ul class="vetro divide-y divide-bordo overflow-hidden !p-0">
+      <StatoErrore v-if="erroreUtenti" :messaggio="erroreUtenti" @riprova="caricaUtenti" />
+      <ul v-else-if="caricamentoUtenti" class="vetro divide-y divide-bordo overflow-hidden !p-0" aria-busy="true" aria-label="Caricamento delle sentinelle">
+        <li v-for="k in 5" :key="k" class="flex items-center gap-3 px-4 py-3">
+          <span class="scheletro size-10 shrink-0 !rounded-full" />
+          <span class="flex-1 space-y-1.5"><span class="scheletro block h-3.5 w-28" /><span class="scheletro block h-2.5 w-16" /></span>
+          <span class="scheletro h-3.5 w-9" />
+        </li>
+      </ul>
+      <p v-else-if="!utenti.length" class="vetro p-6 text-center text-sm text-testo-2">Nessuna sentinella registrata.</p>
+      <ul v-else class="vetro divide-y divide-bordo overflow-hidden !p-0">
         <li v-for="u in utenti" :key="u.id">
           <button class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-vetro-forte active:bg-vetro-forte" @click="scegli(u)">
             <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-vetro-forte text-[.8rem] font-bold ring-1 ring-bordo-luce">{{ iniziali(u.nome) }}</span>
@@ -269,7 +293,6 @@ async function invia() {
             <ChevronRight class="size-4 text-testo-3" aria-hidden="true" />
           </button>
         </li>
-        <li v-if="!utenti.length && !errore" class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</li>
       </ul>
     </section>
 
@@ -283,12 +306,12 @@ async function invia() {
           <button type="button" class="pillola pointer-events-auto flex h-12 min-w-0 flex-1 items-center pr-3 pl-1 text-left" aria-label="Il tuo profilo: tocca per cambiare utente" @click="cambiaUtente">
             <IndicatoreLivello :nome="utente.nome" :punti="utente.punti" :livello="utente.livello" />
           </button>
-          <IndicatoreRischio class="pointer-events-auto" :rischio="rischio" />
+          <IndicatoreRischio class="pointer-events-auto" :rischio="rischio" :errore="rischioErrore" @riprova="caricaRischio" />
           <InterruttoreTema compatto class="pointer-events-auto" />
         </div>
         <div v-if="scheda === 'mappa' && !missione" class="mt-2 flex items-center gap-2">
           <div class="pillola pointer-events-auto flex items-center gap-0.5 p-1 text-[.76rem]" role="group" aria-label="Incendi storici">
-            <button v-for="f in FILTRI" :key="f.id" type="button" class="h-8 rounded-full px-3 font-semibold transition-colors" :class="filtro === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2'" :aria-pressed="filtro === f.id" @click="filtro = f.id">{{ f.etichetta }}</button>
+            <button v-for="f in FILTRI" :key="f.id" type="button" class="tocco h-9 rounded-full px-3 font-semibold transition-colors" :class="filtro === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2'" :aria-pressed="filtro === f.id" @click="filtro = f.id">{{ f.etichetta }}</button>
           </div>
         </div>
       </header>
@@ -334,7 +357,7 @@ async function invia() {
               <p class="etichetta">{{ esito ? 'Segnalazione inviata' : 'Nuova segnalazione' }}</p>
               <h2 id="titolo-pannello" class="mt-0.5 text-lg font-semibold">{{ esito ? 'Grazie, è in coda agli operatori' : 'Cosa vedi?' }}</h2>
             </div>
-            <button type="button" aria-label="Chiudi" class="secondario flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
+            <button type="button" aria-label="Chiudi" class="secondario tocco flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
           </div>
 
           <!-- esito -->
@@ -379,7 +402,7 @@ async function invia() {
               <span class="cifre min-w-0 flex-1 text-[.82rem] leading-tight" :class="pos ? 'font-semibold text-macchia' : 'text-testo-2'">
                 {{ pos ? `${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : 'Tocca la mappa per indicare il punto' }}
               </span>
-              <button type="button" class="secondario flex h-9 shrink-0 items-center gap-1.5 px-3 text-[.8rem]" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> GPS</button>
+              <button type="button" class="secondario tocco flex h-9 shrink-0 items-center gap-1.5 px-3 text-[.8rem]" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> GPS</button>
             </div>
 
             <label class="flex items-center gap-3 rounded-[var(--radius-m)] border border-dashed border-bordo-luce bg-vetro p-3 text-sm">
@@ -412,15 +435,21 @@ async function invia() {
       </Transition>
 
       <BarraNavigazione v-model="scheda" />
-      <ToastPunti :toast="toast" :nuovo-livello="nuovoLivello" />
+      <ToastPunti :toast="toast" :nuovo-livello="nuovoLivello" @chiudi-livello="nuovoLivello = null" />
     </template>
   </main>
 </template>
 
 <style>
-.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 6.5rem); right: 2px; }
-.foglio-enter-active, .foglio-leave-active { transition: opacity .22s ease, transform .22s ease; }
-.foglio-enter-from, .foglio-leave-to { opacity: 0; transform: translateY(12px); }
+.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 6.75rem); right: 2px; }
+/* controlli della mappa a misura di dito */
+.mappa-app .maplibregl-ctrl-group button { width: 40px; height: 40px; }
+.mappa-app .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; }
+/* fogli: salgono con easing in uscita, se ne vanno piu' in fretta (niente sovrapposizioni lunghe) */
+.foglio-enter-active { transition: opacity .2s ease-out, transform .32s cubic-bezier(.22, 1, .36, 1); }
+.foglio-leave-active { transition: opacity .14s ease-in, transform .14s ease-in; }
+.foglio-enter-from { opacity: 0; transform: translateY(28px); }
+.foglio-leave-to { opacity: 0; transform: translateY(10px); }
 .segnaposto { position: relative; width: 22px; height: 22px; }
 .segnaposto span { position: absolute; inset: 0; border-radius: 999px; background: linear-gradient(135deg, #ff9a3d, #e8351f); border: 3px solid var(--fondo-3); box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 18px rgba(255,106,43,.7); }
 .segnaposto i { position: absolute; inset: -10px; border-radius: 999px; border: 2px solid #ff6a2b; animation: pulsa 2.4s ease-in-out infinite; }

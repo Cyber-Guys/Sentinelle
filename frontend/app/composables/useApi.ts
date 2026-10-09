@@ -12,6 +12,13 @@ export function useApi() {
   return { base, chiama, urlFoto }
 }
 
+// Messaggio per le persone, non per gli sviluppatori: rete giu' o server in errore diventano una frase sola.
+export function messaggioErrore(e: unknown, azione = 'caricare i dati') {
+  const m = String((e as Error)?.message ?? '')
+  if (/^4\d\d/.test(m) && !/^40[48]/.test(m)) return `Non è stato possibile ${azione}: richiesta non valida.`
+  return `Non riusciamo a ${azione}. Controlla la connessione e riprova.`
+}
+
 export type Livello = { nome: string; soglia: number; prossima_soglia: number | null; progresso: number }
 export type Utente = { id: number; nome: string; comune: string; punti: number; livello?: Livello }
 export type Missione = {
@@ -32,6 +39,7 @@ export const CENTRI_COMUNI: Record<string, [number, number]> = {
 export type Segnalazione = {
   id: number; utente_id: number; tipo: 'fuoco' | 'area_a_rischio'; lat: number; lon: number
   foto_url: string | null; priorita: number; motivazioni: string[]; stato: string; creata_il: string
+  punti_ottenuti?: number
 }
 export type Rischio = { valore: number; livello: 'basso' | 'medio' | 'alto'; meteo: unknown }
 

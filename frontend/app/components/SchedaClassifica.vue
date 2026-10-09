@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Crown, Star, Users } from '@lucide/vue'
+import { Crown, Star, Users, Trophy } from '@lucide/vue'
 
 const props = defineProps<{ comune: string; nomeUtente: string }>()
 const { chiama } = useApi()
@@ -7,15 +7,22 @@ const { chiama } = useApi()
 const comuni = ref<RigaComune[]>([])
 const utenti = ref<RigaUtente[]>([])
 const errore = ref('')
+const caricamento = ref(true)
 
-onMounted(async () => {
+async function carica() {
+  caricamento.value = true; errore.value = ''
   try {
     comuni.value = await chiama<RigaComune[]>('/classifica/comuni')
     const tutti = await chiama<{ id: number; nome: string }[]>('/comuni')
     const c = tutti.find((x) => x.nome === props.comune)
     if (c) utenti.value = await chiama<RigaUtente[]>(`/classifica/utenti?comune_id=${c.id}`)
-  } catch (e: any) { errore.value = 'Classifica non disponibile: ' + e.message }
-})
+  } catch (e) { errore.value = messaggioErrore(e, 'caricare la classifica') }
+  caricamento.value = false
+}
+onMounted(carica)
+
+// classifica "vuota" anche quando le righe ci sono ma nessuno ha ancora punti
+const senzaPunti = computed(() => !comuni.value.some((r) => r.punti > 0))
 
 const podio = computed(() => {
   const [a, b, c] = comuni.value
@@ -29,7 +36,32 @@ const nomeLivello = (l: RigaUtente['livello']) => (typeof l === 'string' ? l : l
 
 <template>
   <div class="space-y-6 p-4">
-    <p v-if="errore" class="rounded-[var(--radius-m)] border border-brace/40 bg-brace/10 p-3 text-sm text-brace" role="alert">{{ errore }}</p>
+    <StatoErrore v-if="errore" :messaggio="errore" @riprova="carica" />
+    <div v-else-if="caricamento" class="space-y-6" aria-busy="true" aria-label="Caricamento della classifica">
+      <div>
+        <p class="etichetta">Sfida tra comuni</p>
+        <h2 class="mt-0.5 mb-4 text-xl font-semibold tracking-tight">Classifica dei comuni</h2>
+        <div class="grid grid-cols-3 items-end gap-2">
+          <div v-for="h in ['h-16', 'h-24', 'h-12']" :key="h" class="flex flex-col items-center gap-1.5">
+            <span class="scheletro block h-3 w-14" /><span class="scheletro block h-5 w-10" />
+            <span class="scheletro block w-full !rounded-b-[6px]" :class="h" />
+          </div>
+        </div>
+      </div>
+      <div class="space-y-1.5"><span v-for="k in 3" :key="k" class="scheletro block h-12 w-full !rounded-[var(--radius-m)]" /></div>
+    </div>
+    <section v-else-if="senzaPunti">
+      <p class="etichetta">Sfida tra comuni</p>
+      <h2 class="mt-0.5 mb-4 text-xl font-semibold tracking-tight">Classifica dei comuni</h2>
+      <div class="vetro flex flex-col items-center gap-3 px-5 py-8 text-center">
+      <span class="flex size-12 items-center justify-center rounded-full bg-ambra/12 text-ambra ring-1 ring-ambra/25"><Trophy class="size-6" aria-hidden="true" /></span>
+      <div class="space-y-1">
+        <p class="font-semibold">La sfida è appena iniziata</p>
+        <p class="text-[.84rem] text-testo-2">Nessun comune ha ancora punti. Completa una missione e porta <span class="capitalize">{{ comune.toLowerCase() }}</span> in testa.</p>
+      </div>
+      </div>
+    </section>
+    <template v-else>
     <section>
       <p class="etichetta">Sfida tra comuni</p>
       <h2 class="mt-0.5 mb-4 text-xl font-semibold tracking-tight">Classifica dei comuni</h2>
@@ -56,7 +88,6 @@ const nomeLivello = (l: RigaUtente['livello']) => (typeof l === 'string' ? l : l
           <span v-if="r.comune === comune" class="rounded-full bg-brace/15 px-2 py-0.5 text-[.68rem] font-semibold text-brace">il tuo</span>
           <span class="cifre text-lg font-bold">{{ r.punti }}</span>
         </li>
-        <li v-if="!comuni.length && !errore" class="text-sm text-testo-2">Ancora nessun punto assegnato.</li>
       </ol>
     </section>
 
@@ -72,7 +103,9 @@ const nomeLivello = (l: RigaUtente['livello']) => (typeof l === 'string' ? l : l
           </span>
           <span class="cifre flex items-center gap-1 font-semibold"><Star class="size-3.5 fill-ambra text-ambra" aria-hidden="true" />{{ u.punti }}</span>
         </li>
+        <li v-if="!utenti.length" class="px-3 py-4 text-center text-sm text-testo-2">Nessuna sentinella con punti nel tuo comune: inizia tu.</li>
       </ol>
     </section>
+    </template>
   </div>
 </template>
