@@ -13,9 +13,15 @@ const VOCI = [
 </script>
 
 <template>
-  <nav class="grid grid-cols-3 border-t border-bordo bg-carta">
-    <button v-for="v in VOCI" :key="v.id" type="button" class="flex flex-col items-center gap-0.5 py-2 text-xs font-semibold" :class="modelValue === v.id ? 'text-fuoco' : 'text-testo-2'" @click="$emit('update:modelValue', v.id)">
-      <component :is="v.icona" class="size-6" />
+  <nav class="pillola fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 gap-1 p-1.5" aria-label="Sezioni">
+    <button
+      v-for="v in VOCI" :key="v.id" type="button"
+      class="flex h-11 items-center gap-1.5 rounded-full px-4 text-[.82rem] font-semibold transition-colors duration-200"
+      :class="modelValue === v.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'"
+      :aria-current="modelValue === v.id ? 'page' : undefined"
+      @click="$emit('update:modelValue', v.id)"
+    >
+      <component :is="v.icona" class="size-[18px]" :class="modelValue === v.id && 'text-brace'" aria-hidden="true" />
       {{ v.etichetta }}
     </button>
   </nav>

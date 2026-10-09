@@ -20,7 +20,11 @@ Gamification completata (`docs/piani/2026-10-09-gamification.md`): schede
 Mappa/Missioni/Classifica, quiz del giorno (12 domande in
 `backend/config/quiz.toml`), missioni di posizione, livelli, classifica comuni,
 layer "mappature dei cittadini" nel cruscotto. Dati di gioco simulati con
-`scripts/semina_demo.py`. Prossimo passo: rifinitura della demo e pitch.
+`scripts/semina_demo.py`. Rifinitura: restyling scuro-first con interruttore tema
+(`docs/interfaccia/linguaggio-visivo.md`), storico servito come PMTiles
+statico (`frontend/public/tiles/storico.pmtiles`, `scripts/genera_tiles.py`),
+PostGIS nativo arm64, fonti esterne in parallelo
+(`docs/esperimenti/2026-10-09-prestazioni.md`). Prossimo passo: pitch.
 
 ## Chi fa cosa
 
@@ -72,8 +76,6 @@ Ognuno modifica solo la propria riga.
 
 - Errore in console di `@lucide/vue` (useLucideProps): icone funzionanti, da
   risolvere.
-- PostGIS gira in emulazione amd64 (nessuna immagine arm64 ufficiale): query
-  di vicinanza ~1-2 s. Alternativa: immagine arm64 non ufficiale.
 - Oggi nessun hotspot FIRMS: la demo offline non ne ha; valutare hotspot
   fittizi dichiarati.
 

@@ -1,21 +1,283 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-fondo: #fafaf7;
-  --color-carta: #ffffff;
-  --color-bordo: #e4e2da;
-  --color-testo: #1f2420;
-  --color-testo-2: #6b7068;
-  --color-fuoco: #ea580c;
-  --color-fuoco-scuro: #c2410c;
-  --color-bosco: #2f6b3f;
-  --color-bosco-chiaro: #e3efe5;
-  --color-alta: #dc2626;
-  --color-media: #f97316;
-  --color-bassa: #16a34a;
+/*
+  Sentinelle: la notte d'estate in Sardegna con un fuoco all'orizzonte.
+  Token come variabili CSS ridefinite per tema su `html[data-tema]`
+  (vedi docs/interfaccia/linguaggio-visivo.md). Tailwind li legge tramite
+  `@theme inline`, quindi `bg-vetro`, `text-brace`, `border-bordo/50`...
+  cambiano da soli quando cambia il tema. Nessun colore scritto nelle pagine.
+*/
+
+:root,
+html[data-tema='scuro'] {
+  color-scheme: dark;
+  --fondo: #07090d;
+  --fondo-2: #0b0f16;
+  --fondo-3: #121722;
+  --testo: #f3f1ec;
+  --testo-2: #a7a39a;
+  --testo-3: #7a766d;
+  --vetro: rgba(255, 255, 255, 0.045);
+  --vetro-forte: rgba(255, 255, 255, 0.075);
+  --vetro-mappa: rgba(11, 14, 20, 0.72);
+  --bordo: rgba(255, 255, 255, 0.08);
+  --bordo-luce: rgba(255, 255, 255, 0.16);
+  --brace: #ff6a2b;
+  --brace-scuro: #e8351f;
+  --ambra: #f5b83d;
+  --macchia: #3fb37f;
+  --cielo: #5aa9e6;
+  --ombra: 0 24px 60px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.3);
+  --ombra-pillola: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --atmosfera:
+    radial-gradient(90% 55% at 50% 118%, rgba(255, 90, 31, 0.22), transparent 62%),
+    radial-gradient(55% 30% at 18% 108%, rgba(232, 53, 31, 0.12), transparent 70%),
+    radial-gradient(80% 45% at 50% -12%, rgba(63, 179, 127, 0.1), transparent 64%),
+    linear-gradient(180deg, #0a0f15 0%, #07090d 55%, #0b0806 100%);
 }
 
-html, body { background: var(--color-fondo); color: var(--color-testo); font-family: system-ui, sans-serif; margin: 0; }
-.primario { background: var(--color-fuoco); color: #fff; font-weight: 700; border-radius: .75rem; }
-.primario:active { background: var(--color-fuoco-scuro); }
-.secondario { background: var(--color-bosco); color: #fff; font-weight: 600; border-radius: .75rem; }
+html[data-tema='chiaro'] {
+  color-scheme: light;
+  --fondo: #f6f4ef;
+  --fondo-2: #faf9f5;
+  --fondo-3: #ffffff;
+  --testo: #1a1a17;
+  --testo-2: #5b5850;
+  --testo-3: #807c72;
+  --vetro: rgba(255, 255, 255, 0.62);
+  --vetro-forte: rgba(255, 255, 255, 0.82);
+  --vetro-mappa: rgba(255, 255, 255, 0.8);
+  --bordo: rgba(20, 20, 10, 0.08);
+  --bordo-luce: rgba(20, 20, 10, 0.14);
+  /* nel chiaro le tinte usate come testo scendono di luminosita' per il contrasto */
+  --brace: #d9481a;
+  --brace-scuro: #c22e17;
+  --ambra: #b07510;
+  --macchia: #2b8259;
+  --cielo: #2a72ad;
+  --ombra: 0 24px 50px -16px rgba(60, 40, 20, 0.28), 0 0 0 1px rgba(20, 20, 10, 0.04);
+  --ombra-pillola: 0 6px 20px -8px rgba(60, 40, 20, 0.25);
+  --atmosfera:
+    radial-gradient(90% 50% at 50% 120%, rgba(255, 106, 43, 0.16), transparent 62%),
+    radial-gradient(80% 45% at 50% -12%, rgba(47, 143, 99, 0.1), transparent 64%),
+    linear-gradient(180deg, #f3f2ec 0%, #f6f4ef 60%, #f8efe6 100%);
+}
+
+@theme inline {
+  --color-fondo: var(--fondo);
+  --color-fondo-2: var(--fondo-2);
+  --color-fondo-3: var(--fondo-3);
+  --color-testo: var(--testo);
+  --color-testo-2: var(--testo-2);
+  --color-testo-3: var(--testo-3);
+  --color-vetro: var(--vetro);
+  --color-vetro-forte: var(--vetro-forte);
+  --color-bordo: var(--bordo);
+  --color-bordo-luce: var(--bordo-luce);
+  --color-brace: var(--brace);
+  --color-brace-scuro: var(--brace-scuro);
+  --color-ambra: var(--ambra);
+  --color-macchia: var(--macchia);
+  --color-cielo: var(--cielo);
+  /* scala della priorita' e del rischio: sempre con la parola accanto */
+  --color-alta: var(--brace);
+  --color-media: var(--ambra);
+  --color-bassa: var(--macchia);
+}
+
+@theme {
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 20px;
+  --radius-pill: 999px;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+}
+
+/* Il fondo sta su `html`: un fondo sul body coprirebbe l'atmosfera (z-index negativo). */
+html {
+  background: var(--fondo);
+  transition: background-color 0.25s ease;
+}
+
+html,
+body {
+  color: var(--testo);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+  line-height: 1.45;
+  margin: 0;
+  min-height: 100%;
+}
+
+/* ATMOSFERA: fuoco lontano in basso, macchia in alto. Fissa rispetto alla finestra. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: var(--atmosfera);
+}
+
+/* Grana ~3%: sotto sparisce, sopra sporca il testo. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+@layer base {
+  :where(a, button, input, select, textarea, label, [tabindex]):focus-visible {
+    outline: 2px solid var(--cielo);
+    outline-offset: 2px;
+    border-radius: var(--radius-s);
+  }
+  button:not(:disabled),
+  label:has(input[type='file']) {
+    cursor: pointer;
+  }
+}
+
+/*
+  SCALA DI ELEVAZIONE: atmosfera, barra, vetro, sospeso. La pillola e' il
+  vetro che fluttua da solo sopra la mappa. Niente quinto livello.
+*/
+@utility barra {
+  background: color-mix(in srgb, var(--fondo) 64%, transparent);
+  border-bottom: 1px solid var(--bordo);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+@utility vetro {
+  background: var(--vetro);
+  border: 1px solid var(--bordo);
+  border-top-color: var(--bordo-luce);
+  border-radius: var(--radius-m);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* Sopra la mappa il vetro e' piu' denso: le etichette della carta non devono leggersi attraverso. */
+@utility pillola {
+  background: var(--vetro-mappa);
+  border: 1px solid var(--bordo);
+  border-top-color: var(--bordo-luce);
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--ombra-pillola);
+}
+
+@utility sospeso {
+  background: linear-gradient(170deg, var(--fondo-3) 0%, var(--fondo-2) 55%, var(--fondo) 100%);
+  border: 1px solid var(--bordo);
+  border-top-color: var(--bordo-luce);
+  border-radius: var(--radius-l);
+  box-shadow: var(--ombra);
+}
+
+/* L'unico accento pieno della schermata. */
+@utility primario {
+  background: linear-gradient(135deg, #f45a1e, #d92d17);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  box-shadow:
+    0 10px 30px -8px rgba(255, 90, 31, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  &:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+  }
+}
+
+@utility secondario {
+  background: var(--vetro-forte);
+  border: 1px solid var(--bordo);
+  border-top-color: var(--bordo-luce);
+  color: var(--testo);
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease;
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--vetro-forte) 60%, var(--bordo-luce));
+  }
+}
+
+@utility etichetta {
+  color: var(--testo-3);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+@utility cifre {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+@utility testo-brace {
+  background: linear-gradient(135deg, #ff8a3d, #e8351f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Movimento sobrio */
+@keyframes pulsa {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.35); opacity: 0; }
+}
+@utility pulsa {
+  animation: pulsa 2.4s ease-in-out infinite;
+}
+
+/* MapLibre: controlli e popup nello stesso vetro */
+.maplibregl-ctrl-group {
+  background: var(--vetro-mappa) !important;
+  border: 1px solid var(--bordo);
+  border-radius: var(--radius-m) !important;
+  backdrop-filter: blur(20px);
+  box-shadow: var(--ombra-pillola) !important;
+  overflow: hidden;
+}
+.maplibregl-ctrl-group button + button { border-top-color: var(--bordo) !important; }
+html[data-tema='scuro'] .maplibregl-ctrl-group .maplibregl-ctrl-icon { filter: invert(1) brightness(1.2); }
+.maplibregl-ctrl-attrib {
+  background: var(--vetro-mappa) !important;
+  color: var(--testo-2);
+  border-radius: var(--radius-pill) !important;
+  backdrop-filter: blur(12px);
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a { color: var(--testo-2) !important; }
+html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
+.maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; }
+.maplibregl-popup-content {
+  background: var(--fondo-3) !important;
+  color: var(--testo);
+  border: 1px solid var(--bordo-luce);
+  border-radius: var(--radius-m) !important;
+  box-shadow: var(--ombra) !important;
+  padding: 10px 14px !important;
+  font: 13px/1.4 var(--font-sans);
+}
+.maplibregl-popup-tip { display: none !important; }
+.maplibregl-popup-close-button { color: var(--testo-2); padding: 0 6px; font-size: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  body::after { display: none; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -3,7 +3,7 @@
   "short_name": "Sentinelle",
   "start_url": "/app",
   "display": "standalone",
-  "background_color": "#fafaf7",
-  "theme_color": "#ea580c",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
   "icons": []
 }

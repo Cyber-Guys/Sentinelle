@@ -35,21 +35,10 @@ export type Segnalazione = {
 }
 export type Rischio = { valore: number; livello: 'basso' | 'medio' | 'alto'; meteo: unknown }
 
-export const coloreAlta = '#dc2626'
-export const coloreMedia = '#f97316'
-export const coloreBassa = '#16a34a'
+export const coloreAlta = '#ff6a2b'
+export const coloreMedia = '#f5b83d'
+export const coloreBassa = '#3fb37f'
 export const colorePriorita = (p: number) => (p >= 60 ? coloreAlta : p >= 30 ? coloreMedia : coloreBassa)
+// stessa scala come token CSS (segue il tema)
+export const varPriorita = (p: number) => (p >= 60 ? 'var(--brace)' : p >= 30 ? 'var(--ambra)' : 'var(--macchia)')
 export const etichettaPriorita = (p: number) => (p >= 60 ? 'Alta' : p >= 30 ? 'Media' : 'Bassa')
-
-export const stileOsm = {
-  version: 8 as const,
-  sources: {
-    osm: {
-      type: 'raster' as const,
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
-}

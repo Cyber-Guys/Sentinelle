@@ -1,34 +1,12 @@
 """Carica i GeoJSON di dati/ in PostGIS. Idempotente: svuota e ricarica."""
-import json, os, re
-from datetime import date
+import json, os
 from pathlib import Path
 import psycopg
+from campi_incendi import comune as nome_comune, data_incendio, ettari_bosco, ettari_totali, primo
 
 DATI = Path(__file__).resolve().parent.parent / "dati"
 URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://sentinelle:sentinelle@localhost:5432/sentinelle").replace("+psycopg", "")
 GEOM = "ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))), 3))"
-
-
-def primo(p, chiavi):
-    for k in chiavi:
-        if p.get(k) not in (None, ""):
-            return p[k]
-
-
-def numero(v, div=1):
-    try:
-        return float(v) / div
-    except (TypeError, ValueError):
-        return None
-
-
-def data(v):
-    # i formati cambiano da un anno all'altro: gg/mm/aaaa, aaaa-mm-gg, aaaa/mm/gg, con o senza "Z"
-    m = re.match(r"(\d{4})[-/](\d{2})[-/](\d{2})", str(v or ""))
-    if m:
-        return date(*map(int, m.groups()))
-    m = re.match(r"(\d{2})/(\d{2})/(\d{4})", str(v or ""))
-    return date(int(m[3]), int(m[2]), int(m[1])) if m else None
 
 
 def geom(f):
@@ -40,7 +18,7 @@ with psycopg.connect(URL) as con, con.cursor() as cur:
     cur.execute("ALTER TABLE incendio_storico ADD COLUMN IF NOT EXISTS geom_semplice geometry(MultiPolygon,4326)")
     cur.execute("CREATE INDEX IF NOT EXISTS incendio_storico_geom_semplice_idx ON incendio_storico USING gist (geom_semplice)")
     # tabelle del gioco (sezione "-- gioco:" di schema.sql, IF NOT EXISTS) prima del TRUNCATE ... CASCADE
-    cur.execute((Path(__file__).resolve().parent.parent / "infra" / "schema.sql").read_text().split("-- gioco:", 1)[1])
+    cur.execute("--" + (Path(__file__).resolve().parent.parent / "infra" / "schema.sql").read_text().split("-- gioco:", 1)[1])
     cur.execute("TRUNCATE comune, incendio_storico, pericolo_aib, utente, segnalazione RESTART IDENTITY CASCADE")
 
     for f in json.loads((DATI / "comuni.geojson").read_text())["features"]:
@@ -56,18 +34,11 @@ with psycopg.connect(URL) as con, con.cursor() as cur:
             continue
         for f in json.loads(path.read_text())["features"]:
             p = f["properties"]
-            tot = numero(primo(p, ["totale_ha", "ha_totale", "ha_totali", "sup_tot_ha", "area"]))
-            if tot is None:
-                tot = numero(primo(p, ["totale_mq", "mq_totale", "mq_totali", "sup_tot_mq", "sup_tot"]), 10000)
-            bosco = numero(primo(p, ["bosco_ha", "ha_bosco"]))
-            if bosco is None:
-                bosco = numero(primo(p, ["bosco_mq", "mq_bosco", "m2_bosco", "sup_bosco"]), 10000)
-            comune = primo(p, ["comune"])
             cur.execute(
                 f"INSERT INTO incendio_storico (cod_incend, anno, data, comune, ettari_totali, ettari_bosco, tipologia, geom) "
                 f"VALUES (%s,%s,%s,%s,%s,%s,%s,{GEOM})",
                 (primo(p, ["cod_incend", "id_ince", "numincen", "numeroincendio", "numeroince"]), anno,
-                 data(primo(p, ["data", "data_ince", "dt_ince"])), comune.upper() if comune else None, tot, bosco,
+                 data_incendio(p), nome_comune(p), ettari_totali(p), ettari_bosco(p),
                  primo(p, ["tipologia", "tipologie"]), geom(f)))
 
     cur.execute("""UPDATE incendio_storico SET geom_semplice =

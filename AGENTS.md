@@ -142,6 +142,7 @@ appartiene a `STATO.md` o a un commento nel codice.
 | `docs/materiali/` | Cosa ci hanno dato gli organizzatori? | Sola lettura, piu' il README di sintesi |
 | `docs/dominio/` | Com'e' fatta la realta' degli incendi? Indici, dati, normative, attori | Autorita' esterna: la registriamo, non la decidiamo |
 | `docs/decisioni/` | Perche' abbiamo scelto cosi'? | Append-only: una decisione superata si annota come superata, non si riscrive |
+| `docs/interfaccia/` | Come si vede? Linguaggio visivo, token, widget | Corrente, si aggiorna in place: leggerlo prima di toccare il frontend |
 | `docs/specifiche/` | Cosa deve fare questa parte, e con quali contratti? | Una per componente, prima del piano |
 | `docs/piani/` | Con quali passi la costruiamo? | Documento vivo durante l'esecuzione |
 | `docs/esperimenti/` | Cosa abbiamo misurato su dati o modelli? | Configurazione, comando, risultato |

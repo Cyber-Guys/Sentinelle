@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Check, Droplets, Leaf, Trash2, Compass, HelpCircle, Star, ChevronRight } from '@lucide/vue'
+import { Check, Droplets, Leaf, Trash2, Compass, HelpCircle, Star, X, Loader2, CircleCheck, CircleX, Flame } from '@lucide/vue'
 
-const props = defineProps<{ utente: Utente; centro: [number, number] }>()
+const props = defineProps<{ utente: Utente }>()
 const emit = defineEmits<{ esito: [EsitoMissione]; posizione: [Missione] }>()
 const { chiama } = useApi()
 
@@ -52,7 +52,7 @@ async function completa(m: Missione, extra: Record<string, string> = {}) {
     emit('esito', r)
     return r
   } catch (e: any) {
-    errore.value = String(e.message).startsWith('409') ? 'Missione gia completata (limite raggiunto).' : 'Operazione non riuscita: ' + e.message
+    errore.value = String(e.message).startsWith('409') ? 'Missione già completata (limite raggiunto).' : 'Operazione non riuscita: ' + e.message
   } finally { inCorso.value = false }
 }
 
@@ -68,20 +68,15 @@ async function consegna() {
 
 async function statistiche() {
   caricandoStat.value = true; righe.value = []
-  const [lon, lat] = props.centro
   try {
-    const g = await chiama<any>(`/storico/incendi?bbox=${lon - 0.12},${lat - 0.1},${lon + 0.12},${lat + 0.1}&anno_da=2015&anno_a=2025`)
-    const per: Record<number, { anno: number; incendi: number; ettari: number }> = {}
-    for (const f of g.features) {
-      const p = f.properties
-      if (p.comune !== props.utente.comune) continue
-      const r = (per[p.anno] ??= { anno: p.anno, incendi: 0, ettari: 0 })
-      r.incendi++; r.ettari += Number(p.ettari_totali ?? 0)
-    }
-    righe.value = Object.values(per).sort((a, b) => b.anno - a.anno)
+    const g = await chiama<{ per_anno: { anno: number; incendi: number; ettari: number }[] }>(`/storico/statistiche?comune=${encodeURIComponent(props.utente.comune)}&anno_da=2015`)
+    righe.value = [...g.per_anno].sort((a, b) => b.anno - a.anno)
   } catch (e: any) { errore.value = 'Statistiche non disponibili' }
   caricandoStat.value = false
 }
+const giuste = computed(() => risultato.value?.esiti?.filter((e) => e.giusta).length ?? 0)
+const totEttari = computed(() => righe.value.reduce((a, r) => a + r.ettari, 0))
+const totIncendi = computed(() => righe.value.reduce((a, r) => a + r.incendi, 0))
 const maxEttari = computed(() => Math.max(1, ...righe.value.map((r) => r.ettari)))
 
 async function completaEsplora() {
@@ -91,64 +86,110 @@ async function completaEsplora() {
 </script>
 
 <template>
-  <div class="space-y-3 p-4">
-    <p v-if="errore" class="text-sm text-alta">{{ errore }}</p>
+  <div class="p-4">
+    <p v-if="errore" class="mb-3 rounded-[var(--radius-m)] border border-brace/40 bg-brace/10 p-3 text-sm text-brace" role="alert">{{ errore }}</p>
 
     <!-- elenco -->
     <template v-if="!attiva">
-      <h2 class="text-lg font-bold">Missioni di prevenzione</h2>
-      <button v-for="m in missioni" :key="m.id" type="button" class="flex w-full items-center gap-3 rounded-xl border p-3 text-left" :class="m.disponibile ? 'border-bordo bg-carta active:bg-bosco-chiaro' : 'border-bordo bg-fondo opacity-70'" :disabled="!m.disponibile" @click="apri(m)">
-        <span class="flex size-11 shrink-0 items-center justify-center rounded-full" :class="m.disponibile ? 'bg-orange-50 text-fuoco' : 'bg-bosco-chiaro text-bosco'">
-          <Check v-if="!m.disponibile" class="size-6" /><component :is="ICONE[m.codice] ?? Compass" v-else class="size-6" />
-        </span>
-        <span class="min-w-0 flex-1">
-          <span class="block font-semibold">{{ m.titolo }}</span>
-          <span class="block text-xs text-testo-2">{{ m.disponibile ? m.descrizione : (m.motivo ?? 'Completata') }}</span>
-        </span>
-        <span class="flex shrink-0 items-center gap-0.5 text-sm font-bold text-bosco"><Star class="size-3.5" />{{ m.punti }}</span>
-        <ChevronRight v-if="m.disponibile" class="size-4 shrink-0 text-testo-2" />
-      </button>
+      <p class="etichetta">Oggi</p>
+      <h2 class="mt-0.5 mb-3 text-xl font-semibold tracking-tight">Missioni di prevenzione</h2>
+      <ul class="space-y-2">
+        <li v-for="m in missioni" :key="m.id">
+          <button type="button" class="vetro flex w-full items-center gap-3 p-3 text-left transition-colors" :class="m.disponibile ? 'hover:bg-vetro-forte active:bg-vetro-forte' : 'opacity-75'" :disabled="!m.disponibile" @click="apri(m)">
+            <span class="flex size-11 shrink-0 items-center justify-center rounded-[12px] ring-1" :class="m.disponibile ? 'bg-brace/12 text-brace ring-brace/25' : 'bg-macchia/12 text-macchia ring-macchia/25'">
+              <Check v-if="!m.disponibile" class="size-5" aria-hidden="true" /><component :is="ICONE[m.codice] ?? Compass" v-else class="size-5" aria-hidden="true" />
+            </span>
+            <span class="min-w-0 flex-1 leading-tight">
+              <span class="block font-semibold">{{ m.titolo }}</span>
+              <span class="mt-0.5 block text-[.78rem]" :class="m.disponibile ? 'text-testo-2' : 'text-macchia'">{{ m.disponibile ? m.descrizione : (m.motivo ?? 'Completata') }}</span>
+            </span>
+            <span class="cifre flex shrink-0 items-center gap-1 rounded-full bg-ambra/12 px-2 py-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3 fill-current" aria-hidden="true" />{{ m.punti }}</span>
+          </button>
+        </li>
+        <li v-if="!missioni.length && !errore" class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</li>
+      </ul>
     </template>
 
     <!-- quiz -->
-    <section v-else-if="attiva.tipo === 'quiz'" class="space-y-3">
-      <div class="flex items-center justify-between"><h2 class="text-lg font-bold">{{ attiva.titolo }}</h2><button class="text-sm text-testo-2" @click="chiudi">Chiudi</button></div>
+    <section v-else-if="attiva.tipo === 'quiz'" class="space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="etichetta">Quiz · +{{ attiva.punti }} punti</p>
+          <h2 class="mt-0.5 text-lg font-semibold">{{ attiva.titolo }}</h2>
+        </div>
+        <button type="button" aria-label="Chiudi il quiz" class="secondario flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
+      </div>
       <template v-if="!risultato">
+        <div v-if="domande.length" class="flex gap-1.5" aria-hidden="true">
+          <span v-for="(_, k) in domande" :key="k" class="h-1 flex-1 rounded-full transition-colors duration-300" :class="k < risposte.length ? 'bg-brace' : k === passo ? 'bg-testo-3' : 'bg-bordo-luce'" />
+        </div>
         <template v-if="domande.length && risposte.length < domande.length">
-          <p class="text-xs font-semibold text-testo-2">Domanda {{ passo + 1 }} di {{ domande.length }}</p>
-          <p class="text-lg font-bold">{{ domande[passo]!.domanda }}</p>
-          <button v-for="(o, i) in domande[passo]!.opzioni" :key="i" type="button" class="w-full rounded-xl border border-bordo bg-carta p-3 text-left active:bg-bosco-chiaro" @click="rispondi(i)">{{ o }}</button>
+          <p class="cifre text-[.78rem] font-semibold text-testo-2">Domanda {{ passo + 1 }} di {{ domande.length }}</p>
+          <p class="text-[1.15rem] font-semibold leading-snug">{{ domande[passo]!.domanda }}</p>
+          <div class="space-y-2">
+            <button v-for="(o, i) in domande[passo]!.opzioni" :key="i" type="button" class="vetro flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-vetro-forte active:bg-vetro-forte" @click="rispondi(i)">
+              <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-vetro-forte text-[.78rem] font-bold text-testo-2 ring-1 ring-bordo-luce">{{ String.fromCharCode(65 + i) }}</span>
+              <span class="text-[.92rem]">{{ o }}</span>
+            </button>
+          </div>
         </template>
         <template v-else-if="domande.length">
-          <p class="font-semibold">Hai risposto a tutte le domande.</p>
-          <button class="primario w-full py-4 text-lg disabled:opacity-50" :disabled="inCorso" @click="consegna">{{ inCorso ? 'Invio…' : 'Consegna' }}</button>
+          <div class="vetro flex flex-col items-center gap-2 p-5 text-center">
+            <CircleCheck class="size-9 text-macchia" aria-hidden="true" />
+            <p class="font-semibold">Hai risposto a tutte le domande</p>
+            <p class="text-sm text-testo-2">Consegna per vedere il risultato e le spiegazioni.</p>
+          </div>
+          <button class="primario flex h-14 w-full items-center justify-center gap-2 text-lg" :disabled="inCorso" @click="consegna"><Loader2 v-if="inCorso" class="size-5 animate-spin" />{{ inCorso ? 'Invio…' : 'Consegna' }}</button>
         </template>
+        <p v-else class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</p>
       </template>
       <template v-else>
-        <p class="rounded-xl bg-bosco-chiaro p-3 text-center font-bold text-bosco">{{ risultato.esiti?.filter((e) => e.giusta).length }} su {{ risultato.esiti?.length }} giuste: +{{ risultato.punti_ottenuti }} punti</p>
-        <div v-for="e in risultato.esiti" :key="e.indice" class="space-y-1 rounded-xl border p-3 text-sm" :class="e.giusta ? 'border-bassa' : 'border-alta'">
-          <p class="font-bold">{{ domande[e.indice]?.domanda }}</p>
-          <p :class="e.giusta ? 'text-bassa' : 'text-alta'">Tu: {{ domande[e.indice]?.opzioni[risposte[e.indice]!] }}</p>
-          <p v-if="!e.giusta" class="text-bassa">Corretta: {{ domande[e.indice]?.opzioni[e.corretta] }}</p>
-          <p class="text-testo-2">{{ e.spiegazione }}</p>
+        <div class="vetro flex items-center gap-4 p-4">
+          <p class="cifre text-5xl font-bold tracking-tight">{{ giuste }}<span class="text-2xl text-testo-3">/{{ risultato.esiti?.length }}</span></p>
+          <div class="leading-tight">
+            <p class="font-semibold">{{ giuste === risultato.esiti?.length ? 'Tutte giuste!' : 'Risposte giuste' }}</p>
+            <p class="cifre mt-1 inline-flex items-center gap-1 rounded-full bg-ambra/15 px-2.5 py-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ risultato.punti_ottenuti }} punti</p>
+          </div>
         </div>
-        <button class="secondario w-full py-3" @click="chiudi">Fatto</button>
+        <div v-for="e in risultato.esiti" :key="e.indice" class="vetro space-y-1.5 p-3 text-[.86rem]">
+          <p class="flex items-start gap-2 font-semibold">
+            <CircleCheck v-if="e.giusta" class="mt-0.5 size-4 shrink-0 text-macchia" aria-label="Giusta" />
+            <CircleX v-else class="mt-0.5 size-4 shrink-0 text-brace" aria-label="Sbagliata" />
+            {{ domande[e.indice]?.domanda }}
+          </p>
+          <p class="pl-6" :class="e.giusta ? 'text-macchia' : 'text-brace'">{{ e.giusta ? 'Giusta' : 'Tua' }}: {{ domande[e.indice]?.opzioni[risposte[e.indice]!] }}</p>
+          <p v-if="!e.giusta" class="pl-6 text-macchia">Corretta: {{ domande[e.indice]?.opzioni[e.corretta] }}</p>
+          <p class="pl-6 text-testo-2">{{ e.spiegazione }}</p>
+        </div>
+        <button class="secondario h-12 w-full" @click="chiudi">Fatto</button>
       </template>
     </section>
 
     <!-- esplora -->
-    <section v-else class="space-y-3">
-      <div class="flex items-center justify-between"><h2 class="text-lg font-bold">Incendi a <span class="capitalize">{{ utente.comune.toLowerCase() }}</span></h2><button class="text-sm text-testo-2" @click="chiudi">Chiudi</button></div>
-      <p class="text-sm text-testo-2">Incendi ed ettari bruciati per anno, dal 2015 (dati storici regionali).</p>
-      <p v-if="caricandoStat" class="text-sm text-testo-2">Caricamento…</p>
-      <p v-else-if="!righe.length" class="text-sm text-testo-2">Nessun incendio registrato in archivio per il tuo comune.</p>
-      <ul class="space-y-1.5">
-        <li v-for="r in righe" :key="r.anno" class="text-sm">
-          <div class="flex justify-between"><span class="font-semibold">{{ r.anno }}</span><span class="text-testo-2">{{ r.incendi }} incendi · {{ r.ettari.toFixed(1) }} ha</span></div>
-          <div class="mt-0.5 h-2 overflow-hidden rounded-full bg-bosco-chiaro"><div class="h-full rounded-full bg-fuoco" :style="{ width: (r.ettari / maxEttari * 100) + '%' }" /></div>
-        </li>
-      </ul>
-      <button class="primario w-full py-4 text-lg disabled:opacity-50" :disabled="inCorso || caricandoStat" @click="completaEsplora">{{ inCorso ? 'Invio…' : `Completa (+${attiva.punti} punti)` }}</button>
+    <section v-else class="space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <p class="etichetta">Esplora · +{{ attiva.punti }} punti</p>
+          <h2 class="mt-0.5 text-lg font-semibold">Incendi a <span class="capitalize">{{ utente.comune.toLowerCase() }}</span></h2>
+        </div>
+        <button type="button" aria-label="Chiudi" class="secondario flex size-9 shrink-0 items-center justify-center" @click="chiudi"><X class="size-[18px]" /></button>
+      </div>
+      <p v-if="caricandoStat" class="flex items-center justify-center gap-2 p-6 text-sm text-testo-2"><Loader2 class="size-4 animate-spin" /> Caricamento…</p>
+      <p v-else-if="!righe.length" class="vetro p-4 text-sm text-testo-2">Nessun incendio registrato in archivio per il tuo comune.</p>
+      <template v-else>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="vetro p-3"><p class="etichetta">Incendi dal 2015</p><p class="cifre mt-1 text-3xl font-bold">{{ totIncendi }}</p></div>
+          <div class="vetro p-3"><p class="etichetta">Ettari bruciati</p><p class="cifre mt-1 text-3xl font-bold">{{ totEttari.toFixed(0) }}<span class="text-base text-testo-3"> ha</span></p></div>
+        </div>
+        <ul class="vetro space-y-2.5 p-3">
+          <li v-for="r in righe" :key="r.anno" class="text-[.82rem]">
+            <div class="flex items-baseline justify-between"><span class="cifre font-semibold">{{ r.anno }}</span><span class="cifre text-testo-2">{{ r.incendi }} incendi · {{ r.ettari.toFixed(1) }} ha</span></div>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-bordo-luce"><div class="h-full rounded-full bg-gradient-to-r from-ambra to-brace" :style="{ width: Math.max(2, r.ettari / maxEttari * 100) + '%' }" /></div>
+          </li>
+        </ul>
+        <p class="text-[.75rem] text-testo-3">Dati storici regionali (CFVA), per anno.</p>
+      </template>
+      <button class="primario flex h-14 w-full items-center justify-center gap-2 text-lg" :disabled="inCorso || caricandoStat" @click="completaEsplora"><Loader2 v-if="inCorso" class="size-5 animate-spin" />{{ inCorso ? 'Invio…' : `Completa · +${attiva.punti} punti` }}</button>
     </section>
   </div>
 </template>

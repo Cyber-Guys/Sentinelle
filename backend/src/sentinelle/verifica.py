@@ -1,5 +1,6 @@
 import math
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from sqlalchemy import text
@@ -94,8 +95,15 @@ def _distanza_km(lat1, lon1, lat2, lon2) -> float:
 
 
 def raccogli_contesto(sessione, lat: float, lon: float) -> Contesto:
-    hs = hotspot_sardegna()
-    hotspot_km = None if hs is None else min((_distanza_km(lat, lon, h.lat, h.lon) for h in hs), default=999.0)
+    # fonti esterne in parallelo (rete), mentre il thread corrente fa le query al DB
+    with ThreadPoolExecutor(3) as pool:
+        f_hs = pool.submit(hotspot_sardegna)
+        f_meteo = pool.submit(meteo, lat, lon)
+        f_suolo = pool.submit(classe_suolo, lat, lon)
+        return _contesto_db(sessione, lat, lon, f_hs, f_meteo, f_suolo)
+
+
+def _contesto_db(sessione, lat, lon, f_hs, f_meteo, f_suolo) -> Contesto:
     # prefiltro con indice GIST (&& + ST_Expand), poi distanza esatta su geography
     p = {"lon": lon, "lat": lat}
     punto = "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)"
@@ -108,4 +116,6 @@ def raccogli_contesto(sessione, lat: float, lon: float) -> Contesto:
     storici = sessione.execute(text(
         f"SELECT count(*) FROM incendio_storico WHERE geom && ST_Expand({punto}, 0.05) "
         f"AND ST_DWithin(geom::geography, {punto}::geography, 1000) AND anno BETWEEN 2005 AND 2025"), p).scalar()
-    return Contesto(hotspot_km, meteo(lat, lon), classe_suolo(lat, lon), classe, vicine, storici)
+    hs = f_hs.result()
+    hotspot_km = None if hs is None else min((_distanza_km(lat, lon, h.lat, h.lon) for h in hs), default=999.0)
+    return Contesto(hotspot_km, f_meteo.result(), f_suolo.result(), classe, vicine, storici)

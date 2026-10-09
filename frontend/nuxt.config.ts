@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import { SCRIPT_TEMA } from './app/composables/useTema'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-06',
@@ -14,10 +15,13 @@ export default defineNuxtConfig({
       title: 'Sentinelle',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width,initial-scale=1' },
-        { name: 'theme-color', content: '#ea580c' },
+        { name: 'viewport', content: 'width=device-width,initial-scale=1,viewport-fit=cover' },
+        { name: 'theme-color', content: '#07090d' },
       ],
       link: [{ rel: 'manifest', href: '/manifest.webmanifest' }],
+      // tema applicato prima del primo render: niente lampo chiaro/scuro
+      script: [{ innerHTML: SCRIPT_TEMA, tagPosition: 'head' }],
+      style: [{ innerHTML: "html{background:#07090d;color-scheme:dark}html[data-tema='chiaro']{background:#f6f4ef;color-scheme:light}" }],
     },
   },
   runtimeConfig: {

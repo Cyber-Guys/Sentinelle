@@ -1,10 +1,9 @@
 import json
 import math
 
-import httpx
-
 from ..config import DIR_OFFLINE, impostazioni
 from .cache import con_cache
+from .http import client
 
 URL = "https://image.discomap.eea.europa.eu/arcgis/rest/services/Corine/CLC2018_WM/MapServer/identify"
 
@@ -37,7 +36,7 @@ def _interroga(lat: float, lon: float) -> tuple[int, str] | None:
         dati = json.loads((DIR_OFFLINE / "corine.json").read_text())
     else:
         x, y = _a_3857(lat, lon)
-        r = httpx.get(URL, timeout=5, params={
+        r = client.get(URL, params={
             "f": "json", "geometry": f"{x},{y}", "geometryType": "esriGeometryPoint", "sr": 102100,
             "layers": "all", "tolerance": 1, "returnGeometry": "false",
             "mapExtent": f"{x - 500},{y - 500},{x + 500},{y + 500}", "imageDisplay": "400,400,96"})
@@ -51,4 +50,4 @@ def _interroga(lat: float, lon: float) -> tuple[int, str] | None:
 
 
 def classe_suolo(lat: float, lon: float) -> tuple[int, str] | None:
-    return con_cache(f"corine:{lat:.3f}:{lon:.3f}", lambda: _interroga(lat, lon))
+    return con_cache(f"corine:{lat:.4f}:{lon:.4f}", lambda: _interroga(lat, lon))

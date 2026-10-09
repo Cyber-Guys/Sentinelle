@@ -9,11 +9,14 @@ Segnalazione partecipata e gamification contro gli incendi in Sardegna
 Prerequisiti: Docker Desktop, conda, Node 22.
 
 ```bash
-# 1. database (PostGIS) e dati
+# 1. database (PostGIS, immagine multi-arch imresamu/postgis: nativa su Apple Silicon) e dati
 docker compose -f infra/compose.yaml up -d
 conda create -y -n sentinelle python=3.12 && conda run -n sentinelle pip install -e "backend[dev]"
 conda run -n sentinelle python scripts/scarica_dati.py   # solo la prima volta, lento (~280 MB)
 conda run -n sentinelle python scripts/carica_dati.py
+# tile vettoriali dello storico (frontend/public/tiles/storico.pmtiles, gia' versionato): serve solo per rigenerarli
+# richiede tippecanoe (brew install tippecanoe, oppure conda-forge)
+conda run -n sentinelle python scripts/genera_tiles.py
 
 # 2. backend su :8000
 cd backend && conda run --no-capture-output -n sentinelle python -m uvicorn sentinelle.main:app --app-dir src --port 8000 --reload
@@ -27,6 +30,7 @@ cd frontend && npm install && npm run dev
 
 ## Utili
 
+- Cambiando immagine o architettura il volume va ricreato: `docker compose -f infra/compose.yaml down -v`, poi `up -d` e `carica_dati.py`.
 - Prova end-to-end: `conda run -n sentinelle python scripts/prova_percorso.py`
 - Test della priorita': `cd backend && conda run -n sentinelle pytest -q`
 - Prova del gioco: `conda run -n sentinelle python scripts/prova_gioco.py`
