@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `f1b06fd` — 2026-10-09
+> **Riferimento:** commit `729709e` — 2026-10-09
 
 ## Fase
 
@@ -27,7 +27,11 @@ PostGIS nativo arm64, fonti esterne in parallelo
 (`docs/esperimenti/2026-10-09-prestazioni.md`). Mappa base offline Protomaps
 (`frontend/public/tiles/sardegna.pmtiles`, 57 MB), proxy `/api` e
 `scripts/tunnel.sh` per HTTPS da telefono, stati di errore/caricamento/vuoto,
-micro-animazioni, contrasti AA. Prossimo passo: prova su telefono vero, pitch.
+micro-animazioni, contrasti AA. UI professionale: stile mappa notte
+(terra/mare contrastati, limiti sull'estratto), priorità scomposta per fattore
+(`fattori` jsonb in segnalazione, `ScomposizionePriorita.vue`), raggi concentrici
+22/10/6 + pillole, pin pulsanti (`animaAloni()`). Prossimo passo: prova su
+telefono vero, pitch.
 
 ## Chi fa cosa
 
