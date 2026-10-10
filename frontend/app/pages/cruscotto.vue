@@ -52,6 +52,19 @@ const segnapostiMappature = () => {
 // ordine di disegno: piu' a sud sopra (pin ancorati in basso, come Waze)
 const conOrdine = (g: any) => ({ ...g, features: g.features.map((f: any) => ({ ...f, properties: { ...f.properties, ordine: -f.geometry.coordinates[1] } })) })
 const nMappature = ref(0)
+let timerMappature: ReturnType<typeof setInterval> | undefined
+let firmaMappature = ''
+// setData solo se qualcosa e' cambiato, per non ridisegnare i cluster a vuoto.
+function caricaMappature() {
+  chiama<any>('/mappature').then((g) => {
+    const firma = `${g.features.length}:${g.features.map((f: any) => f.properties?.completata_il).sort().at(-1) ?? ''}`
+    if (firma === firmaMappature) return
+    firmaMappature = firma
+    datiMappature = g = conOrdine(g)
+    nMappature.value = g.features.length
+    ;(mappa?.getSource('mappature') as maplibregl.GeoJSONSource | undefined)?.setData(g)
+  }).catch(() => {})
+}
 let datiMappature: any = { type: 'FeatureCollection', features: [] }
 let datiHotspot: any = { type: 'FeatureCollection', features: [] }
 
@@ -217,7 +230,7 @@ onMounted(() => {
   mappa.on('style.load', aggiungiLivelli)
   segnapostiMancanti(mappa, segnapostiMappature, () => tema.value)
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
-  chiama<any>('/mappature').then((g) => { datiMappature = g = conOrdine(g); nMappature.value = g.features.length; (mappa?.getSource('mappature') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
+  caricaMappature()
   mappa.on('load', () => {
     const m = mappa!
     m.on('click', 'mappature', (ev) => {
@@ -264,9 +277,11 @@ onMounted(() => {
   caricaStorico() // serve anche alla scheda in sola lettura
   timer = setInterval(aggiorna, 3000)
   timerValutate = setInterval(() => { if (schedaBox.value !== 'nuova') caricaStorico() }, 10000)
+  // le missioni dei cittadini arrivano in qualunque momento: aggiornamento leggero ogni 5 s
+  timerMappature = setInterval(caricaMappature, 5000)
 })
 
-onBeforeUnmount(() => { clearInterval(timer); clearInterval(timerValutate); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
