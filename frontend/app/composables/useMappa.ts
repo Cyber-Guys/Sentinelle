@@ -4,6 +4,7 @@ import { Protocol } from 'pmtiles'
 import type { Tema } from './useTema'
 import { h, render, type Component } from 'vue'
 import type { Segnalazione } from './useApi'
+import PopupIncendio from '~/components/PopupIncendio.vue'
 
 // Protocollo pmtiles:// (storico incendi statico), registrato una sola volta
 let pmtilesOk = false
@@ -210,3 +211,41 @@ export function aggiungiPinSegnalazioni(m: MappaLibre, id: string, c: ReturnType
   } }, prima)
 }
 export const aloneSegnalazioni = (id: string): Alone => ({ layer: `${id}-alone`, periodo: 2600, da: 9, a: 27, opacita: 0.45 })
+
+/*
+  Incendi storici CFVA (app e cruscotto): perimetri da tile statici (public/tiles/storico.pmtiles), colore e
+  opacita' per anno. Il filtro per anno e' istantaneo (setFilter: i dati sono gia' nei tile). Si aggiungono
+  prima di ogni altro livello dati, cosi' pin e hotspot restano sopra.
+*/
+export const FILTRI_STORICO_INCENDI = [
+  { id: '2025', etichetta: 'Stagione 2025', breve: '2025', dettaglio: "Solo l'ultima estate", da: 2025 },
+  { id: '5', etichetta: 'Ultimi 5 anni', breve: '5 anni', dettaglio: '2021 \u2013 2025', da: 2021 },
+  { id: 'tutti', etichetta: 'Dal 2015', breve: '2015+', dettaglio: 'Ultime 11 stagioni, 2015 \u2013 2025', da: 2015 },
+] as const
+const filtroAnni = (id: string) => ['>=', ['get', 'anno'], FILTRI_STORICO_INCENDI.find((f) => f.id === id)!.da] as any
+const LIVELLI_STORICO_INCENDI = ['storico-riempimento', 'storico-linea']
+export function aggiungiStoricoIncendi(m: MappaLibre, c: ReturnType<typeof coloriMappa>, filtro: string, visibile = true) {
+  const layout = { visibility: visibile ? 'visible' : 'none' } as const
+  const filter = filtroAnni(filtro)
+  m.addSource('storico', { type: 'vector', url: 'pmtiles:///tiles/storico.pmtiles' })
+  m.addLayer({ id: 'storico-riempimento', type: 'fill', source: 'storico', 'source-layer': 'incendi', layout, filter, paint: { 'fill-color': c.storico, 'fill-opacity': c.opacitaStorico } })
+  m.addLayer({ id: 'storico-linea', type: 'line', source: 'storico', 'source-layer': 'incendi', layout, filter, paint: { 'line-color': c.storico, 'line-width': 0.7, 'line-opacity': 0.55 } })
+}
+export function impostaStoricoIncendi(m: MappaLibre | null, filtro: string, visibile = true) {
+  for (const id of LIVELLI_STORICO_INCENDI) {
+    if (!m?.getLayer(id)) continue
+    m.setFilter(id, filtroAnni(filtro))
+    m.setLayoutProperty(id, 'visibility', visibile ? 'visible' : 'none')
+  }
+}
+// Tocco su un perimetro: popup dell'incendio, a meno che sotto il puntatore ci sia un pin (vince il pin).
+// `pin`: id dei layer pin; `bloccato`: es. si sta scegliendo un punto sulla mappa.
+export function clicIncendio(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false) {
+  m.on('click', 'storico-riempimento', (ev) => {
+    const p = ev.features?.[0]?.properties
+    if (!p || bloccato()) return
+    const layers = pin.filter((l) => m.getLayer(l))
+    if (layers.length && m.queryRenderedFeatures(ev.point, { layers }).length) return
+    apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
+  })
+}

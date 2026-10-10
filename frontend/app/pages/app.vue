@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, type Alone } from '~/composables/useMappa'
-import PopupIncendio from '~/components/PopupIncendio.vue'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, type Alone } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
@@ -32,11 +31,6 @@ const nuovoLivello = ref<{ nome: string; punti: number } | null>(null)
 let tToast: ReturnType<typeof setTimeout> | undefined
 let tLivello: ReturnType<typeof setTimeout> | undefined
 
-const FILTRI = [
-  { id: '2025', etichetta: 'Stagione 2025', breve: '2025', dettaglio: "Solo l'ultima estate", da: 2025 },
-  { id: '5', etichetta: 'Ultimi 5 anni', breve: '5 anni', dettaglio: '2021 – 2025', da: 2021 },
-  { id: 'tutti', etichetta: 'Dal 2015', breve: '2015+', dettaglio: 'Ultime 11 stagioni, 2015 – 2025', da: 2015 },
-] as const
 const filtro = ref<string>('2025')
 
 // proprie segnalazioni: pin sempre sulla mappa, elenco nella scheda, polling leggero dello stato
@@ -195,13 +189,7 @@ function avviaMappa() {
   mappa.on('style.load', aggiungiLivelli)
   mappa.on('load', () => {
     const m = mappa!
-    m.on('click', 'storico-riempimento', (ev) => {
-      const p = ev.features?.[0]?.properties
-      if (!p || pannello.value || missione.value) return
-      // un proprio pin sopra il perimetro: vince il pin
-      if (m.queryRenderedFeatures(ev.point, { layers: ['mie'] }).length) return
-      apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
-    })
+    clicIncendio(m, ['mie'], () => pannello.value || !!missione.value)
     m.on('click', 'mie', (ev) => {
       if (pannello.value || missione.value) return
       const s = mie.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
@@ -225,9 +213,7 @@ function aggiungiLivelli() {
   const m = mappa
   if (!m || m.getSource('storico')) return
   const c = coloriMappa(tema.value)
-  m.addSource('storico', { type: 'vector', url: 'pmtiles:///tiles/storico.pmtiles' })
-  m.addLayer({ id: 'storico-riempimento', type: 'fill', source: 'storico', 'source-layer': 'incendi', filter: filtroAnni(), paint: { 'fill-color': c.storico, 'fill-opacity': c.opacitaStorico } })
-  m.addLayer({ id: 'storico-linea', type: 'line', source: 'storico', 'source-layer': 'incendi', filter: filtroAnni(), paint: { 'line-color': c.storico, 'line-width': 0.7, 'line-opacity': 0.55 } })
+  aggiungiStoricoIncendi(m, c, filtro.value)
   aggiungiHotspot(m, c, datiHotspot)
   // proprie segnalazioni sopra storico e hotspot: in valutazione ambra con onda, confermate macchia, falsi allarmi ad anello
   aggiungiPinSegnalazioni(m, 'mie', c, geojsonSegnalazioni(mie.value), { nuova: c.ambra, confermata: c.macchia })
@@ -235,10 +221,8 @@ function aggiungiLivelli() {
 
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
 
-const filtroAnni = () => ['>=', ['get', 'anno'], FILTRI.find((f) => f.id === filtro.value)!.da] as any
-
 // filtro anni istantaneo: i dati sono gia' nei tile
-watch(filtro, () => { for (const id of ['storico-riempimento', 'storico-linea']) if (mappa?.getLayer(id)) mappa.setFilter(id, filtroAnni()) })
+watch(filtro, (f) => impostaStoricoIncendi(mappa, f))
 
 // punto scelto: pin pulsante (`.pin` in tema.css) del colore del significato:
 // fuoco brace, area a rischio ambra, missione di mappatura macchia

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
@@ -30,13 +30,15 @@ const mostraMappature = ref(false)
 const mostraHotspot = ref(true)
 const livelliAperti = ref(false)
 const mostraStorico = ref(false)
+const mostraIncendi = ref(true)
+const filtroIncendi = ref('2025')
 const filtroStorico = ref<'entrambe' | 'confermata' | 'archiviata'>('entrambe')
 const FILTRI_STORICO = [
   { id: 'entrambe', etichetta: 'Entrambe' }, { id: 'confermata', etichetta: 'Confermate' }, { id: 'archiviata', etichetta: 'Falsi allarmi' },
 ] as const
 // segnalazioni gia' valutate: si ricaricano all'accensione del livello e dopo ogni valutazione (non nel polling)
 const storico = ref<Segnalazione[]>([])
-const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value))
+const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
 const TIPI_MAPPATURA = [
   { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplets },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
@@ -119,6 +121,7 @@ watch(selezionata, aggiornaMappa)
 watch(mostraMappature, (v) => mappa?.setLayoutProperty('mappature', 'visibility', v ? 'visible' : 'none'))
 const visibilitaHotspot = () => { for (const l of ['hotspot-alone', 'hotspot']) mappa?.setLayoutProperty(l, 'visibility', mostraHotspot.value ? 'visible' : 'none') }
 watch(mostraHotspot, visibilitaHotspot)
+watch([mostraIncendi, filtroIncendi], () => impostaStoricoIncendi(mappa, filtroIncendi.value, mostraIncendi.value))
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
 
 // sorgenti e layer: richiamata a ogni stile caricato (anche dopo il cambio tema)
@@ -127,6 +130,7 @@ function aggiungiLivelli() {
   if (!m || m.getSource('coda')) return
   const c = coloriMappa(tema.value)
   const prio: any = ['step', ['get', 'priorita'], c.macchia, 30, c.ambra, 60, c.brace]
+  aggiungiStoricoIncendi(m, c, filtroIncendi.value, mostraIncendi.value) // sotto a tutto il resto
   aggiungiHotspot(m, c, datiHotspot)
   visibilitaHotspot()
   m.addSource('mappature', { type: 'geojson', data: datiMappature })
@@ -173,6 +177,7 @@ onMounted(() => {
         sottotitolo: [p.utente, p.comune ? nomeComune(String(p.comune)) : ''].filter(Boolean).join(' · '),
       }, () => h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`))
     })
+    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'hotspot'])
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })
     m.on('click', 'storico-segn', (ev) => {
       // la coda attiva sta sopra: se il clic e' anche su un pin della coda vince quello
@@ -359,7 +364,7 @@ const contatori = computed(() => [
 
     <!-- colonna destra come nell'app: Livelli, zoom, "i" (passo 14 px dal flex) -->
     <div class="absolute top-[4.75rem] right-4 z-20 flex w-11 flex-col items-center gap-[14px]">
-    <PulsanteLivelli v-model:aperto="livelliAperti" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" class="relative">
+    <PulsanteLivelli v-model:aperto="livelliAperti" v-model="filtroIncendi" v-model:acceso="mostraIncendi" :filtri="FILTRI_STORICO_INCENDI" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" class="relative">
       <div class="space-y-1">
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
           <input v-model="mostraHotspot" type="checkbox" role="switch" class="sr-only" />
@@ -419,6 +424,7 @@ const contatori = computed(() => [
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
       <span v-if="mostraStorico" class="flex items-center gap-3 border-l border-bordo pl-3"><span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" />Confermata</span><span class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" />Falso allarme</span></span>
+      <span v-if="mostraIncendi" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-storico h-1.5 w-8 rounded-full" />Incendi storici</span>
       <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Hotspot</span>
     </div>
 
