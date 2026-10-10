@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `13e140f` — 2026-10-10
+> **Riferimento:** commit `50ccb01` — 2026-10-10
 
 ## Fase
 
@@ -11,6 +11,7 @@ Il cruscotto mostra anche gli incendi storici CFVA (livello in cima ai Livelli, 
 Il box Segnalazioni del cruscotto ha le schede In coda / Confermate / Falsi allarmi (righe valutate, scheda in sola lettura).
 Le mappature dei cittadini nel cruscotto sono segnaposto a icona discreti (vetro scuro, anello e icona nel colore del tipo) raggruppati in cluster fino a zoom 11 (`registraSegnaposti()` in `useMappa.ts`).
 App e cruscotto si aggiornano in tempo reale: trigger Postgres -> NOTIFY -> `GET /eventi` (SSE) -> `useEventi()`; polling ridotto a 30 s (piano `docs/piani/2026-10-10-eventi-live.md`, misure in `docs/esperimenti/2026-10-10-eventi-live.md`).
+Cruscotto su telefono (< 768 px): header a una fila, colonna destra come l'app, foglio Segnalazioni a tre altezze trascinabile con dettaglio e azioni nel piede, legenda nel pannello Livelli (`docs/interfaccia/linguaggio-visivo.md`, "Cruscotto su telefono"); desktop invariato.
 
 Direzione scelta e specifica approvata:
 `docs/specifiche/2026-10-09-sentinelle-incendi.md` (challenge 2+3 fuse,
@@ -56,6 +57,10 @@ Ognuno modifica solo la propria riga.
 
 ## Decisioni confermate
 
+- Prova su telefono vero via `scripts/tunnel.sh` riuscita (2026-10-10): mappa,
+  tocchi, GPS, fotocamera e aggiornamenti live funzionano. Il problema dei tocchi
+  era solo dell'emulazione mobile del browser.
+
 - Memoria condivisa nel repository (`AGENTS.md`, `STATO.md`, `docs/`).
 - Metodo: SDD snello, nessun reviewer, una verifica eseguibile per consegna.
 - Integrati da cia-sardegna-learning: hook `pre-commit` su STATO.md, piani
@@ -91,8 +96,9 @@ Ognuno modifica solo la propria riga.
 
 ## Aperto
 
-- Su emulazione mobile del browser i tocchi sulla mappa non arrivano a MapLibre
-  (su desktop si'): verificare su telefono vero con `scripts/tunnel.sh`.
+- Cruscotto su telefono: provare su telefono vero (tunnel) il trascinamento del
+  foglio Segnalazioni, testato solo con gesti simulati.
+
 
 - Oggi nessun hotspot FIRMS: la demo offline non ne ha; valutare hotspot
   fittizi dichiarati.

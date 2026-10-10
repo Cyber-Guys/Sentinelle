@@ -187,3 +187,15 @@ cruscotto. Lo stile della mappa base cambia insieme al tema.
   zoom minimo ricalcolato a ogni resize perche' i limiti riempiano sempre la finestra (verificato a
   375x812, 1440x900, 2560x1440).
 - **Cruscotto**: colonna destra e pannello Livelli come l'app (Livelli 44 -> +/- 44 -> "i" 36 centrata, 14 px tra i bordi, cima allineata a coda e scheda a 76 px); il pannello ha in cima la sezione "Incendi storici" (stesso storico PMTiles, filtro e popup dell'app; interruttore on/off, default acceso su 2025, radio e gradiente solo se acceso; sotto tutti i pin, vince il pin al tocco; voce con campione del gradiente nella legenda) poi sezioni a interruttore (Hotspot satellitari, Mappature dei cittadini con legenda dei tipi) e il badge conta i livelli attivi. Legenda separata dai comandi: in basso a sinistra solo una pillola informativa (priorita', piu' hotspot se acceso). La coda si ferma sopra la legenda; la scheda dettaglio sta a 14 px a sinistra della colonna e scorre a sinistra del pannello Livelli quando e' aperto.
+
+## Cruscotto su telefono
+
+Sotto 768 px il cruscotto segue lo schema delle app di mappe (desktop invariato, `mobile` da `matchMedia` in `cruscotto.vue`):
+
+- **Mappa a tutto schermo**; colonna destra identica all'app (Livelli -> zoom -> "i", passo 14 px, 58 px sotto il bordo dell'header), sparisce in dissolvenza quando il foglio la coprirebbe.
+- **Header a una fila**: pillola 44 col solo marchio, pillola contatori brevi (icone `Inbox` / `CircleCheck` / `MapPin` + cifre, etichette solo per lettori di schermo) chiusa dal `.punto-vivo` (verde in diretta, ambra in riconnessione; con errore diventa pulsante "riprova"), tema compatto a destra.
+- **Foglio Segnalazioni** `sospeso` a tre altezze: chiuso 64 px + safe-area (maniglia + "N in coda · priorità max X" / "Tutto tranquillo"), metà 50%, alto 85%. Alto sempre quanto lo stato massimo e spostato con `transform` (320 ms easing in uscita, niente con reduced-motion); trascinamento con pointer events sulla maniglia/intestazione, aggancio allo stato più vicino alla posizione proiettata con la velocità, tocco = chiuso <-> metà. La parte fuori schermo si compensa con padding in fondo all'elenco.
+- **Dettaglio nel foglio**: indietro + titolo nell'intestazione, `CorpoScheda` (foto, posizione, priorità scomposta); la selezione (elenco o pin) porta il foglio almeno a metà e fa `flyTo` con padding in basso pari al foglio. Piede fisso con Conferma / Falso allarme (o badge di stato in sola lettura), nascosto a foglio chiuso.
+- **Componenti condivisi** desktop/telefono: `SchedeStato` (controllo segmentato, `grande` = 44 px), `ElencoSegnalazioni`, `CorpoScheda`.
+- **Legenda** delle priorità in fondo al pannello Livelli (sezione "Legenda"); incendi, hotspot, storico e mappature hanno la loro accanto al livello. Il pannello scorre dentro `maxAltezza` (fino a 14 px sopra il foglio chiuso); aprendolo il foglio scende a chiuso.
+- **Popup**: `impostaFasceLibere()` in `useMappa.ts` (fascia bassa = altezza del foglio, destra = colonna 70 px); larghezza `min(280px, 100vw - 94px)`; si chiudono (`chiudiPopup()`) quando il foglio sale.

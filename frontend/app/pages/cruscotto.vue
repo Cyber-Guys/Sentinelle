@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
-import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink, MapPin, History } from '@lucide/vue'
+import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, MapPin, History, Inbox, ArrowLeft, ChevronUp } from '@lucide/vue'
 
-const { chiama, urlFoto } = useApi()
+const { chiama } = useApi()
 const { tema } = useTema()
 
 const coda = ref<Segnalazione[]>([])
@@ -112,19 +112,8 @@ watch(filtroStorico, livelloStorico)
 // scheda attiva del box Segnalazioni: resta finche' l'operatore non la cambia
 const schedaBox = ref<'nuova' | 'confermata' | 'archiviata'>('nuova')
 const SCHEDE_BOX = [{ id: 'nuova', etichetta: 'In coda' }, { id: 'confermata', etichetta: 'Confermate' }, { id: 'archiviata', etichetta: 'Falsi allarmi' }] as const
-const VUOTO_BOX = { nuova: '', confermata: 'Nessuna segnalazione confermata', archiviata: 'Nessun falso allarme archiviato' }
 const valutate = computed(() => storico.value.filter((s) => s.stato === schedaBox.value).sort((a, b) => (b.valutata_il ?? '').localeCompare(a.valutata_il ?? '')))
 const nBox = computed(() => ({ nuova: coda.value.length, confermata: nStorico.value.confermata, archiviata: nStorico.value.archiviata }))
-const faValutata = (iso: string | null | undefined) => {
-  if (!iso) return ''
-  const d = new Date(iso), min = Math.round((Date.now() - d.getTime()) / 60000)
-  if (min < 60) return fa(iso)
-  const ore = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-  const giorni = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000)
-  if (giorni === 0) return fa(iso)
-  if (giorni === 1) return `ieri ${ore}`
-  return `${d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} ${ore}`
-}
 // nelle schede valutate il livello Storico si accende col filtro coerente; tornando In coda torna com'era
 let prima: { mostra: boolean; filtro: typeof filtroStorico.value } | null = null
 watch(schedaBox, (v) => {
@@ -230,8 +219,7 @@ onMounted(() => {
   registraPmtiles()
   mappa = new maplibregl.Map({ container: contenitore.value!, style: stileMappa(tema.value), center: [9.0, 40.1], zoom: 7.4, attributionControl: false, locale: LOCALE_MAPPA })
   limitaMappa(mappa)
-  // la colonna della coda copre la sinistra: il centro utile della mappa si sposta a destra
-  mappa.setPadding({ left: 400, top: 80, right: 0, bottom: 0 })
+  paddingMappa()
   mappaPronta.value = mappa
   mappa.on('style.load', aggiungiLivelli)
   segnapostiMancanti(mappa, segnapostiMappature, () => tema.value)
@@ -294,10 +282,11 @@ onMounted(() => {
   ]
 })
 
-onBeforeUnmount(() => { fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { fermaTelefono(); fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
+  if (mobile.value) return // sul telefono ci pensa il watch su `selezionata` (anche per i pin)
   mappa?.flyTo({ center: [s.lon, s.lat], zoom: Math.max(mappa.getZoom(), 11), padding: { left: 400, right: 510, top: 80, bottom: 60 } })
 }
 
@@ -318,19 +307,119 @@ async function azione(tipo: 'conferma' | 'archivia') {
 const nCoda = useConteggio(() => coda.value.length)
 const nConfermate = useConteggio(() => confermateOggi.value)
 const nMappe = useConteggio(() => nMappature.value)
+/*
+  Telefono (< 768 px): mappa a tutto schermo, header a una fila, colonna destra come l'app,
+  foglio Segnalazioni in basso a tre altezze (chiuso / meta' / alto) trascinabile dalla maniglia.
+*/
+const mq = window.matchMedia('(max-width: 767px)')
+const mobile = ref(mq.matches)
+type StatoFoglio = 'chiuso' | 'meta' | 'alto'
+const foglio = ref<StatoFoglio>('chiuso')
+const vh = ref(window.innerHeight)
+const sicuro = ref(0) // safe-area in basso
+const colonna = ref<HTMLElement | null>(null)
+const bordiColonna = ref({ alto: 70, basso: 266 })
+const ALTEZZE = computed(() => ({ chiuso: 64 + sicuro.value, meta: Math.round(vh.value * 0.5), alto: Math.round(vh.value * 0.85) }))
+const trascinata = ref<number | null>(null) // altezza visibile durante il trascinamento
+const hFoglio = computed(() => trascinata.value ?? ALTEZZE.value[foglio.value])
+const hPiede = computed(() => 56 + Math.max(12, sicuro.value))
+// piede con le azioni: sempre visibile nel dettaglio, tranne a foglio chiuso
+const conPiede = computed(() => mobile.value && !!scheda.value && hFoglio.value > ALTEZZE.value.chiuso + 80)
+// la colonna destra sparisce quando il foglio la coprirebbe
+const colonnaCoperta = computed(() => mobile.value && vh.value - hFoglio.value < bordiColonna.value.basso + 14)
+// la parte del foglio sotto lo schermo si compensa con padding: l'elenco scorre fino all'ultima riga
+const padScroll = computed(() => ALTEZZE.value.alto - ALTEZZE.value[foglio.value] + (conPiede.value ? hPiede.value : 0) + 12)
+const maxLivelli = computed(() => `${vh.value - bordiColonna.value.alto - ALTEZZE.value.chiuso - 14}px`)
+const prioMax = computed(() => coda.value.reduce((m, s) => Math.max(m, s.priorita), 0))
+
+function misura() {
+  vh.value = window.innerHeight
+  const sonda = document.createElement('div')
+  sonda.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom);visibility:hidden'
+  document.body.appendChild(sonda); sicuro.value = sonda.offsetHeight; sonda.remove()
+  const r = colonna.value?.getBoundingClientRect()
+  if (r) bordiColonna.value = { alto: Math.round(r.top), basso: Math.round(r.top + r.height) }
+}
+function paddingMappa() {
+  // desktop: la colonna della coda copre la sinistra, il centro utile si sposta a destra
+  mappa?.setPadding(mobile.value ? { left: 0, top: 56, right: 0, bottom: ALTEZZE.value.chiuso } : { left: 400, top: 80, right: 0, bottom: 0 })
+  aggiornaFasce()
+}
+const cambioMq = () => { mobile.value = mq.matches }
+mq.addEventListener('change', cambioMq)
+window.addEventListener('resize', misura)
+onMounted(() => nextTick(misura))
+const fermaTelefono = () => { mq.removeEventListener('change', cambioMq); window.removeEventListener('resize', misura) }
+watch(mobile, async () => { paddingMappa(); await nextTick(); misura() })
+// popup della mappa: la fascia libera in basso segue il foglio
+function aggiornaFasce() {
+  if (mappa) impostaFasceLibere(mappa, mobile.value ? { alto: 72, basso: ALTEZZE.value[foglio.value] + 12, destra: 70, sinistra: 12 } : { alto: 72, basso: 156 })
+}
+watch([mobile, foglio, ALTEZZE], aggiornaFasce)
+// il foglio che sale coprirebbe i popup: si chiudono
+watch(foglio, (f) => { if (mobile.value && f !== 'chiuso') chiudiPopup() })
+// selezione (dall'elenco o dal pin): foglio almeno a meta', pin al centro dello spazio libero sopra il foglio
+watch(selezionata, async (id) => {
+  if (!mobile.value || !id) return
+  if (foglio.value === 'chiuso') foglio.value = 'meta'
+  livelliAperti.value = false
+  chiudiPopup()
+  await nextTick()
+  const s = scheda.value
+  if (!s || !mappa) return
+  mappa.flyTo({ center: [s.lon, s.lat], zoom: Math.max(mappa.getZoom(), 11), padding: { top: 72, bottom: ALTEZZE.value[foglio.value] + 24, left: 24, right: 72 } })
+})
+// pannello Livelli aperto: il foglio scende a striscia per lasciargli spazio
+watch(livelliAperti, (v) => { if (v && mobile.value) foglio.value = 'chiuso' })
+
+let presa: { y: number; h: number; mosso: boolean; v: number; ly: number; lt: number } | null = null
+function giu(e: PointerEvent) {
+  if ((e.target as HTMLElement).closest('a, input, label, button:not([data-maniglia])')) return
+  presa = { y: e.clientY, h: hFoglio.value, mosso: false, v: 0, ly: e.clientY, lt: e.timeStamp }
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+}
+function muovi(e: PointerEvent) {
+  if (!presa) return
+  const dy = presa.y - e.clientY
+  if (!presa.mosso && Math.abs(dy) < 6) return
+  presa.mosso = true
+  const dt = e.timeStamp - presa.lt
+  if (dt > 0) presa.v = (presa.ly - e.clientY) / dt
+  presa.ly = e.clientY; presa.lt = e.timeStamp
+  const a = ALTEZZE.value
+  trascinata.value = Math.min(a.alto, Math.max(a.chiuso, presa.h + dy))
+}
+function su(e: PointerEvent) {
+  const p = presa
+  presa = null
+  if (!p) return
+  if (!p.mosso) { if (e.type === 'pointerup') alternaFoglio(); return }
+  // aggancio allo stato piu' vicino alla posizione proiettata (tiene conto della velocita' del gesto)
+  const meta = (trascinata.value ?? p.h) + p.v * 180
+  const a = ALTEZZE.value
+  foglio.value = (['chiuso', 'meta', 'alto'] as const).reduce((x, k) => (Math.abs(a[k] - meta) < Math.abs(a[x] - meta) ? k : x), 'chiuso' as StatoFoglio)
+  trascinata.value = null
+}
+function alternaFoglio() { foglio.value = foglio.value === 'chiuso' ? 'meta' : 'chiuso' }
+
 const contatori = computed(() => [
   { etichetta: 'in coda', valore: nCoda.value, colore: coda.value.length ? 'var(--brace)' : 'var(--testo)' },
   { etichetta: 'confermate oggi', valore: nConfermate.value, colore: 'var(--testo)' },
   { etichetta: 'mappature', valore: nMappe.value, colore: 'var(--testo)' },
 ])
+const contatoriBrevi = computed(() => [
+  { ...contatori.value[0]!, icona: Inbox },
+  { ...contatori.value[1]!, icona: CircleCheck },
+  { ...contatori.value[2]!, icona: MapPin },
+])
 </script>
 
 <template>
-  <main class="relative h-dvh overflow-hidden">
+  <main class="relative h-dvh overflow-hidden" :class="mobile && 'cruscotto-telefono'">
     <div class="cruscotto-mappa absolute inset-0"><div ref="contenitore" class="h-full w-full" /></div>
 
     <!-- barra superiore: marchio, stato, contatori -->
-    <header class="pointer-events-none absolute inset-x-4 top-4 z-20 flex items-center gap-3">
+    <header v-if="!mobile" class="pointer-events-none absolute inset-x-4 top-4 z-20 flex items-center gap-3">
       <NuxtLink to="/" class="pillola pointer-events-auto flex h-12 items-center gap-2.5 pr-4 pl-2 transition-colors hover:bg-vetro-forte">
         <span class="flex size-8 items-center justify-center rounded-full bg-gradient-to-b from-[#f2581d] to-[#d33515]"><Flame class="size-4 text-white" aria-hidden="true" /></span>
         <span class="leading-tight">
@@ -359,76 +448,42 @@ const contatori = computed(() => [
       <InterruttoreTema class="pointer-events-auto ml-auto" />
     </header>
 
+    <!-- telefono: una sola fila, marchio solo icona, contatori brevi, stato, tema -->
+    <header v-else class="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-2 px-3 pt-[max(.75rem,env(safe-area-inset-top))]">
+      <NuxtLink to="/" class="pillola pointer-events-auto flex size-11 shrink-0 items-center justify-center transition-colors hover:bg-vetro-forte" aria-label="Sentinelle, sala operativa: torna all'inizio">
+        <span class="flex size-8 items-center justify-center rounded-full bg-gradient-to-b from-[#f2581d] to-[#d33515]"><Flame class="size-4 text-white" aria-hidden="true" /></span>
+      </NuxtLink>
+      <div class="pillola pointer-events-auto flex h-11 min-w-0 items-center pl-3">
+        <span v-for="c in contatoriBrevi" :key="c.etichetta" class="flex items-center gap-1 pr-3">
+          <component :is="c.icona" class="size-3.5 shrink-0 text-testo-3" aria-hidden="true" />
+          <span class="cifre text-[.95rem] font-semibold leading-none" :style="{ color: c.colore }">{{ c.valore }}</span>
+          <span class="sr-only">{{ c.etichetta }}</span>
+        </span>
+        <span v-if="!errore" class="flex h-11 w-9 items-center justify-center border-l border-bordo" role="status">
+          <span class="punto-vivo" :class="eventi.stato.value === 'riconnessione' && 'punto-ambra'" aria-hidden="true" />
+          <span class="sr-only">{{ eventi.stato.value === 'connesso' ? 'In diretta' : 'Riconnessione…' }}</span>
+        </span>
+        <button v-else type="button" class="flex h-11 w-11 items-center justify-center rounded-r-full border-l border-bordo transition-colors hover:bg-vetro-forte" role="status" aria-label="Connessione persa: riprova adesso" @click="aggiorna">
+          <span class="punto-vivo punto-ambra" aria-hidden="true" />
+        </button>
+      </div>
+      <span class="flex-1" />
+      <InterruttoreTema compatto class="pointer-events-auto" />
+    </header>
+
     <!-- colonna della coda: cresce col contenuto, si ferma sopra la barra in basso, poi scorre -->
-    <aside class="vetro absolute top-[4.75rem] left-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[23rem] flex-col !bg-[var(--vetro-mappa)] shadow-[var(--ombra-pillola)]" aria-label="Segnalazioni">
+    <aside v-if="!mobile" class="vetro absolute top-[4.75rem] left-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[23rem] flex-col !bg-[var(--vetro-mappa)] shadow-[var(--ombra-pillola)]" aria-label="Segnalazioni">
       <div class="shrink-0 space-y-2.5 border-b border-bordo p-3 pt-3.5">
         <h1 class="px-2 text-[.92rem] font-semibold">Segnalazioni</h1>
-        <div class="flex rounded-full bg-vetro p-0.5 ring-1 ring-bordo" role="radiogroup" aria-label="Stato delle segnalazioni">
-          <label v-for="f in SCHEDE_BOX" :key="f.id" class="flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full text-[.74rem] font-medium whitespace-nowrap transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo" :class="schedaBox === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'">
-            <input v-model="schedaBox" type="radio" name="scheda-segnalazioni" :value="f.id" class="sr-only" />{{ f.etichetta }}<span class="cifre text-testo-3">{{ nBox[f.id] }}</span>
-          </label>
-        </div>
+        <SchedeStato v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" />
       </div>
-      <div v-if="schedaBox !== 'nuova'" class="contents">
-        <div v-if="!valutate.length" class="px-5 py-3.5 text-[.8rem] text-testo-2">{{ VUOTO_BOX[schedaBox] }}</div>
-        <ul v-else class="relative min-h-0 space-y-px overflow-y-auto p-3">
-          <li v-for="s in valutate" :key="s.id">
-            <button class="relative flex w-full items-center gap-3 rounded-m px-2 py-2 text-left transition-colors" :class="s.id === selezionata ? 'bg-vetro-forte ring-1 ring-bordo-luce' : 'hover:bg-vetro-forte/60'" :aria-current="s.id === selezionata ? 'true' : undefined" @click="seleziona(s)">
-              <span class="absolute inset-y-3 left-0 w-[3px] rounded-full" :style="{ background: varPriorita(s.priorita) }" aria-hidden="true" />
-              <span class="cifre w-8 shrink-0 text-right text-[1.05rem] font-semibold" :style="{ color: varPriorita(s.priorita) }" :aria-label="`Priorità ${s.priorita}`">{{ s.priorita }}</span>
-              <span class="min-w-0 flex-1 leading-tight">
-                <span class="flex items-center gap-1.5 text-[.86rem] font-medium">
-                  <Flame v-if="s.tipo === 'fuoco'" class="size-3.5 shrink-0 text-brace" aria-hidden="true" /><TriangleAlert v-else class="size-3.5 shrink-0 text-ambra" aria-hidden="true" />
-                  <span class="truncate">{{ s.tipo === 'fuoco' ? 'Fuoco / fumo' : 'Area a rischio' }}<template v-if="s.comune"> · {{ nomeComune(s.comune) }}</template></span>
-                </span>
-                <span class="cifre mt-0.5 block text-[.72rem] text-testo-3">#{{ s.id }} · {{ faValutata(s.valutata_il) }}</span>
-              </span>
-              <span class="shrink-0 rounded-full px-2 py-px text-[.7rem] font-medium" :style="{ color: STATI[s.stato].colore, background: `color-mix(in srgb, ${STATI[s.stato].colore} 14%, transparent)` }">{{ STATI[s.stato].etichetta }}</span>
-            </button>
-          </li>
-        </ul>
-      </div>
-      <div v-else-if="caricamento && errore" class="p-3"><StatoErrore compatto messaggio="Non riusciamo a raggiungere il servizio. La coda si aggiorna da sola appena torna la connessione." @riprova="aggiorna" /></div>
-      <ul v-else-if="caricamento" class="space-y-px p-3" aria-busy="true" aria-label="Caricamento della coda">
-        <li v-for="k in 4" :key="k" class="flex items-center gap-3 px-2 py-2.5">
-          <span class="scheletro h-6 w-8 shrink-0" />
-          <span class="flex-1 space-y-1.5"><span class="scheletro block h-3 w-28" /><span class="scheletro block h-2.5 w-40" /></span>
-        </li>
-      </ul>
-      <div v-else-if="!coda.length" class="flex items-center gap-3 px-5 py-3.5">
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-macchia/12 text-macchia"><ShieldCheck class="size-4" aria-hidden="true" /></span>
-        <div class="leading-tight">
-          <p class="text-[.86rem] font-semibold">Tutto tranquillo</p>
-          <p class="mt-0.5 text-[.76rem] text-testo-2">Le nuove segnalazioni compaiono qui, ordinate per priorità.</p>
-        </div>
-      </div>
-      <TransitionGroup v-else tag="ul" name="coda" class="relative min-h-0 space-y-px overflow-y-auto p-3">
-        <li v-for="s in coda" :key="s.id">
-          <button
-            class="relative flex w-full items-center gap-3 rounded-m px-2 py-2 text-left transition-colors"
-            :class="[s.id === selezionata ? 'bg-vetro-forte ring-1 ring-bordo-luce' : 'hover:bg-vetro-forte/60', appena.has(s.id) && 'appena-arrivata']"
-            :aria-current="s.id === selezionata ? 'true' : undefined"
-            @click="seleziona(s)"
-          >
-            <span class="absolute inset-y-3 left-0 w-[3px] rounded-full" :style="{ background: varPriorita(s.priorita) }" aria-hidden="true" />
-            <span class="cifre w-8 shrink-0 text-right text-[1.05rem] font-semibold" :style="{ color: varPriorita(s.priorita) }" :aria-label="`Priorità ${s.priorita}`">{{ s.priorita }}</span>
-            <span class="min-w-0 flex-1 leading-tight">
-              <span class="flex items-center gap-1.5 text-[.86rem] font-medium">
-                <Flame v-if="s.tipo === 'fuoco'" class="size-3.5 shrink-0 text-brace" aria-hidden="true" /><TriangleAlert v-else class="size-3.5 shrink-0 text-ambra" aria-hidden="true" />
-                <span class="truncate">{{ s.tipo === 'fuoco' ? 'Fuoco / fumo' : 'Area a rischio' }}<template v-if="s.comune"> · {{ nomeComune(s.comune) }}</template></span>
-              </span>
-              <span class="cifre mt-0.5 block text-[.72rem] text-testo-3">#{{ s.id }} · {{ fa(s.creata_il) }}</span>
-            </span>
-            <span class="shrink-0 text-[.7rem] font-medium" :style="{ color: varPriorita(s.priorita) }">{{ etichettaPriorita(s.priorita) }}</span>
-          </button>
-        </li>
-      </TransitionGroup>
+      <ElencoSegnalazioni :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
     </aside>
 
     <!-- scheda della segnalazione selezionata -->
     <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0 translate-x-3" leave-active-class="transition duration-150" leave-to-class="opacity-0 translate-x-3">
       <!-- a sinistra della colonna destra (16 + 44 + 14); col pannello Livelli aperto scorre a sinistra del pannello -->
-      <section v-if="scheda" class="sospeso absolute top-[4.75rem] z-10 flex max-h-[calc(100%-4.75rem-1rem)] w-[26rem] flex-col overflow-hidden transition-[right] duration-200 ease-out" :style="{ right: livelliAperti ? 'calc(68px + min(17.5rem, 100vw - 5.5rem) + 14px)' : '74px' }" aria-labelledby="titolo-scheda">
+      <section v-if="scheda && !mobile" class="sospeso absolute top-[4.75rem] z-10 flex max-h-[calc(100%-4.75rem-1rem)] w-[26rem] flex-col overflow-hidden transition-[right] duration-200 ease-out" :style="{ right: livelliAperti ? 'calc(68px + min(17.5rem, 100vw - 5.5rem) + 14px)' : '74px' }" aria-labelledby="titolo-scheda">
         <header class="flex shrink-0 items-start justify-between gap-3 border-b border-bordo px-5 py-3.5">
           <div class="min-w-0">
             <p class="flex items-center gap-2 text-[.72rem] text-testo-3">
@@ -444,18 +499,7 @@ const contatori = computed(() => [
           <button type="button" aria-label="Chiudi la scheda" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="selezionata = null"><X class="size-4" /></button>
         </header>
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <div class="grid gap-2" :class="scheda.foto_url ? 'grid-cols-[7.5rem_1fr]' : 'grid-cols-1'">
-            <a v-if="scheda.foto_url" :href="urlFoto(scheda.foto_url)!" target="_blank" rel="noopener" class="group relative block h-[5.5rem] overflow-hidden rounded-m border border-bordo bg-vetro-forte" aria-label="Apri la foto a dimensione piena">
-              <img :key="scheda.id" :src="urlFoto(scheda.foto_url)!" alt="Foto allegata alla segnalazione" class="size-full object-cover" />
-              <ExternalLink class="absolute right-1.5 bottom-1.5 size-3.5 text-white opacity-0 drop-shadow transition-opacity group-hover:opacity-100" aria-hidden="true" />
-            </a>
-            <dl class="grid content-start gap-y-1.5 text-[.76rem]">
-              <div class="flex gap-2"><dt class="w-16 shrink-0 text-testo-3">Posizione</dt><dd class="cifre text-testo-2">{{ scheda.lat.toFixed(5) }}, {{ scheda.lon.toFixed(5) }}</dd></div>
-              <div v-if="scheda.comune" class="flex gap-2"><dt class="w-16 shrink-0 text-testo-3">Comune</dt><dd class="text-testo-2">{{ nomeComune(scheda.comune) }}</dd></div>
-              <div v-if="!scheda.foto_url" class="flex gap-2"><dt class="w-16 shrink-0 text-testo-3">Foto</dt><dd class="text-testo-3">nessuna</dd></div>
-            </dl>
-          </div>
-          <ScomposizionePriorita :priorita="scheda.priorita" :fattori="scheda.fattori" :motivazioni="scheda.motivazioni" />
+          <CorpoScheda :s="scheda" />
         </div>
         <!-- valutata: esito al posto delle azioni -->
         <footer v-if="sola" class="flex shrink-0 items-center gap-3 border-t border-bordo px-5 py-3.5">
@@ -476,8 +520,9 @@ const contatori = computed(() => [
     </Transition>
 
     <!-- colonna destra come nell'app: Livelli, zoom, "i" (passo 14 px dal flex) -->
-    <div class="absolute top-[4.75rem] right-4 z-20 flex w-11 flex-col items-center gap-[14px]">
-    <PulsanteLivelli v-model:aperto="livelliAperti" v-model="filtroIncendi" v-model:acceso="mostraIncendi" :filtri="FILTRI_STORICO_INCENDI" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" class="relative">
+    <!-- telefono: stessa colonna dell'app (sotto l'header, passo 14 px); sparisce quando il foglio la coprirebbe -->
+    <div ref="colonna" class="absolute z-20 flex w-11 flex-col items-center gap-[14px]" :class="mobile ? ['top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 transition-opacity duration-200', colonnaCoperta && 'pointer-events-none opacity-0'] : 'top-[4.75rem] right-4'" :inert="colonnaCoperta || undefined">
+    <PulsanteLivelli v-model:aperto="livelliAperti" v-model="filtroIncendi" v-model:acceso="mostraIncendi" :filtri="FILTRI_STORICO_INCENDI" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" :max-altezza="mobile ? maxLivelli : undefined" class="relative">
       <div class="space-y-1">
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
           <input v-model="mostraHotspot" type="checkbox" role="switch" class="sr-only" />
@@ -516,7 +561,7 @@ const contatori = computed(() => [
         </label>
         <div v-if="mostraStorico" class="px-3 pt-1 pb-1">
           <div class="flex rounded-full bg-vetro p-0.5 ring-1 ring-bordo" role="radiogroup" aria-label="Filtro dello storico">
-            <label v-for="f in FILTRI_STORICO" :key="f.id" class="flex h-8 flex-1 cursor-pointer items-center justify-center rounded-full text-[.74rem] font-medium whitespace-nowrap transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo" :class="filtroStorico === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'">
+            <label v-for="f in FILTRI_STORICO" :key="f.id" class="flex flex-1 cursor-pointer items-center justify-center rounded-full text-[.74rem] font-medium whitespace-nowrap transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo" :class="[mobile ? 'h-11' : 'h-8', filtroStorico === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo']">
               <input v-model="filtroStorico" type="radio" name="filtro-storico-segn" :value="f.id" class="sr-only" />{{ f.etichetta }}
             </label>
           </div>
@@ -525,13 +570,25 @@ const contatori = computed(() => [
             <li class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" aria-hidden="true" />Falso allarme</li>
           </ul>
         </div>
+        <!-- telefono: la legenda sta qui, non in basso (li' c'e' il foglio); incendi, hotspot, storico e mappature hanno la loro accanto al livello -->
+        <section v-if="mobile" class="mt-2 border-t border-bordo px-3 pt-3 pb-1 text-[.76rem] text-testo-2" aria-labelledby="titolo-legenda">
+          <h3 id="titolo-legenda" class="etichetta mb-2">Legenda</h3>
+          <ul class="space-y-1.5">
+            <li class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span class="w-full text-testo-3">Priorità delle segnalazioni</span>
+              <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-alta" aria-hidden="true" />Alta <span class="cifre text-testo-3">60+</span></span>
+              <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" aria-hidden="true" />Media <span class="cifre text-testo-3">30-59</span></span>
+              <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" aria-hidden="true" />Bassa <span class="cifre text-testo-3">0-29</span></span>
+            </li>
+          </ul>
+        </section>
       </div>
     </PulsanteLivelli>
     <ControlliMappa :mappa="mappaPronta" />
     </div>
 
     <!-- legenda (solo informativa): priorita' delle segnalazioni, hotspot se il livello e' acceso -->
-    <div class="pillola pointer-events-none absolute bottom-4 left-4 z-10 flex h-9 items-center gap-3 px-3 text-[.74rem] whitespace-nowrap" aria-label="Legenda della mappa">
+    <div v-if="!mobile" class="pillola pointer-events-none absolute bottom-4 left-4 z-10 flex h-9 items-center gap-3 px-3 text-[.74rem] whitespace-nowrap" aria-label="Legenda della mappa">
       <span class="etichetta">Priorità</span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-alta" />Alta <span class="cifre text-testo-3">60+</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
@@ -541,9 +598,77 @@ const contatori = computed(() => [
       <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Hotspot</span>
     </div>
 
+    <!-- telefono: foglio Segnalazioni a tre altezze; si sposta con transform, l'altezza resta quella massima -->
+    <section
+      v-if="mobile"
+      class="sospeso foglio-telefono fixed inset-x-0 bottom-0 z-30 flex flex-col !rounded-b-none"
+      :class="trascinata !== null && 'trascinando'"
+      :style="{ height: `${ALTEZZE.alto}px`, transform: `translateY(${ALTEZZE.alto - hFoglio}px)` }"
+      aria-label="Segnalazioni"
+    >
+      <div class="shrink-0 cursor-grab touch-none select-none" @pointerdown="giu" @pointermove="muovi" @pointerup="su" @pointercancel="su">
+        <button data-maniglia type="button" class="tocco flex h-4 w-full items-end justify-center" :aria-label="foglio === 'chiuso' ? 'Apri il foglio delle segnalazioni' : 'Riduci il foglio delle segnalazioni'" :aria-expanded="foglio !== 'chiuso'">
+          <span class="h-1 w-9 rounded-full bg-bordo-luce" aria-hidden="true" />
+        </button>
+        <!-- elenco: riepilogo; dettaglio: indietro + titolo -->
+        <div v-if="!scheda" class="flex h-12 items-center gap-3 px-4">
+          <template v-if="errore">
+            <span class="punto-vivo punto-ambra shrink-0" aria-hidden="true" />
+            <p class="min-w-0 flex-1 truncate text-[.92rem]"><span class="font-semibold">Connessione persa</span> <span class="text-testo-2">· riprovo da solo</span></p>
+          </template>
+          <p v-else-if="caricamento" class="flex-1 text-[.92rem] text-testo-2">Caricamento della coda…</p>
+          <p v-else-if="coda.length" class="cifre min-w-0 flex-1 truncate text-[.92rem]">
+            <span class="font-semibold text-brace">{{ coda.length }}</span> in coda <span class="text-testo-3">·</span> priorità max <span class="font-semibold" :style="{ color: varPriorita(prioMax) }">{{ prioMax }}</span>
+          </p>
+          <p v-else class="flex min-w-0 flex-1 items-center gap-2 text-[.92rem] font-semibold"><ShieldCheck class="size-4 shrink-0 text-macchia" aria-hidden="true" />Tutto tranquillo</p>
+          <ChevronUp class="size-4 shrink-0 text-testo-3 transition-transform duration-200" :class="foglio !== 'chiuso' && 'rotate-180'" aria-hidden="true" />
+        </div>
+        <div v-else class="flex h-12 items-center gap-2 pr-4 pl-2">
+          <button type="button" class="flex size-11 shrink-0 items-center justify-center rounded-full text-testo-2 transition-colors hover:bg-vetro-forte" aria-label="Torna all'elenco" @click="selezionata = null"><ArrowLeft class="size-5" aria-hidden="true" /></button>
+          <div class="min-w-0 flex-1 leading-tight">
+            <p class="flex items-center gap-1.5 text-[.72rem] text-testo-3">
+              <span v-if="!sola" class="rounded-full bg-cielo/12 px-2 py-px font-medium text-cielo">Nuova</span>
+              <span v-else class="rounded-full px-2 py-px font-medium" :style="{ color: STATI[scheda.stato].colore, background: `color-mix(in srgb, ${STATI[scheda.stato].colore} 14%, transparent)` }">{{ STATI[scheda.stato].etichetta }}</span>
+              <span class="cifre truncate">#{{ scheda.id }} · {{ fa(scheda.creata_il) }}</span>
+            </p>
+            <h2 class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[.95rem] font-semibold">
+              <Flame v-if="scheda.tipo === 'fuoco'" class="size-4 shrink-0 text-brace" aria-hidden="true" /><TriangleAlert v-else class="size-4 shrink-0 text-ambra" aria-hidden="true" />
+              <span class="truncate">{{ scheda.tipo === 'fuoco' ? 'Fuoco / fumo' : 'Area a rischio' }}<span v-if="scheda.comune" class="font-normal text-testo-2"> · {{ nomeComune(scheda.comune) }}</span></span>
+            </h2>
+          </div>
+        </div>
+      </div>
+      <div v-if="!scheda" class="shrink-0 border-b border-bordo px-3 pb-3">
+        <SchedeStato v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" grande />
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain" :class="scheda && 'border-t border-bordo'" :style="{ paddingBottom: `${padScroll}px` }">
+        <ElencoSegnalazioni v-if="!scheda" :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
+        <div v-else class="space-y-4 px-4 pt-4"><CorpoScheda :s="scheda" /></div>
+      </div>
+    </section>
+    <!-- piede del dettaglio: azioni (in coda) o esito (valutata), sempre visibile sopra il foglio -->
+    <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 translate-y-2" leave-active-class="transition duration-150 ease-in" leave-to-class="opacity-0 translate-y-2">
+      <footer v-if="conPiede && scheda" class="fixed inset-x-0 bottom-0 z-40 border-t border-bordo bg-fondo px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+        <div v-if="sola" class="flex h-11 items-center gap-3">
+          <span class="flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-semibold" :style="{ color: STATI[scheda.stato].colore, background: `color-mix(in srgb, ${STATI[scheda.stato].colore} 14%, transparent)` }">
+            <Check v-if="scheda.stato === 'confermata'" class="size-4" aria-hidden="true" /><Ban v-else class="size-4" aria-hidden="true" />{{ STATI[scheda.stato].etichetta }}
+          </span>
+          <span class="cifre text-[.76rem] leading-tight text-testo-2">Valutata<br>{{ ora(scheda.valutata_il ?? scheda.creata_il) }}</span>
+        </div>
+        <div v-else class="grid grid-cols-[1fr_auto] gap-2">
+          <button class="primario flex h-11 items-center justify-center gap-1.5 text-sm" :disabled="!!inAzione" @click="azione('conferma')">
+            <Loader2 v-if="inAzione === 'conferma'" class="size-4 animate-spin" aria-hidden="true" /><Check v-else class="size-4" aria-hidden="true" /> Conferma
+          </button>
+          <button class="secondario flex h-11 items-center justify-center gap-1.5 px-4 text-sm text-testo-2" :disabled="!!inAzione" aria-label="Archivia come falso allarme" @click="azione('archivia')">
+            <Loader2 v-if="inAzione === 'archivia'" class="size-4 animate-spin" aria-hidden="true" /><Ban v-else class="size-4" aria-hidden="true" /> Falso allarme
+          </button>
+        </div>
+      </footer>
+    </Transition>
+
     <!-- esito delle azioni dell'operatore -->
     <Transition enter-active-class="transition duration-250 ease-out" enter-from-class="opacity-0 translate-y-2" leave-active-class="transition duration-200 ease-in" leave-to-class="opacity-0 translate-y-1">
-      <div v-if="avviso" :key="avviso.id" class="pointer-events-none absolute bottom-16 left-1/2 z-30 -translate-x-1/2" role="status">
+      <div v-if="avviso" :key="avviso.id" class="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2" :class="mobile ? 'z-50 w-max max-w-[calc(100vw-2rem)]' : 'z-30'" :style="mobile ? { bottom: `${hFoglio + 12}px` } : undefined" role="status">
         <span class="sospeso flex items-center gap-2 !rounded-full py-2 pr-4 pl-3 text-sm font-medium">
           <CircleCheck v-if="avviso.tipo === 'ok'" class="size-4 text-macchia" aria-hidden="true" />
           <TriangleAlert v-else class="size-4 text-ambra" aria-hidden="true" />
@@ -568,4 +693,10 @@ const contatori = computed(() => [
 .coda-move { transition: transform .3s cubic-bezier(.22, 1, .36, 1); }
 @keyframes arrivo { from { box-shadow: 0 0 0 1px var(--brace); } to { box-shadow: 0 0 0 1px transparent, 0 0 0 0 transparent; } }
 .appena-arrivata { animation: arrivo 3.6s ease-out forwards; }
+/* foglio del telefono: segue il dito durante il trascinamento, poi aggancia con easing in uscita */
+.foglio-telefono { transition: transform .32s cubic-bezier(.22, 1, .36, 1); will-change: transform; }
+.foglio-telefono.trascinando { transition: none; }
+/* popup della mappa sul telefono: non arrivano sotto la colonna destra (12 + 44 + 14 a destra, 12 a sinistra) */
+.cruscotto-telefono .popup-sentinelle .maplibregl-popup-content { width: min(280px, calc(100vw - 94px)); }
+@media (prefers-reduced-motion: reduce) { .foglio-telefono { transition: none; } }
 </style>

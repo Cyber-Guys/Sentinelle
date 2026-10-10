@@ -5,7 +5,8 @@ import { Layers, X, Flame } from '@lucide/vue'
 // App: sezione "Incendi storici" a radio (`filtri` + v-model). Cruscotto: sezioni a interruttore nello slot.
 export interface FiltroStorico { id: string; etichetta: string; breve: string; dettaglio: string }
 
-const props = defineProps<{ filtri?: readonly FiltroStorico[]; badge?: string; descrizione?: string }>()
+// maxAltezza (opzionale): il pannello scorre dentro questa altezza (cruscotto su telefono, sopra il foglio)
+const props = defineProps<{ filtri?: readonly FiltroStorico[]; badge?: string; descrizione?: string; maxAltezza?: string }>()
 const filtro = defineModel<string>()
 // `acceso` (opzionale): se passato la sezione "Incendi storici" ha un interruttore on/off (cruscotto); nell'app e' sempre attiva
 const acceso = defineModel<boolean | undefined>('acceso', { default: undefined })
@@ -63,6 +64,7 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', fuori, true)
         id="pannello-livelli"
         ref="pannello"
         class="sospeso absolute top-0 right-[calc(100%+.5rem)] w-[min(17.5rem,calc(100vw-5.5rem))] origin-top-right p-3"
+        :style="maxAltezza ? { maxHeight: maxAltezza, overflowY: 'auto', overscrollBehavior: 'contain' } : undefined"
         aria-labelledby="titolo-livelli"
       >
         <div class="mb-2 flex items-center justify-between gap-2 pl-1">

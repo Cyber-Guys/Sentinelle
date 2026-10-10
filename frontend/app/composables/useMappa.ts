@@ -114,7 +114,8 @@ export function apriPopup(m: MappaLibre, lngLat: maplibregl.LngLatLike, comp: Co
   const el = document.createElement('div')
   const popup = new maplibregl.Popup({ closeButton: false, focusAfterOpen: false, maxWidth: 'none', offset: 10, className: 'popup-sentinelle' })
   render(h(comp, { ...props, onChiudi: () => popup.remove() }, corpo ? { default: corpo } : undefined), el)
-  popup.on('close', () => render(null, el))
+  popup.on('close', () => { render(null, el); aperti.delete(popup) })
+  aperti.add(popup)
   popup.setLngLat(lngLat).setDOMContent(el).addTo(m)
   // La mappa sta sotto header (in alto) e Segnala/navigazione (in basso): se il popup
   // ci finisce sotto, la mappa scorre quanto basta per liberarlo.
@@ -122,15 +123,26 @@ export function apriPopup(m: MappaLibre, lngLat: maplibregl.LngLatLike, comp: Co
     const r = popup.getElement()?.getBoundingClientRect()
     const c = m.getContainer().getBoundingClientRect()
     if (!r) return
-    const sotto = r.bottom - (c.bottom - LIBERO.basso)
-    const sopra = c.top + LIBERO.alto - r.top
-    if (sotto > 0) m.panBy([0, sotto], { duration: 250 })
-    else if (sopra > 0) m.panBy([0, -sopra], { duration: 250 })
+    const f = fasce.get(m) ?? LIBERO
+    const sotto = r.bottom - (c.bottom - f.basso)
+    const sopra = c.top + f.alto - r.top
+    const destra = r.right - (c.right - (f.destra ?? 0))
+    const sinistra = c.left + (f.sinistra ?? 0) - r.left
+    const dx = destra > 0 ? destra : sinistra > 0 ? -sinistra : 0
+    const dy = sotto > 0 ? sotto : sopra > 0 ? -sopra : 0
+    if (dx || dy) m.panBy([dx, dy], { duration: 250 })
   })
   return popup
 }
 // fasce occupate dai controlli flottanti, in px dai bordi della mappa
 const LIBERO = { alto: 72, basso: 156 }
+const aperti = new Set<maplibregl.Popup>()
+// chiude i popup aperti con apriPopup (cruscotto su telefono: il foglio sale e li coprirebbe)
+export function chiudiPopup() { [...aperti].forEach((p) => p.remove()) }
+type Fasce = { alto: number; basso: number; destra?: number; sinistra?: number }
+const fasce = new WeakMap<MappaLibre, Fasce>()
+// fasce libere per mappa (cruscotto su telefono: il foglio in basso cambia altezza)
+export function impostaFasceLibere(m: MappaLibre, f: Fasce) { fasce.set(m, f) }
 
 // Colori dei layer coerenti con i token (MapLibre vuole valori, non variabili CSS)
 export function coloriMappa(t: Tema) {
