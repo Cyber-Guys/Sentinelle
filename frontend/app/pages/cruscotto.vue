@@ -87,6 +87,35 @@ function livelloStorico() {
 }
 watch(mostraStorico, (v) => { livelloStorico(); if (v) caricaStorico() })
 watch(filtroStorico, livelloStorico)
+// scheda attiva del box Segnalazioni: resta finche' l'operatore non la cambia
+const schedaBox = ref<'nuova' | 'confermata' | 'archiviata'>('nuova')
+const SCHEDE_BOX = [{ id: 'nuova', etichetta: 'In coda' }, { id: 'confermata', etichetta: 'Confermate' }, { id: 'archiviata', etichetta: 'Falsi allarmi' }] as const
+const VUOTO_BOX = { nuova: '', confermata: 'Nessuna segnalazione confermata', archiviata: 'Nessun falso allarme archiviato' }
+const valutate = computed(() => storico.value.filter((s) => s.stato === schedaBox.value).sort((a, b) => (b.valutata_il ?? '').localeCompare(a.valutata_il ?? '')))
+const nBox = computed(() => ({ nuova: coda.value.length, confermata: nStorico.value.confermata, archiviata: nStorico.value.archiviata }))
+const faValutata = (iso: string | null | undefined) => {
+  if (!iso) return ''
+  const d = new Date(iso), min = Math.round((Date.now() - d.getTime()) / 60000)
+  if (min < 60) return fa(iso)
+  const ore = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  const giorni = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000)
+  if (giorni === 0) return fa(iso)
+  if (giorni === 1) return `ieri ${ore}`
+  return `${d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} ${ore}`
+}
+// nelle schede valutate il livello Storico si accende col filtro coerente; tornando In coda torna com'era
+let prima: { mostra: boolean; filtro: typeof filtroStorico.value } | null = null
+watch(schedaBox, (v) => {
+  if (v === 'nuova') {
+    if (prima) { mostraStorico.value = prima.mostra; filtroStorico.value = prima.filtro; prima = null }
+    return
+  }
+  prima ??= { mostra: mostraStorico.value, filtro: filtroStorico.value }
+  filtroStorico.value = v
+  mostraStorico.value = true
+  caricaStorico()
+})
+let timerValutate: ReturnType<typeof setInterval> | undefined
 const nStorico = computed(() => ({ confermata: storico.value.filter((s) => s.stato === 'confermata').length, archiviata: storico.value.filter((s) => s.stato === 'archiviata').length }))
 
 function mostraAvviso(testo: string, tipo: 'ok' | 'errore' = 'ok') {
@@ -202,9 +231,10 @@ onMounted(() => {
   aggiorna()
   caricaStorico() // serve anche alla scheda in sola lettura
   timer = setInterval(aggiorna, 3000)
+  timerValutate = setInterval(() => { if (schedaBox.value !== 'nuova') caricaStorico() }, 10000)
 })
 
-onBeforeUnmount(() => { clearInterval(timer); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { clearInterval(timer); clearInterval(timerValutate); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
@@ -270,12 +300,35 @@ const contatori = computed(() => [
     </header>
 
     <!-- colonna della coda: cresce col contenuto, si ferma sopra la barra in basso, poi scorre -->
-    <aside class="vetro absolute top-[4.75rem] left-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[23rem] flex-col !bg-[var(--vetro-mappa)] shadow-[var(--ombra-pillola)]" aria-label="Coda delle segnalazioni">
-      <div class="flex shrink-0 items-center justify-between border-b border-bordo px-5 py-3">
-        <h1 class="text-[.92rem] font-semibold">Coda segnalazioni</h1>
-        <span v-if="!caricamento" class="cifre text-[.74rem] text-testo-3">{{ coda.length }} da valutare</span>
+    <aside class="vetro absolute top-[4.75rem] left-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[23rem] flex-col !bg-[var(--vetro-mappa)] shadow-[var(--ombra-pillola)]" aria-label="Segnalazioni">
+      <div class="shrink-0 space-y-2.5 border-b border-bordo p-3 pt-3.5">
+        <h1 class="px-2 text-[.92rem] font-semibold">Segnalazioni</h1>
+        <div class="flex rounded-full bg-vetro p-0.5 ring-1 ring-bordo" role="radiogroup" aria-label="Stato delle segnalazioni">
+          <label v-for="f in SCHEDE_BOX" :key="f.id" class="flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full text-[.74rem] font-medium whitespace-nowrap transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo" :class="schedaBox === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'">
+            <input v-model="schedaBox" type="radio" name="scheda-segnalazioni" :value="f.id" class="sr-only" />{{ f.etichetta }}<span class="cifre text-testo-3">{{ nBox[f.id] }}</span>
+          </label>
+        </div>
       </div>
-      <div v-if="caricamento && errore" class="p-3"><StatoErrore compatto messaggio="Non riusciamo a raggiungere il servizio. La coda si aggiorna da sola appena torna la connessione." @riprova="aggiorna" /></div>
+      <div v-if="schedaBox !== 'nuova'" class="contents">
+        <div v-if="!valutate.length" class="px-5 py-3.5 text-[.8rem] text-testo-2">{{ VUOTO_BOX[schedaBox] }}</div>
+        <ul v-else class="relative min-h-0 space-y-px overflow-y-auto p-3">
+          <li v-for="s in valutate" :key="s.id">
+            <button class="relative flex w-full items-center gap-3 rounded-m px-2 py-2 text-left transition-colors" :class="s.id === selezionata ? 'bg-vetro-forte ring-1 ring-bordo-luce' : 'hover:bg-vetro-forte/60'" :aria-current="s.id === selezionata ? 'true' : undefined" @click="seleziona(s)">
+              <span class="absolute inset-y-3 left-0 w-[3px] rounded-full" :style="{ background: varPriorita(s.priorita) }" aria-hidden="true" />
+              <span class="cifre w-8 shrink-0 text-right text-[1.05rem] font-semibold" :style="{ color: varPriorita(s.priorita) }" :aria-label="`Priorità ${s.priorita}`">{{ s.priorita }}</span>
+              <span class="min-w-0 flex-1 leading-tight">
+                <span class="flex items-center gap-1.5 text-[.86rem] font-medium">
+                  <Flame v-if="s.tipo === 'fuoco'" class="size-3.5 shrink-0 text-brace" aria-hidden="true" /><TriangleAlert v-else class="size-3.5 shrink-0 text-ambra" aria-hidden="true" />
+                  <span class="truncate">{{ s.tipo === 'fuoco' ? 'Fuoco / fumo' : 'Area a rischio' }}<template v-if="s.comune"> · {{ nomeComune(s.comune) }}</template></span>
+                </span>
+                <span class="cifre mt-0.5 block text-[.72rem] text-testo-3">#{{ s.id }} · {{ faValutata(s.valutata_il) }}</span>
+              </span>
+              <span class="shrink-0 rounded-full px-2 py-px text-[.7rem] font-medium" :style="{ color: STATI[s.stato].colore, background: `color-mix(in srgb, ${STATI[s.stato].colore} 14%, transparent)` }">{{ STATI[s.stato].etichetta }}</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+      <div v-else-if="caricamento && errore" class="p-3"><StatoErrore compatto messaggio="Non riusciamo a raggiungere il servizio. La coda si aggiorna da sola appena torna la connessione." @riprova="aggiorna" /></div>
       <ul v-else-if="caricamento" class="space-y-px p-3" aria-busy="true" aria-label="Caricamento della coda">
         <li v-for="k in 4" :key="k" class="flex items-center gap-3 px-2 py-2.5">
           <span class="scheletro h-6 w-8 shrink-0" />

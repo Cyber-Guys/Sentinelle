@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `c151f1e` — 2026-10-10
+> **Riferimento:** commit `71b5857` — 2026-10-10
 
 ## Fase
 
@@ -8,6 +8,7 @@ Preparazione pre-hackathon (evento 16-17 ottobre, webinar 14 ottobre).
 Materiali e criteri di valutazione sintetizzati in `docs/materiali/README.md`.
 Fonti dati analizzate e verificate in `docs/dominio/fonti-*.md`.
 Il cruscotto mostra anche gli incendi storici CFVA (livello in cima ai Livelli, logica condivisa con l'app in `useMappa.ts`).
+Il box Segnalazioni del cruscotto ha le schede In coda / Confermate / Falsi allarmi (righe valutate, scheda in sola lettura).
 
 Direzione scelta e specifica approvata:
 `docs/specifiche/2026-10-09-sentinelle-incendi.md` (challenge 2+3 fuse,
