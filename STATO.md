@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `de46f19` — 2026-10-10
+> **Riferimento:** commit `760619b` — 2026-10-10
 
 ## Fase
 
@@ -35,7 +35,8 @@ cruscotto: hotspot e mappature come interruttori, legenda separata dai comandi),
 colonna controlli a passo 14 px, popup della mappa come componenti Vue
 (`PopupMappa.vue`, `PopupIncendio.vue`, `apriPopup()`), controlli mappa nostri
 con icone Lucide (`ControlliMappa.vue`, niente controlli nativi MapLibre), stato
-"in diretta" nella pillola dei contatori del cruscotto (`.punto-vivo`). Prossimo passo: prova su
+"in diretta" nella pillola dei contatori del cruscotto (`.punto-vivo`).
+Storico segnalazioni (`docs/piani/2026-10-10-storico-segnalazioni.md`): `valutata_il`/`punti_ottenuti`, livello "Storico segnalazioni" nel cruscotto con scheda in sola lettura, quarta scheda "Segnalazioni" nell'app con pin per stato e toast alla valutazione (polling 10 s). Prossimo passo: prova su
 telefono vero, pitch.
 
 ## Chi fa cosa

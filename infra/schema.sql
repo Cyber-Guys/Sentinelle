@@ -26,3 +26,6 @@ CREATE TABLE IF NOT EXISTS missione_completata (id serial PRIMARY KEY,
   completata_il timestamptz NOT NULL DEFAULT now());
 -- scomposizione della priorita' per fattore (vuota per le segnalazioni precedenti)
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT '[]'::jsonb;
+-- storico: data di valutazione e punti guadagnati con la segnalazione
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS valutata_il timestamptz;
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS punti_ottenuti int NOT NULL DEFAULT 0;

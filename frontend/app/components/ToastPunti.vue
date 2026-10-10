@@ -1,18 +1,25 @@
 <script setup lang="ts">
-import { Star, Trophy } from '@lucide/vue'
+import { Star, Trophy, Ban, CircleCheck } from '@lucide/vue'
 
-defineProps<{ toast: { id: number; testo: string } | null; nuovoLivello: { nome: string; punti: number } | null }>()
+// `nota`: riga piccola sopra il testo (es. segnalazione confermata); `esito`: senza punti, icona e testo sobri
+defineProps<{ toast: { id: number; testo: string; nota?: string; esito?: 'ok' | 'no' } | null; nuovoLivello: { nome: string; punti: number } | null }>()
 defineEmits<{ chiudiLivello: [] }>()
 </script>
 
 <template>
   <Transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0 -translate-y-4 scale-95" leave-active-class="transition duration-200 ease-in" leave-to-class="opacity-0 -translate-y-3">
-    <div v-if="toast" :key="toast.id" class="pointer-events-none fixed inset-x-0 top-24 z-50 flex justify-center" role="status">
-      <span class="sospeso flex items-center gap-2.5 !rounded-full py-2 pr-5 pl-2">
-        <span class="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ffb347] to-[#e8351f] shadow-[0_0_18px_rgba(255,106,43,.55)]">
+    <div v-if="toast" :key="toast.id" class="pointer-events-none fixed inset-x-3 top-24 z-50 flex justify-center" role="status">
+      <span class="sospeso flex max-w-[22rem] items-center gap-2.5 !rounded-full py-2 pr-5 pl-2">
+        <span v-if="toast.esito" class="flex size-9 shrink-0 items-center justify-center rounded-full ring-1" :class="toast.esito === 'ok' ? 'bg-macchia/15 text-macchia ring-macchia/30' : 'bg-vetro-forte text-testo-2 ring-bordo-luce'">
+          <CircleCheck v-if="toast.esito === 'ok'" class="size-[18px]" aria-hidden="true" /><Ban v-else class="size-[18px]" aria-hidden="true" />
+        </span>
+        <span v-else class="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#ffb347] to-[#e8351f] shadow-[0_0_18px_rgba(255,106,43,.55)]">
           <Star class="size-[18px] fill-white text-white" aria-hidden="true" />
         </span>
-        <span class="cifre text-lg font-bold">{{ toast.testo }}</span>
+        <span class="min-w-0 leading-tight">
+          <span v-if="toast.nota" class="block text-[.74rem] text-testo-2">{{ toast.nota }}</span>
+          <span class="cifre block" :class="toast.esito ? 'text-[.9rem] font-semibold' : 'text-lg font-bold'">{{ toast.testo }}</span>
+        </span>
       </span>
     </div>
   </Transition>

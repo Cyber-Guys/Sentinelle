@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, animaAloni, apriPopup, ALONE_HOTSPOT } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
+import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
-import { Flame, Check, Ban, Droplets, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink, MapPin } from '@lucide/vue'
+import { Flame, Check, Ban, Droplets, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink, MapPin, History } from '@lucide/vue'
 
 const { chiama, urlFoto } = useApi()
 const { tema } = useTema()
@@ -28,7 +29,14 @@ let fermaAloni = () => {}
 const mostraMappature = ref(false)
 const mostraHotspot = ref(true)
 const livelliAperti = ref(false)
-const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value))
+const mostraStorico = ref(false)
+const filtroStorico = ref<'entrambe' | 'confermata' | 'archiviata'>('entrambe')
+const FILTRI_STORICO = [
+  { id: 'entrambe', etichetta: 'Entrambe' }, { id: 'confermata', etichetta: 'Confermate' }, { id: 'archiviata', etichetta: 'Falsi allarmi' },
+] as const
+// segnalazioni gia' valutate: si ricaricano all'accensione del livello e dopo ogni valutazione (non nel polling)
+const storico = ref<Segnalazione[]>([])
+const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value))
 const TIPI_MAPPATURA = [
   { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplets },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
@@ -38,7 +46,8 @@ const nMappature = ref(0)
 let datiMappature: any = { type: 'FeatureCollection', features: [] }
 let datiHotspot: any = { type: 'FeatureCollection', features: [] }
 
-const scheda = computed(() => coda.value.find((s) => s.id === selezionata.value) ?? null)
+const scheda = computed(() => coda.value.find((s) => s.id === selezionata.value) ?? storico.value.find((s) => s.id === selezionata.value) ?? null)
+const sola = computed(() => !!scheda.value && scheda.value.stato !== 'nuova') // scheda in sola lettura
 
 const ora = (iso: string) => new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const fa = (iso: string) => {
@@ -61,8 +70,22 @@ function geojsonCoda() {
 }
 
 function aggiornaMappa() {
-  (mappa?.getSource('coda') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonCoda())
+  (mappa?.getSource('coda') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonCoda());
+  (mappa?.getSource('storico-segn') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonSegnalazioni(storico.value, selezionata.value))
 }
+
+async function caricaStorico() {
+  try { storico.value = await chiama<Segnalazione[]>('/segnalazioni?stato=valutate'); aggiornaMappa() } catch {}
+}
+const filtroStoricoMappa = () => (filtroStorico.value === 'entrambe' ? null : ['==', ['get', 'stato'], filtroStorico.value]) as any
+function livelloStorico() {
+  if (!mappa?.getLayer('storico-segn')) return
+  mappa.setLayoutProperty('storico-segn', 'visibility', mostraStorico.value ? 'visible' : 'none')
+  mappa.setFilter('storico-segn', filtroStoricoMappa())
+}
+watch(mostraStorico, (v) => { livelloStorico(); if (v) caricaStorico() })
+watch(filtroStorico, livelloStorico)
+const nStorico = computed(() => ({ confermata: storico.value.filter((s) => s.stato === 'confermata').length, archiviata: storico.value.filter((s) => s.stato === 'archiviata').length }))
 
 function mostraAvviso(testo: string, tipo: 'ok' | 'errore' = 'ok') {
   avviso.value = { id: Date.now(), testo, tipo }
@@ -87,7 +110,7 @@ async function aggiorna() {
     aggiornaMappa()
     const oggi = new Date().toDateString()
     chiama<Segnalazione[]>('/segnalazioni?stato=confermata')
-      .then((l) => (confermateOggi.value = l.filter((s) => new Date(s.creata_il).toDateString() === oggi).length))
+      .then((l) => (confermateOggi.value = l.filter((s) => s.valutata_il && new Date(s.valutata_il).toDateString() === oggi).length))
       .catch(() => {})
   } catch { errore.value = 'Connessione persa' }
 }
@@ -112,6 +135,9 @@ function aggiungiLivelli() {
     'circle-color': ['match', ['get', 'codice'], ...TIPI_MAPPATURA.flatMap((t) => [t.codice, c[t.colore]]), c.testo] as any,
     'circle-stroke-color': c.bordo, 'circle-stroke-width': 2,
   } })
+  // storico delle segnalazioni valutate: sotto la coda attiva, pin fermi (confermata piena, falso allarme ad anello)
+  aggiungiPinSegnalazioni(m, 'storico-segn', c, geojsonSegnalazioni(storico.value, selezionata.value), { nuova: prio, confermata: prio })
+  livelloStorico()
   m.addSource('coda', { type: 'geojson', data: geojsonCoda() })
   // valori statici = alone fisso con reduced-motion; animaAloni li fa pulsare
   m.addLayer({ id: 'coda-alone', type: 'circle', source: 'coda', paint: { 'circle-radius': 16, 'circle-color': prio, 'circle-opacity': 0.22, 'circle-blur': 0.3 } })
@@ -148,6 +174,16 @@ onMounted(() => {
       }, () => h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`))
     })
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })
+    m.on('click', 'storico-segn', (ev) => {
+      // la coda attiva sta sopra: se il clic e' anche su un pin della coda vince quello
+      if (m.queryRenderedFeatures(ev.point, { layers: ['coda'] }).length) return
+      const s = storico.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
+      if (s) apriPopup(m, [s.lon, s.lat], PopupSegnalazione, { s, azione: () => (selezionata.value = s.id) })
+    })
+    for (const l of ['storico-segn', 'mappature']) {
+      m.on('mouseenter', l, () => (m.getCanvas().style.cursor = 'pointer'))
+      m.on('mouseleave', l, () => (m.getCanvas().style.cursor = ''))
+    }
     m.on('mouseenter', 'coda', () => (m.getCanvas().style.cursor = 'pointer'))
     m.on('mouseleave', 'coda', () => (m.getCanvas().style.cursor = ''))
     chiama<any>('/hotspot').then((g) => { datiHotspot = g; (m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
@@ -159,6 +195,7 @@ onMounted(() => {
     ])
   })
   aggiorna()
+  caricaStorico() // serve anche alla scheda in sola lettura
   timer = setInterval(aggiorna, 3000)
 })
 
@@ -176,6 +213,7 @@ async function azione(tipo: 'conferma' | 'archivia') {
   try {
     await chiama(`/segnalazioni/${id}/${tipo}`, { method: 'POST' })
     selezionata.value = null
+    caricaStorico()
     mostraAvviso(tipo === 'conferma' ? `Segnalazione #${id} confermata` : `Segnalazione #${id} archiviata come falso allarme`)
     await aggiorna()
   } catch (e) { mostraAvviso(messaggioErrore(e, tipo === 'conferma' ? 'confermare la segnalazione' : 'archiviare la segnalazione'), 'errore') }
@@ -276,7 +314,8 @@ const contatori = computed(() => [
         <header class="flex shrink-0 items-start justify-between gap-3 border-b border-bordo px-5 py-3.5">
           <div class="min-w-0">
             <p class="flex items-center gap-2 text-[.72rem] text-testo-3">
-              <span class="rounded-full bg-cielo/12 px-2 py-px font-medium text-cielo">Nuova</span>
+              <span v-if="!sola" class="rounded-full bg-cielo/12 px-2 py-px font-medium text-cielo">Nuova</span>
+              <span v-else class="rounded-full px-2 py-px font-medium" :style="{ color: STATI[scheda.stato].colore, background: `color-mix(in srgb, ${STATI[scheda.stato].colore} 14%, transparent)` }">{{ STATI[scheda.stato].etichetta }}</span>
               <span class="cifre">#{{ scheda.id }} · {{ ora(scheda.creata_il) }} · {{ fa(scheda.creata_il) }}</span>
             </p>
             <h2 id="titolo-scheda" class="mt-1 flex items-center gap-1.5 text-base font-semibold">
@@ -300,7 +339,14 @@ const contatori = computed(() => [
           </div>
           <ScomposizionePriorita :priorita="scheda.priorita" :fattori="scheda.fattori" :motivazioni="scheda.motivazioni" />
         </div>
-        <footer class="grid shrink-0 grid-cols-[1fr_auto] gap-2 border-t border-bordo px-5 py-3.5">
+        <!-- valutata: esito al posto delle azioni -->
+        <footer v-if="sola" class="flex shrink-0 items-center gap-3 border-t border-bordo px-5 py-3.5">
+          <span class="flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold" :style="{ color: STATI[scheda.stato].colore, background: `color-mix(in srgb, ${STATI[scheda.stato].colore} 14%, transparent)` }">
+            <Check v-if="scheda.stato === 'confermata'" class="size-4" aria-hidden="true" /><Ban v-else class="size-4" aria-hidden="true" />{{ STATI[scheda.stato].etichetta }}
+          </span>
+          <span class="cifre text-[.76rem] leading-tight text-testo-2">Valutata<br>{{ ora(scheda.valutata_il ?? scheda.creata_il) }}</span>
+        </footer>
+        <footer v-else class="grid shrink-0 grid-cols-[1fr_auto] gap-2 border-t border-bordo px-5 py-3.5">
           <button class="primario flex h-10 items-center justify-center gap-1.5 text-sm" :disabled="!!inAzione" @click="azione('conferma')">
             <Loader2 v-if="inAzione === 'conferma'" class="size-4 animate-spin" aria-hidden="true" /><Check v-else class="size-4" aria-hidden="true" /> Conferma
           </button>
@@ -341,6 +387,26 @@ const contatori = computed(() => [
             </li>
           </ul>
         </div>
+        <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
+          <input v-model="mostraStorico" type="checkbox" role="switch" class="sr-only" />
+          <History class="size-4 shrink-0 text-testo-2" aria-hidden="true" />
+          <span class="min-w-0 flex-1 leading-tight">
+            <span class="block text-[.86rem] font-semibold">Storico segnalazioni</span>
+            <span class="cifre block text-[.72rem] text-testo-2">{{ nStorico.confermata }} confermate · {{ nStorico.archiviata }} falsi allarmi</span>
+          </span>
+          <span class="interruttore" :class="mostraStorico && 'acceso'" aria-hidden="true" />
+        </label>
+        <div v-if="mostraStorico" class="px-3 pt-1 pb-1">
+          <div class="flex rounded-full bg-vetro p-0.5 ring-1 ring-bordo" role="radiogroup" aria-label="Filtro dello storico">
+            <label v-for="f in FILTRI_STORICO" :key="f.id" class="flex h-8 flex-1 cursor-pointer items-center justify-center rounded-full text-[.74rem] font-medium whitespace-nowrap transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo" :class="filtroStorico === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'">
+              <input v-model="filtroStorico" type="radio" name="filtro-storico-segn" :value="f.id" class="sr-only" />{{ f.etichetta }}
+            </label>
+          </div>
+          <ul class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[.74rem] text-testo-2">
+            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" aria-hidden="true" />Confermata, fissa</li>
+            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" aria-hidden="true" />Falso allarme</li>
+          </ul>
+        </div>
       </div>
     </PulsanteLivelli>
     <ControlliMappa :mappa="mappaPronta" />
@@ -352,6 +418,7 @@ const contatori = computed(() => [
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-alta" />Alta <span class="cifre text-testo-3">60+</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
+      <span v-if="mostraStorico" class="flex items-center gap-3 border-l border-bordo pl-3"><span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" />Confermata</span><span class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" />Falso allarme</span></span>
       <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Hotspot</span>
     </div>
 

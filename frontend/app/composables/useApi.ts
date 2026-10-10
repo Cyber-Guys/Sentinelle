@@ -39,8 +39,16 @@ export const CENTRI_COMUNI: Record<string, [number, number]> = {
 export type Segnalazione = {
   id: number; utente_id: number; tipo: 'fuoco' | 'area_a_rischio'; lat: number; lon: number
   foto_url: string | null; priorita: number; motivazioni: string[]; fattori: Fattore[]; comune: string | null
-  stato: string; creata_il: string; punti_ottenuti?: number
+  stato: StatoSegnalazione; creata_il: string; valutata_il?: string | null; punti_ottenuti?: number
 }
+export type StatoSegnalazione = 'nuova' | 'confermata' | 'archiviata'
+// stato della segnalazione per le persone: sempre colore + parola
+export const STATI: Record<StatoSegnalazione, { etichetta: string; colore: string }> = {
+  nuova: { etichetta: 'In valutazione', colore: 'var(--ambra)' },
+  confermata: { etichetta: 'Confermata', colore: 'var(--macchia)' },
+  archiviata: { etichetta: 'Falso allarme', colore: 'var(--testo-3)' },
+}
+export const dataOra = (iso: string) => new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 // un termine della priorita': valore 0..1, peso effettivo (rinormalizzato), contributo in punti 0..100
 export type Fattore = {
   chiave: 'hotspot' | 'meteo' | 'suolo' | 'pericolo' | 'vicine' | 'storico'; etichetta: string

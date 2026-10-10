@@ -3,6 +3,7 @@ import { layers, namedFlavor } from '@protomaps/basemaps'
 import { Protocol } from 'pmtiles'
 import type { Tema } from './useTema'
 import { h, render, type Component } from 'vue'
+import type { Segnalazione } from './useApi'
 
 // Protocollo pmtiles:// (storico incendi statico), registrato una sola volta
 let pmtilesOk = false
@@ -140,6 +141,7 @@ export function coloriMappa(t: Tema) {
     cielo: scuro ? '#5aa9e6' : '#2f7fc0',
     viola: scuro ? '#b48cf2' : '#7c4dc4',
     bordo: scuro ? '#07090d' : '#ffffff',
+    grigio: scuro ? '#8a867e' : '#6d6960', // testo-3: falsi allarmi
     testo: scuro ? '#f3f1ec' : '#1a1a17',
     // incendi storici: da ambra tenue (vecchi) a brace (recenti)
     storico: ['interpolate', ['linear'], ['get', 'anno'], 2015, scuro ? '#c99a4a' : '#e2b45a', 2020, scuro ? '#ff8a3d' : '#ef7a2e', 2025, scuro ? '#ff4a1f' : '#d92d17'] as any,
@@ -179,3 +181,32 @@ export function aggiungiHotspot(m: MappaLibre, c: ReturnType<typeof coloriMappa>
   m.addLayer({ id: 'hotspot-alone', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 12, 'circle-color': c.brace, 'circle-opacity': 0.22, 'circle-blur': 0.5 } })
   m.addLayer({ id: 'hotspot', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 5, 'circle-color': c.brace, 'circle-stroke-color': c.bordo, 'circle-stroke-width': 1.5 } })
 }
+
+/*
+  Segnalazioni con stato (storico nel cruscotto, proprie nell'app): `nuova` = punto `coloreNuova` con onda
+  (layer `<id>-alone`, da animare con animaAloni), `confermata` = punto pieno `coloreConfermata` fermo con
+  bordo chiaro, `archiviata` = anello grigio vuoto fermo. Proprieta' delle feature: id, stato, priorita, selezionata.
+*/
+export function geojsonSegnalazioni(l: Segnalazione[], selezionata: number | null = null) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: l.map((s) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
+      properties: { id: s.id, stato: s.stato, priorita: s.priorita, selezionata: s.id === selezionata ? 1 : 0 },
+    })),
+  }
+}
+export function aggiungiPinSegnalazioni(m: MappaLibre, id: string, c: ReturnType<typeof coloriMappa>, dati: any, colori: { nuova: any; confermata: any }, prima?: string) {
+  m.addSource(id, { type: 'geojson', data: dati })
+  const stato = ['get', 'stato']
+  const sel = ['==', ['get', 'selezionata'], 1]
+  m.addLayer({ id: `${id}-alone`, type: 'circle', source: id, filter: ['==', stato, 'nuova'], paint: { 'circle-radius': 16, 'circle-color': colori.nuova, 'circle-opacity': 0.22, 'circle-blur': 0.3 } }, prima)
+  m.addLayer({ id, type: 'circle', source: id, paint: {
+    'circle-radius': ['case', sel, 10, ['==', stato, 'archiviata'], 6, 7] as any,
+    'circle-color': ['match', stato, 'archiviata', 'rgba(0,0,0,0)', 'confermata', colori.confermata, colori.nuova] as any,
+    'circle-stroke-color': ['match', stato, 'archiviata', c.grigio, 'confermata', c.testo, c.bordo] as any,
+    'circle-stroke-width': ['case', sel, 3, ['==', stato, 'nuova'], 2, 2.5] as any,
+  } }, prima)
+}
+export const aloneSegnalazioni = (id: string): Alone => ({ layer: `${id}-alone`, periodo: 2600, da: 9, a: 27, opacita: 0.45 })

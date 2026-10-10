@@ -86,6 +86,11 @@ alone che si muove. Colore per significato, sempre accompagnato da testo altrove
 | Segnalazione selezionata (cruscotto) | colore della priorita' | in piu' un anello (solo bordo) piu' rapido, 1,6 s; punto piu' grande con bordo chiaro |
 | Hotspot satellitari (app e cruscotto) | `brace` | respiro lento (cresce e cala), 3,8 s; punto piccolo |
 | Punto scelto nell'app | fuoco `brace`, area a rischio `ambra`, missione `posizione` `macchia` | onda 2,6 s |
+| Storico segnalazioni (cruscotto): confermata | colore della priorita', bordo chiaro (`testo`) | fermo |
+| Storico segnalazioni (cruscotto): falso allarme | anello `testo-3` vuoto | fermo |
+| Proprie segnalazioni (app): in valutazione | `ambra` | onda 2,6 s |
+| Proprie segnalazioni (app): confermata | `macchia`, bordo chiaro | fermo |
+| Proprie segnalazioni (app): falso allarme | anello `testo-3` vuoto | fermo |
 | Posizione dell'utente ("tu sei qui") | `cielo` (`.pin-cielo`) | onda; oggi non mostrata: il GPS imposta il punto scelto |
 
 - **Layer MapLibre** (coda, hotspot): `animaAloni()` in `useMappa.ts`, un solo
@@ -93,6 +98,7 @@ alone che si muove. Colore per significato, sempre accompagnato da testo altrove
   cresce col numero di pin. Nell'app parte solo se ci sono hotspot (niente ridisegno a vuoto).
 - **Marker HTML** (punto scelto): classe `.pin` (+ `.pin-ambra|macchia|cielo`) in `tema.css`, onda
   in CSS (`scale` + `opacity`, solo compositor).
+- **Stati delle segnalazioni** (`STATI` in `useApi.ts`, sempre colore + parola): nuova = "In valutazione" ambra, confermata = "Confermata" macchia, archiviata = "Falso allarme" `testo-3`. Layer con `aggiungiPinSegnalazioni()` (alone solo per le nuove, da animare con `aloneSegnalazioni()`), popup `PopupSegnalazione.vue` (stato, data, priorita', punti; nel cruscotto "Apri scheda" in sola lettura con badge e data di valutazione al posto delle azioni).
 - **Reduced-motion:** niente animazione; i valori statici dei layer e la base di `.pin::before`
   sono un alone fisso, quindi il pin resta leggibile.
 

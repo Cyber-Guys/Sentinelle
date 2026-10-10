@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, animaAloni, apriPopup, ALONE_HOTSPOT } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, type Alone } from '~/composables/useMappa'
 import PopupIncendio from '~/components/PopupIncendio.vue'
+import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
 
@@ -26,7 +27,7 @@ const esito = ref<Segnalazione | null>(null)
 
 const scheda = ref<Scheda>('mappa')
 const missione = ref<Missione | null>(null) // missione `posizione` in attesa del punto sulla mappa
-const toast = ref<{ id: number; testo: string } | null>(null)
+const toast = ref<{ id: number; testo: string; nota?: string; esito?: 'ok' | 'no' } | null>(null)
 const nuovoLivello = ref<{ nome: string; punti: number } | null>(null)
 let tToast: ReturnType<typeof setTimeout> | undefined
 let tLivello: ReturnType<typeof setTimeout> | undefined
@@ -37,6 +38,16 @@ const FILTRI = [
   { id: 'tutti', etichetta: 'Dal 2015', breve: '2015+', dettaglio: 'Ultime 11 stagioni, 2015 – 2025', da: 2015 },
 ] as const
 const filtro = ref<string>('2025')
+
+// proprie segnalazioni: pin sempre sulla mappa, elenco nella scheda, polling leggero dello stato
+const mie = ref<Segnalazione[]>([])
+const mieCaricamento = ref(true)
+const mieErrore = ref('')
+const mieNovita = ref(false) // pallino sulla voce Segnalazioni dopo una valutazione
+let note: Map<number, Segnalazione> | null = null // stato al fetch precedente: null = primo caricamento, niente toast
+let tMie: ReturnType<typeof setInterval> | undefined
+let popupMia: maplibregl.Popup | null = null
+let popupMiaId = 0
 
 const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
@@ -62,15 +73,98 @@ async function caricaUtenti() {
 }
 onMounted(caricaUtenti)
 
-onBeforeUnmount(() => { clearTimeout(tToast); clearTimeout(tLivello); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { clearTimeout(tToast); clearTimeout(tLivello); clearInterval(tMie); fermaAloni(); mappa?.remove() })
 
 async function scegli(u: Utente) {
   utente.value = u
   chiama<Utente>(`/utenti/${u.id}`).then((d) => (utente.value = d)).catch(() => {})
   try { localStorage.setItem('utenteId', String(u.id)) } catch {}
   caricaRischio()
+  caricaMie()
+  clearInterval(tMie); tMie = setInterval(caricaMie, 10000)
   await nextTick()
   avviaMappa()
+}
+
+async function caricaMie() {
+  const u = utente.value
+  if (!u) return
+  try {
+    const l = await chiama<Segnalazione[]>(`/segnalazioni?stato=tutte&utente_id=${u.id}`)
+    if (utente.value?.id !== u.id) return
+    const prima = note
+    const valutate = prima ? l.filter((s) => prima.get(s.id)?.stato === 'nuova' && s.stato !== 'nuova') : []
+    note = new Map(l.map((s) => [s.id, s]))
+    mie.value = l; mieErrore.value = ''
+    aggiornaPinMie()
+    if (prima && valutate.length) {
+      // popup aperto su una segnalazione appena valutata: si riapre col nuovo stato
+      const aperta = popupMia?.isOpen() && valutate.find((x) => x.id === popupMiaId)
+      if (aperta) apriPopupMia(aperta)
+      notificaValutazione(valutate, prima)
+    }
+  } catch (e) { mieErrore.value = messaggioErrore(e, 'caricare le tue segnalazioni') }
+  mieCaricamento.value = false
+}
+
+// cambio di stato visto dal polling: toast (o riquadro del nuovo livello) e punti aggiornati
+async function notificaValutazione(valutate: Segnalazione[], prima: Map<number, Segnalazione>) {
+  if (!utente.value) return
+  if (scheda.value !== 'segnalazioni') mieNovita.value = true
+  const s = valutate[0]!
+  const punti = valutate.reduce((t, x) => t + (x.punti_ottenuti ?? 0) - (prima.get(x.id)?.punti_ottenuti ?? 0), 0)
+  const chi = valutate.length > 1 ? `${valutate.length} tue segnalazioni` : `La tua segnalazione #${s.id}`
+  const confermata = s.stato === 'confermata'
+  if (punti > 0) {
+    try {
+      const d = await chiama<Utente>(`/utenti/${utente.value.id}`)
+      applicaEsito({ punti_ottenuti: punti, punti: d.punti, livello: d.livello! }, `${chi} ${valutate.length > 1 ? 'sono state valutate' : 'è stata confermata'}`)
+      return
+    } catch {}
+  }
+  mostraToast({ nota: chi, testo: valutate.length > 1 ? 'Sono state valutate' : confermata ? 'È stata confermata' : 'Archiviata come falso allarme', esito: confermata ? 'ok' : 'no' }, 4000)
+}
+
+function mostraToast(t: { testo: string; nota?: string; esito?: 'ok' | 'no' }, durata = 2500) {
+  toast.value = { id: Date.now(), ...t }
+  clearTimeout(tToast); tToast = setTimeout(() => (toast.value = null), durata)
+}
+
+let chiaveAloni = ''
+// un solo requestAnimationFrame per gli aloni presenti: hotspot (se ce ne sono) e proprie segnalazioni in valutazione
+function aggiornaAloni() {
+  const m = mappa
+  if (!m) return
+  const lista: Alone[] = []
+  if (datiHotspot.features?.length) lista.push(ALONE_HOTSPOT)
+  if (mie.value.some((s) => s.stato === 'nuova')) lista.push(aloneSegnalazioni('mie'))
+  const k = lista.map((a) => a.layer).join()
+  if (k === chiaveAloni) return
+  chiaveAloni = k; fermaAloni()
+  fermaAloni = lista.length ? animaAloni(m, lista) : () => {}
+}
+
+function aggiornaPinMie() {
+  (mappa?.getSource('mie') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonSegnalazioni(mie.value))
+  aggiornaAloni()
+}
+
+function apriPopupMia(s: Segnalazione) {
+  if (!mappa) return
+  popupMia?.remove(); popupMiaId = s.id
+  popupMia = apriPopup(mappa, [s.lon, s.lat], PopupSegnalazione, { s })
+}
+
+// dall'elenco: torna alla mappa, vola sul pin e apre il popup
+async function mostraSuMappa(s: Segnalazione) {
+  if (pannello.value) await chiudi()
+  scheda.value = 'mappa'
+  await nextTick()
+  const m = mappa
+  if (!m) return
+  m.resize()
+  m.flyTo({ center: [s.lon, s.lat], zoom: Math.max(m.getZoom(), 13), duration: 900 })
+  m.once('moveend', () => apriPopupMia(s))
 }
 
 function caricaRischio() {
@@ -79,7 +173,8 @@ function caricaRischio() {
 }
 
 function cambiaUtente() {
-  fermaAloni(); mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO
+  fermaAloni(); mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO; chiaveAloni = ''
+  clearInterval(tMie); note = null; mie.value = []; mieCaricamento.value = true; mieNovita.value = false; popupMia = null
   utente.value = null; pannello.value = false; esito.value = null; missione.value = null; scheda.value = 'mappa'
   try { localStorage.removeItem('utenteId') } catch {}
 }
@@ -103,16 +198,25 @@ function avviaMappa() {
     m.on('click', 'storico-riempimento', (ev) => {
       const p = ev.features?.[0]?.properties
       if (!p || pannello.value || missione.value) return
+      // un proprio pin sopra il perimetro: vince il pin
+      if (m.queryRenderedFeatures(ev.point, { layers: ['mie'] }).length) return
       apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
     })
+    m.on('click', 'mie', (ev) => {
+      if (pannello.value || missione.value) return
+      const s = mie.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
+      if (s) apriPopupMia(s)
+    })
+    m.on('mouseenter', 'mie', () => (m.getCanvas().style.cursor = 'pointer'))
+    m.on('mouseleave', 'mie', () => (m.getCanvas().style.cursor = ''))
     m.on('click', (ev) => {
       if (!pannello.value && !missione.value) return
       impostaPos(ev.lngLat.lat, ev.lngLat.lng)
     })
     chiama<any>('/hotspot').then((g) => {
       datiHotspot = g; (m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g)
-      // l'alone respira solo se ci sono hotspot: niente ridisegno continuo della mappa a vuoto
-      if (g?.features?.length) { fermaAloni(); fermaAloni = animaAloni(m, [ALONE_HOTSPOT]) }
+      // gli aloni si animano solo se ci sono pin: niente ridisegno continuo della mappa a vuoto
+      aggiornaAloni()
     }).catch(() => {})
   })
 }
@@ -125,6 +229,8 @@ function aggiungiLivelli() {
   m.addLayer({ id: 'storico-riempimento', type: 'fill', source: 'storico', 'source-layer': 'incendi', filter: filtroAnni(), paint: { 'fill-color': c.storico, 'fill-opacity': c.opacitaStorico } })
   m.addLayer({ id: 'storico-linea', type: 'line', source: 'storico', 'source-layer': 'incendi', filter: filtroAnni(), paint: { 'line-color': c.storico, 'line-width': 0.7, 'line-opacity': 0.55 } })
   aggiungiHotspot(m, c, datiHotspot)
+  // proprie segnalazioni sopra storico e hotspot: in valutazione ambra con onda, confermate macchia, falsi allarmi ad anello
+  aggiungiPinSegnalazioni(m, 'mie', c, geojsonSegnalazioni(mie.value), { nuova: c.ambra, confermata: c.macchia })
 }
 
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
@@ -174,7 +280,7 @@ async function chiudi() {
 }
 
 // aggiorna header e mostra toast/overlay dopo un'azione che da' punti
-function applicaEsito(r: { punti_ottenuti: number; punti: number; livello: Livello }) {
+function applicaEsito(r: { punti_ottenuti: number; punti: number; livello: Livello }, nota?: string) {
   if (!utente.value) return
   const vecchio = utente.value.livello?.nome
   utente.value = { ...utente.value, punti: r.punti, livello: r.livello }
@@ -184,12 +290,12 @@ function applicaEsito(r: { punti_ottenuti: number; punti: number; livello: Livel
     nuovoLivello.value = { nome: r.livello.nome, punti: r.punti_ottenuti }
     clearTimeout(tLivello); tLivello = setTimeout(() => (nuovoLivello.value = null), 3600)
   } else if (r.punti_ottenuti > 0) {
-    toast.value = { id: Date.now(), testo: `+${r.punti_ottenuti} punti` }
-    clearTimeout(tToast); tToast = setTimeout(() => (toast.value = null), 2500)
+    mostraToast({ testo: `+${r.punti_ottenuti} punti`, nota }, nota ? 4000 : 2500)
   }
 }
 
 watch(scheda, async (s) => {
+  if (s === 'segnalazioni') mieNovita.value = false
   if (s === 'mappa') { await nextTick(); mappa?.resize() }
 })
 
@@ -236,6 +342,7 @@ async function invia() {
   if (foto.value) f.append('foto', foto.value)
   try {
     esito.value = await chiama<Segnalazione>('/segnalazioni', { method: 'POST', body: f })
+    caricaMie()
     if (esito.value.punti_ottenuti > 0) {
       const d = await chiama<Utente>(`/utenti/${utente.value.id}`)
       applicaEsito({ punti_ottenuti: esito.value.punti_ottenuti, punti: d.punti, livello: d.livello! })
@@ -428,7 +535,13 @@ async function invia() {
         </section>
       </Transition>
 
-      <BarraNavigazione v-model="scheda" />
+      <Transition name="foglio">
+        <section v-if="scheda === 'segnalazioni'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] bottom-[5.25rem] z-20 mx-auto max-w-[480px] overflow-y-auto sm:bottom-auto sm:max-h-[calc(100dvh-9.75rem)]">
+          <SchedaSegnalazioni :elenco="mie" :caricamento="mieCaricamento" :errore="mieErrore" @apri="mostraSuMappa" @riprova="caricaMie" />
+        </section>
+      </Transition>
+
+      <BarraNavigazione v-model="scheda" :avviso="mieNovita" />
       <ToastPunti :toast="toast" :nuovo-livello="nuovoLivello" @chiudi-livello="nuovoLivello = null" />
     </template>
   </main>
