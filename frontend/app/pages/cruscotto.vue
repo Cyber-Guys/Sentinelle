@@ -21,6 +21,7 @@ const conosciute = new Set<number>()
 const appena = ref(new Set<number>())
 const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
+const mappaPronta = shallowRef<maplibregl.Map | null>(null) // per ControlliMappa
 let timer: ReturnType<typeof setInterval> | undefined
 let fermaAloni = () => {}
 
@@ -130,13 +131,10 @@ onMounted(() => {
   limitaMappa(mappa)
   // la colonna della coda copre la sinistra: il centro utile della mappa si sposta a destra
   mappa.setPadding({ left: 400, top: 80, right: 0, bottom: 0 })
-  // colonna destra come nell'app: Livelli (componente Vue), poi +/- e "i" di MapLibre
-  mappa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-  mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right')
+  mappaPronta.value = mappa
   mappa.on('style.load', aggiungiLivelli)
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
   chiama<any>('/mappature').then((g) => { datiMappature = g; nMappature.value = g.features.length; (mappa?.getSource('mappature') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
-  chiudiAttribuzione(mappa)
   mappa.on('load', () => {
     const m = mappa!
     m.on('click', 'mappature', (ev) => {
@@ -213,20 +211,17 @@ const contatori = computed(() => [
           <span class="cifre text-lg font-semibold leading-none" :style="{ color: c.colore }">{{ c.valore }}</span>
           <span class="text-[.72rem] leading-tight whitespace-nowrap text-testo-2">{{ c.etichetta }}</span>
         </div>
-      </div>
-
-      <span v-if="!errore" class="pillola pointer-events-auto flex h-8 items-center gap-2 px-3 text-[.72rem] text-testo-2" role="status">
-        <span class="relative flex size-2">
-          <span class="pulsa absolute inset-0 rounded-full bg-macchia" />
-          <span class="relative size-2 rounded-full bg-macchia" />
+        <!-- stato del collegamento: ultimo segmento della stessa pillola -->
+        <span v-if="!errore" class="flex items-center gap-2.5 px-3.5 text-[.72rem] whitespace-nowrap text-testo-2" role="status">
+          <span class="punto-vivo" aria-hidden="true" />
+          In diretta · ogni 3 s
         </span>
-        In diretta · ogni 3 s
-      </span>
-      <button v-else type="button" class="pillola pointer-events-auto flex h-8 items-center gap-2 !border-ambra/50 px-3 text-[.74rem] text-testo-2" role="status" aria-label="Connessione persa: riprova adesso" @click="aggiorna">
-        <span class="size-2 rounded-full bg-ambra" aria-hidden="true" />
-        <span><span class="font-semibold text-testo">Connessione persa</span> · riprovo da solo</span>
-        <RotateCw class="size-3.5 text-testo-3" aria-hidden="true" />
-      </button>
+        <button v-else type="button" class="flex h-full items-center gap-2.5 rounded-r-full px-3.5 text-[.72rem] whitespace-nowrap text-testo-2 transition-colors hover:bg-vetro-forte" role="status" aria-label="Connessione persa: riprova adesso" @click="aggiorna">
+          <span class="punto-vivo punto-ambra" aria-hidden="true" />
+          <span><span class="font-semibold text-testo">Connessione persa</span> · riprovo da solo</span>
+          <RotateCw class="size-3.5 text-testo-3" aria-hidden="true" />
+        </button>
+      </div>
 
       <InterruttoreTema class="pointer-events-auto ml-auto" />
     </header>
@@ -316,8 +311,9 @@ const contatori = computed(() => [
       </section>
     </Transition>
 
-    <!-- colonna destra: Livelli in cima, sotto +/- e "i" di MapLibre (passo 14 px, vedi stile) -->
-    <PulsanteLivelli v-model:aperto="livelliAperti" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" class="absolute top-[4.75rem] right-4 z-20">
+    <!-- colonna destra come nell'app: Livelli, zoom, "i" (passo 14 px dal flex) -->
+    <div class="absolute top-[4.75rem] right-4 z-20 flex w-11 flex-col items-center gap-[14px]">
+    <PulsanteLivelli v-model:aperto="livelliAperti" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" class="relative">
       <div class="space-y-1">
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
           <input v-model="mostraHotspot" type="checkbox" role="switch" class="sr-only" />
@@ -347,6 +343,8 @@ const contatori = computed(() => [
         </div>
       </div>
     </PulsanteLivelli>
+    <ControlliMappa :mappa="mappaPronta" />
+    </div>
 
     <!-- legenda (solo informativa): priorita' delle segnalazioni, hotspot se il livello e' acceso -->
     <div class="pillola pointer-events-none absolute bottom-4 left-4 z-10 flex h-9 items-center gap-3 px-3 text-[.74rem] whitespace-nowrap" aria-label="Legenda della mappa">
@@ -371,17 +369,6 @@ const contatori = computed(() => [
 </template>
 
 <style>
-/* colonna destra a passo unico come nell'app: Livelli (44, top 76) -> +/- (44) -> "i" (36 centrata), 14 px tra i bordi */
-.cruscotto-mappa .maplibregl-ctrl-top-right { top: calc(4.75rem + 44px); right: 0; z-index: 15; } /* sopra la scheda (10): la "i" aperta non ci finisce sotto */
-.cruscotto-mappa .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 14px 16px 0 0; }
-.cruscotto-mappa .maplibregl-ctrl-group button { width: 42px; height: 42px; }
-.cruscotto-mappa .maplibregl-ctrl-attrib.maplibregl-compact { margin-right: 20px; min-height: 36px; }
-.cruscotto-mappa .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { width: 36px; height: 36px; padding: 0; }
-.cruscotto-mappa .maplibregl-ctrl-attrib.maplibregl-compact-show { height: 36px; padding: 0 36px 0 14px; display: flex; align-items: center; }
-.cruscotto-mappa .maplibregl-ctrl-attrib-inner { font-size: 11px; line-height: 1; white-space: nowrap; }
-.cruscotto-mappa .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; top: 4px !important; right: 4px !important; background-color: transparent !important; background-position: center !important; background-repeat: no-repeat !important; box-shadow: none !important; outline: none !important; }
-/* focus da tastiera sulla "i": anello sul contenitore (il pulsante ha il filtro invert in tema scuro) */
-.cruscotto-mappa .maplibregl-ctrl-attrib:has(.maplibregl-ctrl-attrib-button:focus-visible) { outline: 2px solid var(--cielo); outline-offset: 2px; }
 /* interruttore on/off delle sezioni del pannello Livelli */
 .interruttore { position: relative; width: 34px; height: 20px; flex-shrink: 0; border-radius: 999px; background: var(--vetro-forte); box-shadow: inset 0 0 0 1px var(--bordo-luce); transition: background .18s; }
 .interruttore::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 999px; background: var(--testo-3); transition: transform .18s cubic-bezier(.22, 1, .36, 1), background .18s; }

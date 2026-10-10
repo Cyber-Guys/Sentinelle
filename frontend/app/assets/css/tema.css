@@ -316,28 +316,19 @@ body::after {
 .pin-ambra { --pin: var(--ambra); }
 .pin-macchia { --pin: var(--macchia); }
 .pin-cielo { --pin: var(--cielo); }
+/* Punto di stato (es. "in diretta"): stesso linguaggio dei pin, in piccolo */
+.punto-vivo {
+  --pin: var(--macchia);
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.punto-vivo::before,
+.punto-vivo::after { content: ''; position: absolute; inset: 0; border-radius: 999px; background: var(--pin); }
+.punto-vivo::before { scale: 2; opacity: 0.22; animation: pin-onda 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite; }
+.punto-ambra { --pin: var(--ambra); }
 
-/* MapLibre: controlli e popup nello stesso vetro */
-.maplibregl-ctrl-group {
-  background: var(--vetro-mappa) !important;
-  border: 1px solid var(--bordo);
-  border-radius: var(--radius-ctrl) !important;
-  backdrop-filter: blur(20px);
-  box-shadow: var(--ombra-pillola) !important;
-  overflow: hidden;
-}
-.maplibregl-ctrl-group button + button { border-top-color: var(--bordo) !important; }
-html[data-tema='scuro'] .maplibregl-ctrl-group .maplibregl-ctrl-icon { filter: invert(1) brightness(1.2); }
-.maplibregl-ctrl-attrib {
-  background: var(--vetro-mappa) !important;
-  color: var(--testo-2);
-  border-radius: var(--radius-pill) !important;
-  backdrop-filter: blur(12px);
-  font-size: 10px;
-}
-.maplibregl-ctrl-attrib a { color: var(--testo-2) !important; }
-html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
-.maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; }
 /* Popup della mappa: foglio `sospeso` compatto (raggio 22, padding 12 -> interni 10), senza punta. */
 .maplibregl-popup-content {
   background: linear-gradient(170deg, var(--fondo-3) 0%, var(--fondo-2) 100%) !important;
@@ -350,8 +341,6 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
   font: 13px/1.4 var(--font-sans);
 }
 .maplibregl-popup-tip { display: none !important; }
-/* sopra i controlli della mappa (z 2): il popup e' temporaneo, non deve finire sotto +/- e "i" */
-.maplibregl-popup { z-index: 3; }
 .popup-sentinelle .maplibregl-popup-content { width: min(280px, calc(100vw - 32px)); }
 .popup-mappa .popup-icona { color: var(--tinta-scuro); background: color-mix(in srgb, var(--tinta-scuro) 16%, transparent); }
 html[data-tema='chiaro'] .popup-mappa .popup-icona { color: var(--tinta-chiaro); background: color-mix(in srgb, var(--tinta-chiaro) 14%, transparent); }
@@ -370,7 +359,6 @@ html[data-tema='chiaro'] .popup-mappa .popup-icona { color: var(--tinta-chiaro);
 }
 .maplibregl-popup-close-button:hover { background: var(--vetro-forte) !important; color: var(--testo); }
 .maplibregl-popup-close-button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
-.maplibregl-ctrl button:focus-visible { outline: 2px solid var(--cielo) !important; outline-offset: -2px; box-shadow: none !important; }
 @keyframes popup-entra { from { opacity: 0; translate: 0 4px; } }
 .maplibregl-popup-content { animation: popup-entra 0.18s ease-out; }
 

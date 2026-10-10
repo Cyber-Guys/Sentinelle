@@ -40,6 +40,7 @@ const filtro = ref<string>('2025')
 
 const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
+const mappaPronta = shallowRef<maplibregl.Map | null>(null) // per ControlliMappa
 let marcatore: maplibregl.Marker | null = null
 let fermaAloni = () => {}
 
@@ -94,11 +95,9 @@ function avviaMappa() {
     attributionControl: false, locale: LOCALE_MAPPA,
   })
   limitaMappa(mappa)
-  mappa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-  mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right')
+  mappaPronta.value = mappa
   // sorgenti e layer si (ri)aggiungono a ogni stile caricato: anche dopo il cambio tema
   mappa.on('style.load', aggiungiLivelli)
-  chiudiAttribuzione(mappa)
   mappa.on('load', () => {
     const m = mappa!
     m.on('click', 'storico-riempimento', (ev) => {
@@ -305,8 +304,11 @@ async function invia() {
         </div>
       </header>
 
-      <!-- livelli della mappa: in cima alla colonna dei controlli, sopra +/- (il pannello si ancora a questo contenitore) -->
-      <PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20" />
+      <!-- colonna destra sotto il tema: Livelli, zoom, "i" (passo 14 px dal flex; il posto di Livelli resta anche se nascosto) -->
+      <div class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20 flex w-11 flex-col items-center gap-[14px]">
+        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="relative" /></div>
+        <ControlliMappa :mappa="mappaPronta" />
+      </div>
 
       <!-- missione `posizione`: scegli il punto -->
       <Transition name="foglio">
@@ -433,17 +435,6 @@ async function invia() {
 </template>
 
 <style>
-.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 102px); right: 2px; }
-/* colonna destra a passo unico: 14 px tra i bordi (tema, livelli, zoom, info), larghezza 44 */
-.mappa-app .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 14px 10px 0 0; }
-/* controlli della mappa a misura di dito: gruppo largo 44 px come il pulsante livelli sopra */
-.mappa-app .maplibregl-ctrl-group button { width: 42px; height: 42px; }
-/* "i": cerchio da 36 px centrato nella colonna; niente sfondo ne' focus invertiti dal filtro */
-.mappa-app .maplibregl-ctrl-attrib.maplibregl-compact { margin-right: 14px; min-height: 36px; }
-.mappa-app .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { width: 36px; height: 36px; padding: 0; }
-.mappa-app .maplibregl-ctrl-attrib.maplibregl-compact-show { height: 36px; padding: 0 36px 0 14px; display: flex; align-items: center; }
-.mappa-app .maplibregl-ctrl-attrib-inner { font-size: 11px; line-height: 1; white-space: nowrap; }
-.mappa-app .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; top: 4px !important; right: 4px !important; background-color: transparent !important; background-position: center !important; background-repeat: no-repeat !important; box-shadow: none !important; outline: none !important; }
 /* fogli: salgono con easing in uscita, se ne vanno piu' in fretta (niente sovrapposizioni lunghe) */
 .foglio-enter-active { transition: opacity .2s ease-out, transform .32s cubic-bezier(.22, 1, .36, 1); }
 .foglio-leave-active { transition: opacity .14s ease-in, transform .14s ease-in; }

@@ -135,8 +135,8 @@ cruscotto. Lo stile della mappa base cambia insieme al tema.
   `setStyle(..., { diff: false })` cancella sorgenti e layer, che si ri-aggiungono
   dagli ultimi dati in memoria; i listener per id di layer restano validi.
 - Stile Protomaps generato in `stileMappa()` (`@protomaps/basemaps`, `lang: 'it'`) con i colori del flavor ritoccati (fondo, terra, acqua, strade) per avvicinarli ai token. Sorgente `pmtiles:///tiles/sardegna.pmtiles` (bbox Sardegna, zoom 14; oltre viene ingrandito), glyphs e sprite con URL assoluto sull'origine corrente. Va chiamato `registraPmtiles()` in ogni pagina con mappa.
-- **Pulsante livelli** (`PulsanteLivelli.vue`, app): pillola tonda 44 px con icona `Layers` in cima alla colonna dei controlli a destra (sopra +/-, larghi uguali), badge con il filtro attivo (`2025`, `5 anni`, `2015+`). Apre un pannello `sospeso` ancorato a sinistra (scala + opacita' 180 ms dall'angolo del pulsante): sezione "Incendi storici" con elenco a radio (righe `rounded-m`) e legenda ambra -> brace per anno. Resta aperto dopo la scelta (il cambio si vede subito), si chiude toccando fuori, con Esc o la X. Nascosto in modalita' "scegli punto" e con i fogli missioni/classifica. Altri livelli futuri: nuove sezioni nello stesso pannello. Generico: nel cruscotto riceve le sezioni via slot (`badge`, `descrizione`, `v-model:aperto`). Niente piu' barra dei filtri sotto l'header.
-- L'attribuzione OSM + Protomaps arriva dalla sorgente dello stile: controllo compatto ("i").
+- **Pulsante livelli** (`PulsanteLivelli.vue`, app): pillola tonda 44 px con icona `Layers` in cima alla colonna dei controlli a destra (sopra lo zoom di `ControlliMappa`, larghi uguali), badge con il filtro attivo (`2025`, `5 anni`, `2015+`). Apre un pannello `sospeso` ancorato a sinistra (scala + opacita' 180 ms dall'angolo del pulsante): sezione "Incendi storici" con elenco a radio (righe `rounded-m`) e legenda ambra -> brace per anno. Resta aperto dopo la scelta (il cambio si vede subito), si chiude toccando fuori, con Esc o la X. Nascosto in modalita' "scegli punto" e con i fogli missioni/classifica. Altri livelli futuri: nuove sezioni nello stesso pannello. Generico: nel cruscotto riceve le sezioni via slot (`badge`, `descrizione`, `v-model:aperto`). Niente piu' barra dei filtri sotto l'header.
+- **Controlli mappa nostri** (`ControlliMappa.vue`, app e cruscotto), niente controlli di MapLibre (`NavigationControl`/`AttributionControl` e override `.maplibregl-ctrl*` rimossi): gruppo zoom a pillola 44 px con icone Lucide `Plus`/`Minus` 18 px (attenuate e disabilitate ai limiti di zoom), poi cerchio di vetro 36 px con `Info` che apre a sinistra una pillola alta 36 con l'attribuzione obbligatoria "© OpenStreetMap · Protomaps" (link in nuova scheda). Colonna destra = un contenitore flex verticale largo 44 con `gap-[14px]`: Livelli -> zoom -> "i", centri allineati, nessun offset calcolato.
 - **Tre stati per ogni dato remoto: caricamento, errore, vuoto.** Caricamento = `scheletro`
   (utility in `tema.css`) con la forma del contenuto in arrivo, mai uno spinner al posto di
   un elenco; i titoli restano veri, solo i dati sono scheletri. Errore = `StatoErrore` (vetro,
@@ -154,8 +154,8 @@ cruscotto. Lo stile della mappa base cambia insieme al tema.
 - **Un evento, un messaggio**: col salto di livello il riquadro "Nuovo livello" porta anche i
   punti e il toast non compare (prima si sovrapponevano). Il riquadro si chiude toccandolo.
 - **Tocco >= 44 px** nell'app: utility `tocco` (area invisibile allargata) sui pulsanti
-  disegnati piu' piccoli; controlli MapLibre a 40 px nell'app; testi dei controlli in italiano
-  con `LOCALE_MAPPA`.
+  disegnati piu' piccoli; controlli della mappa a 44 px ("i" 36 con `tocco`); testi di MapLibre
+  (popup) in italiano con `LOCALE_MAPPA`.
 - **Contrasto nel chiaro**: `testo-3` `#6d6960`, brace `#c43f14`, ambra `#956207`, macchia
   `#277752` (>= 4,5:1 su `#f6f4ef`); nello scuro `testo-3` `#8a867e`.
 - **Glifi della mappa**: in `public/basemap/fonts` ci sono solo gli intervalli latini; la rotta

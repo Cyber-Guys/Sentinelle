@@ -101,19 +101,9 @@ export function limitaMappa(m: MappaLibre) {
   m.on('resize', aggiorna)
 }
 
-// Testi dei controlli MapLibre in italiano (letti dagli screen reader)
+// Testi di MapLibre in italiano, letti dagli screen reader (zoom e fonti sono nostri: ControlliMappa.vue)
 export const LOCALE_MAPPA = {
-  'NavigationControl.ZoomIn': 'Ingrandisci',
-  'NavigationControl.ZoomOut': 'Riduci',
-  'NavigationControl.ResetBearing': 'Orienta a nord',
-  'AttributionControl.ToggleAttribution': 'Mostra o nascondi le fonti della mappa',
   'Popup.Close': 'Chiudi',
-}
-
-// L'attribuzione (OSM + Protomaps) arriva dalla sorgente: la si mostra compatta (pulsante "i"),
-// chiusa al primo caricamento per non coprire i controlli.
-export function chiudiAttribuzione(m: MappaLibre) {
-  m.once('load', () => m.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'))
 }
 
 // Popup della mappa con un componente Vue dentro (PopupIncendio, PopupMappa): niente pulsante

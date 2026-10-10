@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `ad3f667` — 2026-10-10
+> **Riferimento:** commit `de46f19` — 2026-10-10
 
 ## Fase
 
@@ -33,7 +33,9 @@ micro-animazioni, contrasti AA. UI professionale: stile mappa notte
 22/10/6 + pillole, pin pulsanti (`animaAloni()`), filtro storico nel pulsante livelli (`PulsanteLivelli.vue`, condiviso con il
 cruscotto: hotspot e mappature come interruttori, legenda separata dai comandi),
 colonna controlli a passo 14 px, popup della mappa come componenti Vue
-(`PopupMappa.vue`, `PopupIncendio.vue`, `apriPopup()`). Prossimo passo: prova su
+(`PopupMappa.vue`, `PopupIncendio.vue`, `apriPopup()`), controlli mappa nostri
+con icone Lucide (`ControlliMappa.vue`, niente controlli nativi MapLibre), stato
+"in diretta" nella pillola dei contatori del cruscotto (`.punto-vivo`). Prossimo passo: prova su
 telefono vero, pitch.
 
 ## Chi fa cosa
