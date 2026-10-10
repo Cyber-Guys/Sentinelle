@@ -66,8 +66,13 @@ async function caricaUtenti() {
   caricamentoUtenti.value = false
 }
 onMounted(caricaUtenti)
+const eventi = useEventi()
+const fermaEventi = [
+  eventi.on('segnalazione_valutata', (d) => { if (d.utente_id === utente.value?.id) caricaMie() }),
+  eventi.on('hotspot_aggiornati', () => { if (mappa) caricaHotspot() }),
+]
 
-onBeforeUnmount(() => { clearTimeout(tToast); clearTimeout(tLivello); clearInterval(tMie); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { fermaEventi.forEach((f) => f()); clearTimeout(tToast); clearTimeout(tLivello); clearInterval(tMie); fermaAloni(); mappa?.remove() })
 
 async function scegli(u: Utente) {
   utente.value = u
@@ -75,7 +80,7 @@ async function scegli(u: Utente) {
   try { localStorage.setItem('utenteId', String(u.id)) } catch {}
   caricaRischio()
   caricaMie()
-  clearInterval(tMie); tMie = setInterval(caricaMie, 10000)
+  clearInterval(tMie); tMie = setInterval(caricaMie, 30000) // rete di sicurezza: gli eventi SSE aggiornano subito
   await nextTick()
   avviaMappa()
 }
@@ -161,6 +166,14 @@ async function mostraSuMappa(s: Segnalazione) {
   m.once('moveend', () => apriPopupMia(s))
 }
 
+function caricaHotspot() {
+  chiama<any>('/hotspot').then((g) => {
+    datiHotspot = g; (mappa?.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g)
+    // gli aloni si animano solo se ci sono pin: niente ridisegno continuo della mappa a vuoto
+    aggiornaAloni()
+  }).catch(() => {})
+}
+
 function caricaRischio() {
   rischio.value = null; rischioErrore.value = false
   chiama<Rischio>(`/rischio?lat=${centro.value[1]}&lon=${centro.value[0]}`).then((r) => (rischio.value = r)).catch(() => (rischioErrore.value = true))
@@ -201,11 +214,7 @@ function avviaMappa() {
       if (!pannello.value && !missione.value) return
       impostaPos(ev.lngLat.lat, ev.lngLat.lng)
     })
-    chiama<any>('/hotspot').then((g) => {
-      datiHotspot = g; (m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g)
-      // gli aloni si animano solo se ci sono pin: niente ridisegno continuo della mappa a vuoto
-      aggiornaAloni()
-    }).catch(() => {})
+    caricaHotspot()
   })
 }
 

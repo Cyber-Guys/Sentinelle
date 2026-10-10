@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `3281ada` — 2026-10-10
+> **Riferimento:** commit `13e140f` — 2026-10-10
 
 ## Fase
 
@@ -10,6 +10,7 @@ Fonti dati analizzate e verificate in `docs/dominio/fonti-*.md`.
 Il cruscotto mostra anche gli incendi storici CFVA (livello in cima ai Livelli, logica condivisa con l'app in `useMappa.ts`).
 Il box Segnalazioni del cruscotto ha le schede In coda / Confermate / Falsi allarmi (righe valutate, scheda in sola lettura).
 Le mappature dei cittadini nel cruscotto sono segnaposto a icona discreti (vetro scuro, anello e icona nel colore del tipo) raggruppati in cluster fino a zoom 11 (`registraSegnaposti()` in `useMappa.ts`).
+App e cruscotto si aggiornano in tempo reale: trigger Postgres -> NOTIFY -> `GET /eventi` (SSE) -> `useEventi()`; polling ridotto a 30 s (piano `docs/piani/2026-10-10-eventi-live.md`, misure in `docs/esperimenti/2026-10-10-eventi-live.md`).
 
 Direzione scelta e specifica approvata:
 `docs/specifiche/2026-10-09-sentinelle-incendi.md` (challenge 2+3 fuse,

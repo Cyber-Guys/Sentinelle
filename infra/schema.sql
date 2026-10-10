@@ -29,3 +29,28 @@ ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT
 -- storico: data di valutazione e punti guadagnati con la segnalazione
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS valutata_il timestamptz;
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS punti_ottenuti int NOT NULL DEFAULT 0;
+-- eventi live: notifica sul canale 'sentinelle' (idempotente)
+CREATE OR REPLACE FUNCTION notifica_sentinelle() RETURNS trigger AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'segnalazione' AND TG_OP = 'INSERT' THEN
+    PERFORM pg_notify('sentinelle', json_build_object('tipo', 'segnalazione_nuova', 'id', NEW.id,
+      'utente_id', NEW.utente_id, 'priorita', NEW.priorita)::text);
+  ELSIF TG_TABLE_NAME = 'segnalazione' THEN
+    PERFORM pg_notify('sentinelle', json_build_object('tipo', 'segnalazione_valutata', 'id', NEW.id,
+      'utente_id', NEW.utente_id, 'stato', NEW.stato)::text);
+  ELSE
+    PERFORM pg_notify('sentinelle', json_build_object('tipo', 'mappatura_nuova', 'id', NEW.id,
+      'utente_id', NEW.utente_id)::text);
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS segnalazione_nuova_notifica ON segnalazione;
+CREATE TRIGGER segnalazione_nuova_notifica AFTER INSERT ON segnalazione
+  FOR EACH ROW EXECUTE FUNCTION notifica_sentinelle();
+DROP TRIGGER IF EXISTS segnalazione_valutata_notifica ON segnalazione;
+CREATE TRIGGER segnalazione_valutata_notifica AFTER UPDATE OF stato ON segnalazione
+  FOR EACH ROW WHEN (OLD.stato IS DISTINCT FROM NEW.stato) EXECUTE FUNCTION notifica_sentinelle();
+DROP TRIGGER IF EXISTS mappatura_nuova_notifica ON missione_completata;
+CREATE TRIGGER mappatura_nuova_notifica AFTER INSERT ON missione_completata
+  FOR EACH ROW WHEN (NEW.geom IS NOT NULL) EXECUTE FUNCTION notifica_sentinelle();

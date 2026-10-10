@@ -1,8 +1,10 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import eventi
 from .api import gioco as api_gioco
 from .api import segnalazioni, storico
 from .config import impostazioni
@@ -14,7 +16,10 @@ from .gioco import prepara_db
 async def ciclo_vita(_):
     with engine.begin() as conn:  # tabelle e missioni del gioco (idempotente)
         prepara_db(conn)
+    compiti = [asyncio.create_task(eventi.ascolta()), asyncio.create_task(eventi.controlla_hotspot())]
     yield
+    for c in compiti:
+        c.cancel()
 
 
 app = FastAPI(title="Sentinelle", lifespan=ciclo_vita)
@@ -23,6 +28,7 @@ app.add_middleware(CORSMiddleware, allow_origins=impostazioni.cors_origini,
 app.include_router(storico.router)
 app.include_router(segnalazioni.router)
 app.include_router(api_gioco.router)
+app.include_router(eventi.router)
 
 
 @app.get("/salute")

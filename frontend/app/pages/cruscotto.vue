@@ -24,6 +24,8 @@ const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
 const mappaPronta = shallowRef<maplibregl.Map | null>(null) // per ControlliMappa
 let timer: ReturnType<typeof setInterval> | undefined
+const eventi = useEventi()
+let fermaEventi: (() => void)[] = []
 let fermaAloni = () => {}
 
 const mostraMappature = ref(false)
@@ -141,6 +143,10 @@ const nStorico = computed(() => ({ confermata: storico.value.filter((s) => s.sta
 function mostraAvviso(testo: string, tipo: 'ok' | 'errore' = 'ok') {
   avviso.value = { id: Date.now(), testo, tipo }
   clearTimeout(tAvviso); tAvviso = setTimeout(() => (avviso.value = null), 3000)
+}
+
+function caricaHotspot() {
+  chiama<any>('/hotspot').then((g) => { datiHotspot = g; (mappa?.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
 }
 
 async function aggiorna() {
@@ -265,7 +271,7 @@ onMounted(() => {
     }
     m.on('mouseenter', 'coda', () => (m.getCanvas().style.cursor = 'pointer'))
     m.on('mouseleave', 'coda', () => (m.getCanvas().style.cursor = ''))
-    chiama<any>('/hotspot').then((g) => { datiHotspot = g; (m.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
+    caricaHotspot()
     // pin pulsanti: segnalazioni nuove (onda), selezionata (anello piu' rapido), hotspot (respiro lento)
     fermaAloni = animaAloni(m, [
       { layer: 'coda-alone', periodo: 2600, da: 9, a: 27, opacita: 0.45 },
@@ -275,13 +281,20 @@ onMounted(() => {
   })
   aggiorna()
   caricaStorico() // serve anche alla scheda in sola lettura
-  timer = setInterval(aggiorna, 3000)
-  timerValutate = setInterval(() => { if (schedaBox.value !== 'nuova') caricaStorico() }, 10000)
-  // le missioni dei cittadini arrivano in qualunque momento: aggiornamento leggero ogni 5 s
-  timerMappature = setInterval(caricaMappature, 5000)
+  // aggiornamenti dagli eventi SSE; il polling ogni 30 s e' solo una rete di sicurezza
+  const valutate = () => { if (schedaBox.value !== 'nuova') caricaStorico() }
+  timer = setInterval(aggiorna, 30000)
+  timerValutate = setInterval(valutate, 30000)
+  timerMappature = setInterval(caricaMappature, 30000)
+  fermaEventi = [
+    eventi.on('segnalazione_nuova', aggiorna),
+    eventi.on('segnalazione_valutata', () => { aggiorna(); valutate() }),
+    eventi.on('mappatura_nuova', caricaMappature),
+    eventi.on('hotspot_aggiornati', caricaHotspot),
+  ]
 })
 
-onBeforeUnmount(() => { clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
@@ -333,8 +346,8 @@ const contatori = computed(() => [
         </div>
         <!-- stato del collegamento: ultimo segmento della stessa pillola -->
         <span v-if="!errore" class="flex items-center gap-2.5 px-3.5 text-[.72rem] whitespace-nowrap text-testo-2" role="status">
-          <span class="punto-vivo" aria-hidden="true" />
-          In diretta · ogni 3 s
+          <span class="punto-vivo" :class="eventi.stato.value === 'riconnessione' && 'punto-ambra'" aria-hidden="true" />
+          {{ eventi.stato.value === 'connesso' ? 'In diretta' : 'Riconnessione…' }}
         </span>
         <button v-else type="button" class="flex h-full items-center gap-2.5 rounded-r-full px-3.5 text-[.72rem] whitespace-nowrap text-testo-2 transition-colors hover:bg-vetro-forte" role="status" aria-label="Connessione persa: riprova adesso" @click="aggiorna">
           <span class="punto-vivo punto-ambra" aria-hidden="true" />
