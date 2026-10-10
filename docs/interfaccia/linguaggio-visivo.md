@@ -99,6 +99,15 @@ alone che si muove. Colore per significato, sempre accompagnato da testo altrove
 - **Marker HTML** (punto scelto): classe `.pin` (+ `.pin-ambra|macchia|cielo`) in `tema.css`, onda
   in CSS (`scale` + `opacity`, solo compositor).
 - **Stati delle segnalazioni** (`STATI` in `useApi.ts`, sempre colore + parola): nuova = "In valutazione" ambra, confermata = "Confermata" macchia, archiviata = "Falso allarme" `testo-3`. Layer con `aggiungiPinSegnalazioni()` (alone solo per le nuove, da animare con `aloneSegnalazioni()`), popup `PopupSegnalazione.vue` (stato, data, priorita', punti; nel cruscotto "Apri scheda" in sola lettura con badge e data di valutazione al posto delle azioni).
+- **Segnaposto a icona (mappature dei cittadini, cruscotto):** discreti, in tema, fermi. Badge tondo
+  di vetro (`fondo-3` al 92% nello scuro, bianco al 94% nel chiaro), anello 1,5 px e icona Lucide nel
+  colore del tipo, punta minima di 4 px sul punto (`icon-anchor: bottom`), ombra appena accennata.
+  Colori un tono sotto i token (`toniMappature()` in `useMappa.ts`): `punto_acqua` Droplet cielo,
+  `sterpaglie` Leaf ambra, `rifiuti_strada` Trash2 viola, sconosciuto MapPin grigio. Disegnati su
+  canvas a runtime (`registraSegnaposti()`, pixelRatio >= 2, ri-registrati a ogni `style.load`,
+  `segnapostiMancanti()` su `styleimagemissing`); diametro ~17 px a zoom 6, 24 px da zoom 11.
+  **Cluster** fino a zoom 11 (raggio 40): cerchio di vetro con anello tenue e numero `testo-2`, cresce
+  poco col conteggio; clic = zoom di espansione. Legenda nel pannello Livelli con lo stesso badge.
 - **Reduced-motion:** niente animazione; i valori statici dei layer e la base di `.pin::before`
   sono un alone fisso, quindi il pin resta leggibile.
 

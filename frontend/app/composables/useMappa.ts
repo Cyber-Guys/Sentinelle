@@ -249,3 +249,93 @@ export function clicIncendio(m: MappaLibre, pin: string[], bloccato: () => boole
     apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
   })
 }
+
+/*
+  Segnaposto a icona (mappature dei cittadini): badge tondo di vetro scuro (chiaro nel tema chiaro),
+  anello sottile e icona Lucide nel colore del tipo, punta minima sul punto, ombra appena accennata.
+  Disegnati in modo sincrono su canvas (icona Lucide renderizzata in un div e ridisegnata con Path2D),
+  cosi' l'immagine esiste prima del layer e `styleimagemissing` puo' rigenerarla al volo.
+  Registrare con registraSegnaposti() a ogni style.load (setStyle cancella le immagini).
+*/
+export type Segnaposto = { id: string; icona: Component; colore: string }
+const LATO = 32, ALTO = 34, R = 12, CY = 15 // px logici: badge 24 + anello, punta di 4 px fino in fondo
+
+// colori dei tipi un tono sotto i token (meno saturi), per pin e legenda delle mappature
+export function toniMappature(t: Tema) {
+  const scuro = t === 'scuro'
+  return {
+    cielo: scuro ? '#4f8fc2' : '#2a6a9e',
+    ambra: scuro ? '#cf9a3a' : '#8a5c0b',
+    viola: scuro ? '#9478c6' : '#6a46a6',
+    grigio: scuro ? '#8a867e' : '#6d6960',
+    vetro: scuro ? 'rgba(18,23,34,.92)' : 'rgba(255,255,255,.94)',
+    anello: scuro ? 'rgba(255,255,255,.16)' : 'rgba(20,20,10,.16)',
+    testo2: scuro ? '#a7a39a' : '#5b5850',
+  }
+}
+
+function disegnaIcona(ctx: CanvasRenderingContext2D, icona: Component) {
+  const el = document.createElement('div')
+  render(h(icona as any), el)
+  for (const n of Array.from(el.querySelectorAll('svg > *'))) {
+    const a = (k: string) => Number(n.getAttribute(k) ?? 0)
+    if (n.tagName === 'path') { ctx.stroke(new Path2D(n.getAttribute('d') ?? '')); continue }
+    ctx.beginPath()
+    if (n.tagName === 'circle') ctx.arc(a('cx'), a('cy'), a('r'), 0, Math.PI * 2)
+    else if (n.tagName === 'line') { ctx.moveTo(a('x1'), a('y1')); ctx.lineTo(a('x2'), a('y2')) }
+    else if (n.tagName === 'rect') ctx.roundRect(a('x'), a('y'), a('width'), a('height'), a('rx'))
+    else if (n.tagName === 'polyline' || n.tagName === 'polygon') {
+      const p = (n.getAttribute('points') ?? '').trim().split(/[\s,]+/).map(Number)
+      for (let i = 0; i < p.length; i += 2) i ? ctx.lineTo(p[i]!, p[i + 1]!) : ctx.moveTo(p[i]!, p[i + 1]!)
+      if (n.tagName === 'polygon') ctx.closePath()
+    }
+    ctx.stroke()
+  }
+  render(null, el)
+}
+
+function immagineSegnaposto(s: Segnaposto, tema: Tema, pr: number) {
+  const cv = document.createElement('canvas')
+  cv.width = LATO * pr; cv.height = ALTO * pr
+  const ctx = cv.getContext('2d')!
+  ctx.scale(pr, pr)
+  const cx = LATO / 2, th = 0.32 // semi-apertura della punta (rad)
+  const bx = cx + R * Math.cos(Math.PI / 2 + th), by = CY + R * Math.sin(Math.PI / 2 + th)
+  ctx.beginPath()
+  ctx.arc(cx, CY, R, Math.PI / 2 + th, Math.PI / 2 - th + Math.PI * 2)
+  ctx.lineTo(cx, ALTO - 0.75)
+  ctx.lineTo(bx, by)
+  ctx.closePath()
+  ctx.save()
+  ctx.shadowColor = tema === 'scuro' ? 'rgba(0,0,0,.45)' : 'rgba(20,20,15,.16)'
+  ctx.shadowBlur = 3; ctx.shadowOffsetY = 1
+  ctx.fillStyle = toniMappature(tema).vetro
+  ctx.fill()
+  ctx.restore()
+  ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
+  ctx.strokeStyle = s.colore
+  ctx.stroke()
+  // icona 24x24 Lucide ridotta a 13 px, tratto nel colore del tipo
+  ctx.save()
+  ctx.translate(cx - 6.5, CY - 6.5); ctx.scale(13 / 24, 13 / 24)
+  ctx.strokeStyle = s.colore; ctx.lineWidth = 2.3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+  disegnaIcona(ctx, s.icona)
+  ctx.restore()
+  return ctx.getImageData(0, 0, cv.width, cv.height)
+}
+
+export function registraSegnaposti(m: MappaLibre, segnaposti: Segnaposto[], tema: Tema) {
+  const pr = Math.max(2, Math.ceil(window.devicePixelRatio || 1))
+  for (const s of segnaposti) {
+    if (m.hasImage(s.id)) m.removeImage(s.id)
+    m.addImage(s.id, immagineSegnaposto(s, tema, pr), { pixelRatio: pr })
+  }
+}
+
+// rete di sicurezza: un'immagine chiesta dal layer ma assente si rigenera subito (stesso tema corrente)
+export function segnapostiMancanti(m: MappaLibre, segnaposti: () => Segnaposto[], tema: () => Tema) {
+  m.on('styleimagemissing', (e: any) => {
+    const s = segnaposti().find((x) => x.id === e.id)
+    if (s && !m.hasImage(s.id)) registraSegnaposti(m, [s], tema())
+  })
+}

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
-import { Flame, Check, Ban, Droplets, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink, MapPin, History } from '@lucide/vue'
+import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink, MapPin, History } from '@lucide/vue'
 
 const { chiama, urlFoto } = useApi()
 const { tema } = useTema()
@@ -40,10 +40,17 @@ const FILTRI_STORICO = [
 const storico = ref<Segnalazione[]>([])
 const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
 const TIPI_MAPPATURA = [
-  { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplets },
+  { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplet },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
   { codice: 'rifiuti_strada', etichetta: 'Rifiuti a bordo strada', breve: 'Rifiuti', colore: 'viola', icona: Trash2 },
 ] as const
+// segnaposto a icona per tipo (+ generico per codici sconosciuti), colori del tema corrente
+const segnapostiMappature = () => {
+  const c = toniMappature(tema.value)
+  return [...TIPI_MAPPATURA.map((t) => ({ id: `mappa-${t.codice}`, icona: t.icona, colore: c[t.colore] })), { id: 'mappa-altro', icona: MapPin, colore: c.grigio }]
+}
+// ordine di disegno: piu' a sud sopra (pin ancorati in basso, come Waze)
+const conOrdine = (g: any) => ({ ...g, features: g.features.map((f: any) => ({ ...f, properties: { ...f.properties, ordine: -f.geometry.coordinates[1] } })) })
 const nMappature = ref(0)
 let datiMappature: any = { type: 'FeatureCollection', features: [] }
 let datiHotspot: any = { type: 'FeatureCollection', features: [] }
@@ -147,7 +154,8 @@ async function aggiorna() {
 }
 
 watch(selezionata, aggiornaMappa)
-watch(mostraMappature, (v) => mappa?.setLayoutProperty('mappature', 'visibility', v ? 'visible' : 'none'))
+const LIVELLI_MAPPATURE = ['mappature-cluster', 'mappature-conteggio', 'mappature']
+watch(mostraMappature, (v) => { for (const l of LIVELLI_MAPPATURE) mappa?.setLayoutProperty(l, 'visibility', v ? 'visible' : 'none') })
 const visibilitaHotspot = () => { for (const l of ['hotspot-alone', 'hotspot']) mappa?.setLayoutProperty(l, 'visibility', mostraHotspot.value ? 'visible' : 'none') }
 watch(mostraHotspot, visibilitaHotspot)
 watch([mostraIncendi, filtroIncendi], () => impostaStoricoIncendi(mappa, filtroIncendi.value, mostraIncendi.value))
@@ -162,11 +170,26 @@ function aggiungiLivelli() {
   aggiungiStoricoIncendi(m, c, filtroIncendi.value, mostraIncendi.value) // sotto a tutto il resto
   aggiungiHotspot(m, c, datiHotspot)
   visibilitaHotspot()
-  m.addSource('mappature', { type: 'geojson', data: datiMappature })
-  m.addLayer({ id: 'mappature', type: 'circle', source: 'mappature', layout: { visibility: mostraMappature.value ? 'visible' : 'none' }, paint: {
-    'circle-radius': 6,
-    'circle-color': ['match', ['get', 'codice'], ...TIPI_MAPPATURA.flatMap((t) => [t.codice, c[t.colore]]), c.testo] as any,
-    'circle-stroke-color': c.bordo, 'circle-stroke-width': 2,
+  // mappature: raggruppate fino a zoom 11 (cerchio di vetro con numero), poi segnaposto a icona
+  const tm = toniMappature(tema.value)
+  const visMappature = mostraMappature.value ? 'visible' : 'none'
+  m.addSource('mappature', { type: 'geojson', data: datiMappature, cluster: true, clusterMaxZoom: 11, clusterRadius: 40 })
+  m.addLayer({ id: 'mappature-cluster', type: 'circle', source: 'mappature', filter: ['has', 'point_count'], layout: { visibility: visMappature }, paint: {
+    'circle-color': tm.vetro, 'circle-stroke-color': tm.anello, 'circle-stroke-width': 1.5,
+    'circle-radius': ['interpolate', ['linear'], ['get', 'point_count'], 2, 12, 10, 14, 40, 17] as any,
+  } })
+  m.addLayer({ id: 'mappature-conteggio', type: 'symbol', source: 'mappature', filter: ['has', 'point_count'], layout: {
+    visibility: visMappature, 'text-field': ['get', 'point_count_abbreviated'], 'text-font': ['Noto Sans Medium'], 'text-size': 11.5,
+    'text-allow-overlap': true, 'text-ignore-placement': true,
+  }, paint: { 'text-color': tm.testo2 } })
+  registraSegnaposti(m, segnapostiMappature(), tema.value) // prima del layer: niente immagini mancanti
+  m.addLayer({ id: 'mappature', type: 'symbol', source: 'mappature', filter: ['!', ['has', 'point_count']], layout: {
+    visibility: visMappature,
+    'icon-image': ['match', ['get', 'codice'], ...TIPI_MAPPATURA.flatMap((t) => [t.codice, `mappa-${t.codice}`]), 'mappa-altro'] as any,
+    'icon-anchor': 'bottom',
+    'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.7, 11, 1] as any,
+    'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    'symbol-sort-key': ['get', 'ordine'],
   } })
   // storico delle segnalazioni valutate: sotto la coda attiva, pin fermi (confermata piena, falso allarme ad anello)
   aggiungiPinSegnalazioni(m, 'storico-segn', c, geojsonSegnalazioni(storico.value, selezionata.value), { nuova: prio, confermata: prio })
@@ -192,21 +215,29 @@ onMounted(() => {
   mappa.setPadding({ left: 400, top: 80, right: 0, bottom: 0 })
   mappaPronta.value = mappa
   mappa.on('style.load', aggiungiLivelli)
+  segnapostiMancanti(mappa, segnapostiMappature, () => tema.value)
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
-  chiama<any>('/mappature').then((g) => { datiMappature = g; nMappature.value = g.features.length; (mappa?.getSource('mappature') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
+  chiama<any>('/mappature').then((g) => { datiMappature = g = conOrdine(g); nMappature.value = g.features.length; (mappa?.getSource('mappature') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
   mappa.on('load', () => {
     const m = mappa!
     m.on('click', 'mappature', (ev) => {
       const p = ev.features?.[0]?.properties
       if (!p) return
       const t = TIPI_MAPPATURA.find((x) => x.codice === p.codice)
-      const tinta = t ? [coloriMappa('scuro')[t.colore], coloriMappa('chiaro')[t.colore]] : ['var(--testo-2)', 'var(--testo-2)']
+      const tinta = t ? [toniMappature('scuro')[t.colore], toniMappature('chiaro')[t.colore]] : ['var(--testo-2)', 'var(--testo-2)']
       apriPopup(m, ev.lngLat, PopupMappa, {
         icona: t?.icona ?? MapPin, tinta, etichetta: `Mappatura · ${t?.breve ?? 'cittadino'}`, titolo: p.titolo,
         sottotitolo: [p.utente, p.comune ? nomeComune(String(p.comune)) : ''].filter(Boolean).join(' · '),
       }, () => h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`))
     })
-    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'hotspot'])
+    // cluster: zoom fino a dove il gruppo si separa
+    m.on('click', 'mappature-cluster', async (ev) => {
+      const f = ev.features?.[0]
+      if (!f) return
+      const z = await (m.getSource('mappature') as maplibregl.GeoJSONSource).getClusterExpansionZoom(f.properties!.cluster_id)
+      m.easeTo({ center: (f.geometry as any).coordinates, zoom: z + 0.3 })
+    })
+    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot'])
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })
     m.on('click', 'storico-segn', (ev) => {
       // la coda attiva sta sopra: se il clic e' anche su un pin della coda vince quello
@@ -214,7 +245,7 @@ onMounted(() => {
       const s = storico.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
       if (s) apriPopup(m, [s.lon, s.lat], PopupSegnalazione, { s, azione: () => (selezionata.value = s.id) })
     })
-    for (const l of ['storico-segn', 'mappature']) {
+    for (const l of ['storico-segn', 'mappature', 'mappature-cluster']) {
       m.on('mouseenter', l, () => (m.getCanvas().style.cursor = 'pointer'))
       m.on('mouseleave', l, () => (m.getCanvas().style.cursor = ''))
     }
@@ -441,7 +472,7 @@ const contatori = computed(() => [
           <p v-if="!nMappature" class="text-testo-2">Ancora nessuna mappatura: arrivano dalle missioni dei cittadini.</p>
           <ul v-else class="flex flex-wrap gap-x-3 gap-y-1">
             <li v-for="t in TIPI_MAPPATURA" :key="t.codice" class="flex items-center gap-1.5 whitespace-nowrap text-testo-2">
-              <span class="size-2 rounded-full" :style="{ background: t.colore === 'viola' ? '#b48cf2' : `var(--${t.colore})` }" aria-hidden="true" />{{ t.etichetta }}
+              <span class="grid size-[18px] place-items-center rounded-full shadow-sm" :style="{ background: toniMappature(tema).vetro, boxShadow: `inset 0 0 0 1.5px ${toniMappature(tema)[t.colore]}`, color: toniMappature(tema)[t.colore] }" aria-hidden="true"><component :is="t.icona" class="size-[10px]" :stroke-width="2.6" /></span>{{ t.etichetta }}
             </li>
           </ul>
         </div>

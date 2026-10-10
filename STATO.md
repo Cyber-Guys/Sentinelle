@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `71b5857` — 2026-10-10
+> **Riferimento:** commit `0326b41` — 2026-10-10
 
 ## Fase
 
@@ -9,6 +9,7 @@ Materiali e criteri di valutazione sintetizzati in `docs/materiali/README.md`.
 Fonti dati analizzate e verificate in `docs/dominio/fonti-*.md`.
 Il cruscotto mostra anche gli incendi storici CFVA (livello in cima ai Livelli, logica condivisa con l'app in `useMappa.ts`).
 Il box Segnalazioni del cruscotto ha le schede In coda / Confermate / Falsi allarmi (righe valutate, scheda in sola lettura).
+Le mappature dei cittadini nel cruscotto sono segnaposto a icona discreti (vetro scuro, anello e icona nel colore del tipo) raggruppati in cluster fino a zoom 11 (`registraSegnaposti()` in `useMappa.ts`).
 
 Direzione scelta e specifica approvata:
 `docs/specifiche/2026-10-09-sentinelle-incendi.md` (challenge 2+3 fuse,
