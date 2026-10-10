@@ -173,7 +173,7 @@ function aggiungiLivelli() {
   // mappature: raggruppate fino a zoom 11 (cerchio di vetro con numero), poi segnaposto a icona
   const tm = toniMappature(tema.value)
   const visMappature = mostraMappature.value ? 'visible' : 'none'
-  m.addSource('mappature', { type: 'geojson', data: datiMappature, cluster: true, clusterMaxZoom: 11, clusterRadius: 40 })
+  m.addSource('mappature', { type: 'geojson', data: datiMappature, cluster: true, clusterMaxZoom: 11, clusterRadius: 40, clusterMinPoints: 3 })
   m.addLayer({ id: 'mappature-cluster', type: 'circle', source: 'mappature', filter: ['has', 'point_count'], layout: { visibility: visMappature }, paint: {
     'circle-color': tm.vetro, 'circle-stroke-color': tm.anello, 'circle-stroke-width': 1.5,
     'circle-radius': ['interpolate', ['linear'], ['get', 'point_count'], 2, 12, 10, 14, 40, 17] as any,
@@ -235,7 +235,8 @@ onMounted(() => {
       const f = ev.features?.[0]
       if (!f) return
       const z = await (m.getSource('mappature') as maplibregl.GeoJSONSource).getClusterExpansionZoom(f.properties!.cluster_id)
-      m.easeTo({ center: (f.geometry as any).coordinates, zoom: z + 0.3 })
+      // centro reale della mappa: il box segnalazioni in alto a sinistra e' basso, non serve compensarlo
+      m.easeTo({ center: (f.geometry as any).coordinates, zoom: Math.min(z + 0.5, m.getMaxZoom()), padding: { left: 0, top: 80, right: 0, bottom: 60 } })
     })
     clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot'])
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })

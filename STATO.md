@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `0326b41` — 2026-10-10
+> **Riferimento:** commit `f6a4e5b` — 2026-10-10
 
 ## Fase
 
