@@ -65,14 +65,13 @@ Token in `tema.css` (`@theme`, utility Tailwind `rounded-l|m|s`):
 | `--radius-l` | 22 px | contenitori: fogli `sospeso`, riquadri `vetro`, coda e scheda del cruscotto, card della home, popup della mappa |
 | `--radius-m` | 10 px | elementi dentro un contenitore: righe, campi, tessere, vetro annidato, foto |
 | `--radius-s` | 6 px | secondo livello: icone in riquadro dentro una tessera, scheletri |
-| `--radius-ctrl` / `--radius-pill` | 999 px | pillole: navigazione, filtri anni, header utente, rischio, tema, legenda e controlli mappa, Segnala, pulsanti `primario` e `secondario`, badge |
+| `--radius-ctrl` / `--radius-pill` | 999 px | pillole: navigazione, pulsante livelli, header utente, rischio, tema, legenda e controlli mappa, Segnala, pulsanti `primario` e `secondario`, badge |
 
 - **Regola:** raggio interno = raggio del contenitore - padding che li separa. Per questo fogli
   e coda hanno padding 12 px (22 - 12 = 10 = `--radius-m`). Se il risultato scende sotto 6 si usa 6.
 - **Vetro annidato:** `:where(.sospeso, .vetro) .vetro` prende da solo `--radius-m` (tessere
   delle missioni, righe della classifica, `StatoErrore` nella coda).
-- **Pillole dentro pillole:** stessa regola (filtri anni: pillola esterna con 3 px di padding,
-  bottoni interni `rounded-full`); il campo posizione del foglio e' una pillola col pulsante GPS dentro.
+- **Pillole dentro pillole:** stessa regola (bottoni interni `rounded-full`); il campo posizione del foglio e' una pillola col pulsante GPS dentro.
 - Azioni = pillole; superfici (tessere, campi, righe) = concentriche. Niente raggi scritti a mano
   nei componenti, salvo i loghi (`rounded-[32%]`, squircle che scala con la misura).
 
@@ -136,6 +135,7 @@ cruscotto. Lo stile della mappa base cambia insieme al tema.
   `setStyle(..., { diff: false })` cancella sorgenti e layer, che si ri-aggiungono
   dagli ultimi dati in memoria; i listener per id di layer restano validi.
 - Stile Protomaps generato in `stileMappa()` (`@protomaps/basemaps`, `lang: 'it'`) con i colori del flavor ritoccati (fondo, terra, acqua, strade) per avvicinarli ai token. Sorgente `pmtiles:///tiles/sardegna.pmtiles` (bbox Sardegna, zoom 14; oltre viene ingrandito), glyphs e sprite con URL assoluto sull'origine corrente. Va chiamato `registraPmtiles()` in ogni pagina con mappa.
+- **Pulsante livelli** (`PulsanteLivelli.vue`, app): pillola tonda 44 px con icona `Layers` in cima alla colonna dei controlli a destra (sopra +/-, larghi uguali), badge con il filtro attivo (`2025`, `5 anni`, `2015+`). Apre un pannello `sospeso` ancorato a sinistra (scala + opacita' 180 ms dall'angolo del pulsante): sezione "Incendi storici" con elenco a radio (righe `rounded-m`) e legenda ambra -> brace per anno. Resta aperto dopo la scelta (il cambio si vede subito), si chiude toccando fuori, con Esc o la X. Nascosto in modalita' "scegli punto" e con i fogli missioni/classifica. Altri livelli futuri: nuove sezioni nello stesso pannello. Niente piu' barra dei filtri sotto l'header.
 - L'attribuzione OSM + Protomaps arriva dalla sorgente dello stile: controllo compatto ("i").
 - **Tre stati per ogni dato remoto: caricamento, errore, vuoto.** Caricamento = `scheletro`
   (utility in `tema.css`) con la forma del contenuto in arrivo, mai uno spinner al posto di

@@ -31,11 +31,11 @@ let tToast: ReturnType<typeof setTimeout> | undefined
 let tLivello: ReturnType<typeof setTimeout> | undefined
 
 const FILTRI = [
-  { id: '2025', etichetta: '2025', da: 2025 },
-  { id: '5', etichetta: 'Ultimi 5 anni', da: 2021 },
-  { id: 'tutti', etichetta: 'Dal 2015', da: 2015 },
+  { id: '2025', etichetta: 'Stagione 2025', breve: '2025', dettaglio: "Solo l'ultima estate", da: 2025 },
+  { id: '5', etichetta: 'Ultimi 5 anni', breve: '5 anni', dettaglio: '2021 – 2025', da: 2021 },
+  { id: 'tutti', etichetta: 'Dal 2015', breve: '2015+', dettaglio: 'Ultime 11 stagioni, 2015 – 2025', da: 2015 },
 ] as const
-const filtro = ref<(typeof FILTRI)[number]['id']>('2025')
+const filtro = ref<string>('2025')
 
 const contenitore = ref<HTMLElement | null>(null)
 let mappa: maplibregl.Map | null = null
@@ -309,13 +309,10 @@ async function invia() {
           <IndicatoreRischio class="pointer-events-auto" :rischio="rischio" :errore="rischioErrore" @riprova="caricaRischio" />
           <InterruttoreTema compatto class="pointer-events-auto" />
         </div>
-        <div v-if="scheda === 'mappa' && !missione" class="mt-2 flex items-center gap-2">
-          <div class="pillola pointer-events-auto flex items-center gap-0.5 p-[3px] text-[.74rem]" role="group" aria-label="Incendi storici">
-            <span class="etichetta hidden pr-1.5 pl-2 sm:inline">Incendi storici</span>
-            <button v-for="f in FILTRI" :key="f.id" type="button" class="tocco h-8 rounded-full px-3 font-medium transition-colors" :class="filtro === f.id ? 'bg-vetro-forte text-testo ring-1 ring-bordo-luce' : 'text-testo-2 hover:text-testo'" :aria-pressed="filtro === f.id" @click="filtro = f.id">{{ f.etichetta }}</button>
-          </div>
-        </div>
       </header>
+
+      <!-- livelli della mappa: in cima alla colonna dei controlli, sopra +/- (il pannello si ancora a questo contenitore) -->
+      <PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] right-3 z-20" />
 
       <!-- missione `posizione`: scegli il punto -->
       <Transition name="foglio">
@@ -442,9 +439,9 @@ async function invia() {
 </template>
 
 <style>
-.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 6.75rem); right: 2px; }
-/* controlli della mappa a misura di dito */
-.mappa-app .maplibregl-ctrl-group button { width: 40px; height: 40px; }
+.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 3.5rem + 44px); right: 2px; }
+/* controlli della mappa a misura di dito: gruppo largo 44 px come il pulsante livelli sopra */
+.mappa-app .maplibregl-ctrl-group button { width: 42px; height: 42px; }
 .mappa-app .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; }
 /* fogli: salgono con easing in uscita, se ne vanno piu' in fretta (niente sovrapposizioni lunghe) */
 .foglio-enter-active { transition: opacity .2s ease-out, transform .32s cubic-bezier(.22, 1, .36, 1); }

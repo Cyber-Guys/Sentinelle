@@ -30,7 +30,7 @@ PostGIS nativo arm64, fonti esterne in parallelo
 micro-animazioni, contrasti AA. UI professionale: stile mappa notte
 (terra/mare contrastati, limiti sull'estratto), priorità scomposta per fattore
 (`fattori` jsonb in segnalazione, `ScomposizionePriorita.vue`), raggi concentrici
-22/10/6 + pillole, pin pulsanti (`animaAloni()`). Prossimo passo: prova su
+22/10/6 + pillole, pin pulsanti (`animaAloni()`), filtro storico nel pulsante livelli (`PulsanteLivelli.vue`). Prossimo passo: prova su
 telefono vero, pitch.
 
 ## Chi fa cosa
