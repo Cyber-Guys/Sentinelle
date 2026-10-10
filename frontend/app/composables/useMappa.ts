@@ -2,6 +2,7 @@ import maplibregl, { type Map as MappaLibre, type StyleSpecification } from 'map
 import { layers, namedFlavor } from '@protomaps/basemaps'
 import { Protocol } from 'pmtiles'
 import type { Tema } from './useTema'
+import { h, render, type Component } from 'vue'
 
 // Protocollo pmtiles:// (storico incendi statico), registrato una sola volta
 let pmtilesOk = false
@@ -114,6 +115,30 @@ export const LOCALE_MAPPA = {
 export function chiudiAttribuzione(m: MappaLibre) {
   m.once('load', () => m.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'))
 }
+
+// Popup della mappa con un componente Vue dentro (PopupIncendio, PopupMappa): niente pulsante
+// di MapLibre (il nostro sta nell'intestazione) e niente focus all'apertura (anello solo da tastiera).
+export function apriPopup(m: MappaLibre, lngLat: maplibregl.LngLatLike, comp: Component, props: Record<string, unknown>, corpo?: () => unknown) {
+  const el = document.createElement('div')
+  const popup = new maplibregl.Popup({ closeButton: false, focusAfterOpen: false, maxWidth: 'none', offset: 10, className: 'popup-sentinelle' })
+  render(h(comp, { ...props, onChiudi: () => popup.remove() }, corpo ? { default: corpo } : undefined), el)
+  popup.on('close', () => render(null, el))
+  popup.setLngLat(lngLat).setDOMContent(el).addTo(m)
+  // La mappa sta sotto header (in alto) e Segnala/navigazione (in basso): se il popup
+  // ci finisce sotto, la mappa scorre quanto basta per liberarlo.
+  requestAnimationFrame(() => {
+    const r = popup.getElement()?.getBoundingClientRect()
+    const c = m.getContainer().getBoundingClientRect()
+    if (!r) return
+    const sotto = r.bottom - (c.bottom - LIBERO.basso)
+    const sopra = c.top + LIBERO.alto - r.top
+    if (sotto > 0) m.panBy([0, sotto], { duration: 250 })
+    else if (sopra > 0) m.panBy([0, -sopra], { duration: 250 })
+  })
+  return popup
+}
+// fasce occupate dai controlli flottanti, in px dai bordi della mappa
+const LIBERO = { alto: 72, basso: 156 }
 
 // Colori dei layer coerenti con i token (MapLibre vuole valori, non variabili CSS)
 export function coloriMappa(t: Tema) {

@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `729709e` — 2026-10-09
+> **Riferimento:** commit `ad3f667` — 2026-10-10
 
 ## Fase
 
@@ -30,7 +30,10 @@ PostGIS nativo arm64, fonti esterne in parallelo
 micro-animazioni, contrasti AA. UI professionale: stile mappa notte
 (terra/mare contrastati, limiti sull'estratto), priorità scomposta per fattore
 (`fattori` jsonb in segnalazione, `ScomposizionePriorita.vue`), raggi concentrici
-22/10/6 + pillole, pin pulsanti (`animaAloni()`), filtro storico nel pulsante livelli (`PulsanteLivelli.vue`). Prossimo passo: prova su
+22/10/6 + pillole, pin pulsanti (`animaAloni()`), filtro storico nel pulsante livelli (`PulsanteLivelli.vue`, condiviso con il
+cruscotto: hotspot e mappature come interruttori, legenda separata dai comandi),
+colonna controlli a passo 14 px, popup della mappa come componenti Vue
+(`PopupMappa.vue`, `PopupIncendio.vue`, `apriPopup()`). Prossimo passo: prova su
 telefono vero, pitch.
 
 ## Chi fa cosa
@@ -81,11 +84,9 @@ Ognuno modifica solo la propria riga.
 
 ## Aperto
 
-- Su emulazione mobile un tap sulla mappa a volte la rimpicciolisce: verificare
-  su telefono vero.
+- Su emulazione mobile del browser i tocchi sulla mappa non arrivano a MapLibre
+  (su desktop si'): verificare su telefono vero con `scripts/tunnel.sh`.
 
-- Errore in console di `@lucide/vue` (useLucideProps): icone funzionanti, da
-  risolvere.
 - Oggi nessun hotspot FIRMS: la demo offline non ne ha; valutare hotspot
   fittizi dichiarati.
 

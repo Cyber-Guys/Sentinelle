@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, animaAloni, ALONE_HOTSPOT } from '~/composables/useMappa'
+import { aggiungiHotspot, animaAloni, apriPopup, ALONE_HOTSPOT } from '~/composables/useMappa'
+import PopupIncendio from '~/components/PopupIncendio.vue'
 import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
 
@@ -46,11 +47,6 @@ const centro = computed<[number, number]>(() => CENTRI[utente.value?.comune ?? '
 const { tema } = useTema()
 
 const oraBreve = (iso: string) => new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-// '2025-06-08' -> '8 giugno 2025' (le date dell'archivio arrivano come stringa ISO o assenti)
-const dataLunga = (d?: string) => {
-  const t = d ? new Date(d) : null
-  return t && !isNaN(+t) ? t.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Data non nota'
-}
 const iniziali = (n: string) => n.replace(/\(.*?\)/g, '').trim().split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase()
 
 async function caricaUtenti() {
@@ -108,9 +104,7 @@ function avviaMappa() {
     m.on('click', 'storico-riempimento', (ev) => {
       const p = ev.features?.[0]?.properties
       if (!p || pannello.value || missione.value) return
-      new maplibregl.Popup({ maxWidth: '220px' }).setLngLat(ev.lngLat)
-        .setHTML(`<div class="popup-titolo">Incendio del ${p.anno}</div><div style="font-weight:650;margin-top:2px">${dataLunga(p.data)}</div><div style="font-variant-numeric:tabular-nums;color:var(--testo-2)">${p.ettari != null ? Number(p.ettari).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' ettari' : 'Superficie non nota'}${p.comune ? ' · ' + nomeComune(String(p.comune)) : ''}</div>`)
-        .addTo(m)
+      apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
     })
     m.on('click', (ev) => {
       if (!pannello.value && !missione.value) return
@@ -312,7 +306,7 @@ async function invia() {
       </header>
 
       <!-- livelli della mappa: in cima alla colonna dei controlli, sopra +/- (il pannello si ancora a questo contenitore) -->
-      <PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] right-3 z-20" />
+      <PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20" />
 
       <!-- missione `posizione`: scegli il punto -->
       <Transition name="foglio">
@@ -439,10 +433,17 @@ async function invia() {
 </template>
 
 <style>
-.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 3.5rem + 44px); right: 2px; }
+.mappa-app .maplibregl-ctrl-top-right { top: calc(max(.75rem, env(safe-area-inset-top)) + 102px); right: 2px; }
+/* colonna destra a passo unico: 14 px tra i bordi (tema, livelli, zoom, info), larghezza 44 */
+.mappa-app .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 14px 10px 0 0; }
 /* controlli della mappa a misura di dito: gruppo largo 44 px come il pulsante livelli sopra */
 .mappa-app .maplibregl-ctrl-group button { width: 42px; height: 42px; }
-.mappa-app .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; }
+/* "i": cerchio da 36 px centrato nella colonna; niente sfondo ne' focus invertiti dal filtro */
+.mappa-app .maplibregl-ctrl-attrib.maplibregl-compact { margin-right: 14px; min-height: 36px; }
+.mappa-app .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { width: 36px; height: 36px; padding: 0; }
+.mappa-app .maplibregl-ctrl-attrib.maplibregl-compact-show { height: 36px; padding: 0 36px 0 14px; display: flex; align-items: center; }
+.mappa-app .maplibregl-ctrl-attrib-inner { font-size: 11px; line-height: 1; white-space: nowrap; }
+.mappa-app .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; top: 4px !important; right: 4px !important; background-color: transparent !important; background-position: center !important; background-repeat: no-repeat !important; box-shadow: none !important; outline: none !important; }
 /* fogli: salgono con easing in uscita, se ne vanno piu' in fretta (niente sovrapposizioni lunghe) */
 .foglio-enter-active { transition: opacity .2s ease-out, transform .32s cubic-bezier(.22, 1, .36, 1); }
 .foglio-leave-active { transition: opacity .14s ease-in, transform .14s ease-in; }

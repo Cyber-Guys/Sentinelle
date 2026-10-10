@@ -1,23 +1,28 @@
 <script setup lang="ts">
 import { Layers, X } from '@lucide/vue'
 
-// Pulsante "livelli" della mappa (come Google Maps / Apple Maps): oggi un solo livello, gli incendi storici.
+// Pulsante "livelli" della mappa (come Google Maps / Apple Maps).
+// App: sezione "Incendi storici" a radio (`filtri` + v-model). Cruscotto: sezioni a interruttore nello slot.
 export interface FiltroStorico { id: string; etichetta: string; breve: string; dettaglio: string }
 
-const props = defineProps<{ filtri: readonly FiltroStorico[] }>()
-const filtro = defineModel<string>({ required: true })
+const props = defineProps<{ filtri?: readonly FiltroStorico[]; badge?: string; descrizione?: string }>()
+const filtro = defineModel<string>()
 
-const aperto = ref(false)
+// aperto esposto come v-model:aperto (opzionale): il cruscotto sposta la scheda dettaglio quando il pannello e' aperto
+const aperto = defineModel<boolean>('aperto', { default: false })
 const radice = ref<HTMLElement | null>(null)
 const pulsante = ref<HTMLButtonElement | null>(null)
 const pannello = ref<HTMLElement | null>(null)
-const attivo = computed(() => props.filtri.find((f) => f.id === filtro.value))
+const attivo = computed(() => props.filtri?.find((f) => f.id === filtro.value))
+const testoBadge = computed(() => props.badge ?? attivo.value?.breve)
 
 async function alterna() {
   aperto.value = !aperto.value
   if (aperto.value) {
     await nextTick()
-    pannello.value?.querySelector<HTMLInputElement>('input:checked')?.focus()
+    const p = pannello.value
+    const primo = p?.querySelector<HTMLInputElement>('input:checked') ?? p?.querySelector<HTMLInputElement>('input')
+    primo?.focus()
   }
 }
 function chiudi(rifocalizza = false) {
@@ -41,11 +46,11 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', fuori, true)
       :class="aperto && 'bg-vetro-forte'"
       :aria-expanded="aperto"
       aria-controls="pannello-livelli"
-      :aria-label="`Livelli della mappa · incendi storici: ${attivo?.etichetta ?? ''}`"
+      :aria-label="`Livelli della mappa · ${descrizione ?? `incendi storici: ${attivo?.etichetta ?? ''}`}`"
       @click="alterna"
     >
       <Layers class="size-[18px] text-testo" aria-hidden="true" />
-      <span class="cifre pointer-events-none absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border border-bordo-luce bg-fondo-3 px-1.5 text-[.6rem] leading-[14px] font-semibold whitespace-nowrap text-ambra shadow-sm" aria-hidden="true">{{ attivo?.breve }}</span>
+      <span v-if="testoBadge" class="cifre pointer-events-none absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border border-bordo-luce bg-fondo-3 px-1.5 text-[.6rem] leading-[14px] font-semibold whitespace-nowrap text-ambra shadow-sm" aria-hidden="true">{{ testoBadge }}</span>
     </button>
 
     <Transition name="livelli">
@@ -61,7 +66,8 @@ onBeforeUnmount(() => { document.removeEventListener('pointerdown', fuori, true)
           <button type="button" aria-label="Chiudi i livelli" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="chiudi(true)"><X class="size-4" aria-hidden="true" /></button>
         </div>
 
-        <fieldset>
+        <slot />
+        <fieldset v-if="filtri">
           <legend class="etichetta mb-1.5 pl-1">Incendi storici</legend>
           <div class="space-y-1">
             <label

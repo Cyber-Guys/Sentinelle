@@ -338,18 +338,28 @@ html[data-tema='scuro'] .maplibregl-ctrl-group .maplibregl-ctrl-icon { filter: i
 .maplibregl-ctrl-attrib a { color: var(--testo-2) !important; }
 html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
 .maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; }
+/* Popup della mappa: foglio `sospeso` compatto (raggio 22, padding 12 -> interni 10), senza punta. */
 .maplibregl-popup-content {
-  background: var(--fondo-3) !important;
+  background: linear-gradient(170deg, var(--fondo-3) 0%, var(--fondo-2) 100%) !important;
   color: var(--testo);
-  border: 1px solid var(--bordo-luce);
+  border: 1px solid var(--bordo);
+  border-top-color: var(--bordo-luce);
   border-radius: var(--radius-l) !important;
   box-shadow: var(--ombra) !important;
-  padding: 12px 16px !important;
+  padding: 12px !important;
   font: 13px/1.4 var(--font-sans);
 }
 .maplibregl-popup-tip { display: none !important; }
+/* sopra i controlli della mappa (z 2): il popup e' temporaneo, non deve finire sotto +/- e "i" */
+.maplibregl-popup { z-index: 3; }
+.popup-sentinelle .maplibregl-popup-content { width: min(280px, calc(100vw - 32px)); }
+.popup-mappa .popup-icona { color: var(--tinta-scuro); background: color-mix(in srgb, var(--tinta-scuro) 16%, transparent); }
+html[data-tema='chiaro'] .popup-mappa .popup-icona { color: var(--tinta-chiaro); background: color-mix(in srgb, var(--tinta-chiaro) 14%, transparent); }
+.popup-mappa .popup-metriche { background: var(--vetro); border: 1px solid var(--bordo); }
+.popup-mappa .popup-chiudi:focus-visible { outline-offset: 0; border-radius: 999px; }
+/* pulsante di MapLibre (popup senza componente): stessa misura sobria */
 .maplibregl-popup-close-button {
-  color: var(--testo-2);
+  color: var(--testo-3);
   width: 28px;
   height: 28px;
   top: 6px !important;
@@ -359,7 +369,7 @@ html[data-tema='scuro'] .maplibregl-ctrl-attrib-button { filter: invert(1); }
   line-height: 1;
 }
 .maplibregl-popup-close-button:hover { background: var(--vetro-forte) !important; color: var(--testo); }
-.maplibregl-popup-content :where(.popup-titolo) { color: var(--testo-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 650; padding-right: 22px; }
+.maplibregl-popup-close-button:focus:not(:focus-visible) { outline: none; box-shadow: none; }
 .maplibregl-ctrl button:focus-visible { outline: 2px solid var(--cielo) !important; outline-offset: -2px; box-shadow: none !important; }
 @keyframes popup-entra { from { opacity: 0; translate: 0 4px; } }
 .maplibregl-popup-content { animation: popup-entra 0.18s ease-out; }

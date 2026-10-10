@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, animaAloni, ALONE_HOTSPOT } from '~/composables/useMappa'
-import { Flame, Check, Ban, Droplets, Leaf, Trash2, Layers, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink } from '@lucide/vue'
+import { aggiungiHotspot, animaAloni, apriPopup, ALONE_HOTSPOT } from '~/composables/useMappa'
+import PopupMappa from '~/components/PopupMappa.vue'
+import { h } from 'vue'
+import { Flame, Check, Ban, Droplets, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, ExternalLink, MapPin } from '@lucide/vue'
 
 const { chiama, urlFoto } = useApi()
 const { tema } = useTema()
@@ -23,6 +25,9 @@ let timer: ReturnType<typeof setInterval> | undefined
 let fermaAloni = () => {}
 
 const mostraMappature = ref(false)
+const mostraHotspot = ref(true)
+const livelliAperti = ref(false)
+const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value))
 const TIPI_MAPPATURA = [
   { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplets },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
@@ -88,6 +93,8 @@ async function aggiorna() {
 
 watch(selezionata, aggiornaMappa)
 watch(mostraMappature, (v) => mappa?.setLayoutProperty('mappature', 'visibility', v ? 'visible' : 'none'))
+const visibilitaHotspot = () => { for (const l of ['hotspot-alone', 'hotspot']) mappa?.setLayoutProperty(l, 'visibility', mostraHotspot.value ? 'visible' : 'none') }
+watch(mostraHotspot, visibilitaHotspot)
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
 
 // sorgenti e layer: richiamata a ogni stile caricato (anche dopo il cambio tema)
@@ -97,6 +104,7 @@ function aggiungiLivelli() {
   const c = coloriMappa(tema.value)
   const prio: any = ['step', ['get', 'priorita'], c.macchia, 30, c.ambra, 60, c.brace]
   aggiungiHotspot(m, c, datiHotspot)
+  visibilitaHotspot()
   m.addSource('mappature', { type: 'geojson', data: datiMappature })
   m.addLayer({ id: 'mappature', type: 'circle', source: 'mappature', layout: { visibility: mostraMappature.value ? 'visible' : 'none' }, paint: {
     'circle-radius': 6,
@@ -122,8 +130,9 @@ onMounted(() => {
   limitaMappa(mappa)
   // la colonna della coda copre la sinistra: il centro utile della mappa si sposta a destra
   mappa.setPadding({ left: 400, top: 80, right: 0, bottom: 0 })
-  mappa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
-  mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
+  // colonna destra come nell'app: Livelli (componente Vue), poi +/- e "i" di MapLibre
+  mappa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+  mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right')
   mappa.on('style.load', aggiungiLivelli)
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
   chiama<any>('/mappature').then((g) => { datiMappature = g; nMappature.value = g.features.length; (mappa?.getSource('mappature') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
@@ -132,7 +141,13 @@ onMounted(() => {
     const m = mappa!
     m.on('click', 'mappature', (ev) => {
       const p = ev.features?.[0]?.properties
-      if (p) new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<div style="font-weight:650">${p.titolo}</div><div style="color:var(--testo-2)">${p.utente}</div><div style="color:var(--testo-3);font-size:12px">${ora(p.completata_il)}</div>`).addTo(m)
+      if (!p) return
+      const t = TIPI_MAPPATURA.find((x) => x.codice === p.codice)
+      const tinta = t ? [coloriMappa('scuro')[t.colore], coloriMappa('chiaro')[t.colore]] : ['var(--testo-2)', 'var(--testo-2)']
+      apriPopup(m, ev.lngLat, PopupMappa, {
+        icona: t?.icona ?? MapPin, tinta, etichetta: `Mappatura · ${t?.breve ?? 'cittadino'}`, titolo: p.titolo,
+        sottotitolo: [p.utente, p.comune ? nomeComune(String(p.comune)) : ''].filter(Boolean).join(' · '),
+      }, () => h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`))
     })
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })
     m.on('mouseenter', 'coda', () => (m.getCanvas().style.cursor = 'pointer'))
@@ -153,7 +168,7 @@ onBeforeUnmount(() => { clearInterval(timer); clearTimeout(tAvviso); fermaAloni(
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
-  mappa?.flyTo({ center: [s.lon, s.lat], zoom: Math.max(mappa.getZoom(), 11), padding: { left: 400, right: 440, top: 80, bottom: 60 } })
+  mappa?.flyTo({ center: [s.lon, s.lat], zoom: Math.max(mappa.getZoom(), 11), padding: { left: 400, right: 510, top: 80, bottom: 60 } })
 }
 
 async function azione(tipo: 'conferma' | 'archivia') {
@@ -261,7 +276,8 @@ const contatori = computed(() => [
 
     <!-- scheda della segnalazione selezionata -->
     <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0 translate-x-3" leave-active-class="transition duration-150" leave-to-class="opacity-0 translate-x-3">
-      <section v-if="scheda" class="sospeso absolute top-[4.75rem] right-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[26rem] flex-col overflow-hidden" aria-labelledby="titolo-scheda">
+      <!-- a sinistra della colonna destra (16 + 44 + 14); col pannello Livelli aperto scorre a sinistra del pannello -->
+      <section v-if="scheda" class="sospeso absolute top-[4.75rem] z-10 flex max-h-[calc(100%-4.75rem-1rem)] w-[26rem] flex-col overflow-hidden transition-[right] duration-200 ease-out" :style="{ right: livelliAperti ? 'calc(68px + min(17.5rem, 100vw - 5.5rem) + 14px)' : '74px' }" aria-labelledby="titolo-scheda">
         <header class="flex shrink-0 items-start justify-between gap-3 border-b border-bordo px-5 py-3.5">
           <div class="min-w-0">
             <p class="flex items-center gap-2 text-[.72rem] text-testo-3">
@@ -300,26 +316,45 @@ const contatori = computed(() => [
       </section>
     </Transition>
 
-    <!-- legenda e filtri: pillole sopra la mappa -->
-    <div class="absolute bottom-4 left-4 right-[8.5rem] z-10 flex items-center gap-2 overflow-hidden whitespace-nowrap text-[.74rem]">
-      <span class="pillola flex h-9 items-center gap-3 px-3">
-        <span class="etichetta">Priorità</span>
-        <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-alta" />Alta <span class="cifre text-testo-3">60+</span></span>
-        <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
-        <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
-      </span>
-      <span class="pillola flex h-9 items-center gap-1.5 px-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" /> Hotspot satellitari</span>
-      <button type="button" class="pillola flex h-9 items-center gap-1.5 px-3 font-medium transition-colors hover:bg-vetro-forte" :class="mostraMappature ? '!border-macchia/50 text-testo' : 'text-testo-2'" :aria-pressed="mostraMappature" @click="mostraMappature = !mostraMappature">
-        <Layers class="size-4" :class="mostraMappature && 'text-macchia'" aria-hidden="true" /> Mappature dei cittadini <span class="cifre text-testo-3">{{ nMappature }}</span>
-      </button>
-      <span v-if="mostraMappature && !nMappature" class="pillola flex h-9 items-center px-3 text-testo-2">Ancora nessuna mappatura: arrivano dalle missioni dei cittadini</span>
-      <template v-else-if="mostraMappature">
-        <span class="pillola flex h-9 items-center gap-3 px-3">
-          <span v-for="t in TIPI_MAPPATURA" :key="t.codice" class="flex items-center gap-1.5 whitespace-nowrap">
-            <span class="size-2 rounded-full" :style="{ background: t.colore === 'viola' ? '#b48cf2' : `var(--${t.colore})` }" aria-hidden="true" />{{ t.breve }}
+    <!-- colonna destra: Livelli in cima, sotto +/- e "i" di MapLibre (passo 14 px, vedi stile) -->
+    <PulsanteLivelli v-model:aperto="livelliAperti" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" class="absolute top-[4.75rem] right-4 z-20">
+      <div class="space-y-1">
+        <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
+          <input v-model="mostraHotspot" type="checkbox" role="switch" class="sr-only" />
+          <span class="size-2.5 shrink-0 rounded-full bg-brace ring-2 ring-fondo" aria-hidden="true" />
+          <span class="min-w-0 flex-1 leading-tight">
+            <span class="block text-[.86rem] font-semibold">Hotspot satellitari</span>
+            <span class="block text-[.72rem] text-testo-2">VIIRS, ultime 24 h</span>
           </span>
-        </span>
-      </template>
+          <span class="interruttore" :class="mostraHotspot && 'acceso'" aria-hidden="true" />
+        </label>
+        <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
+          <input v-model="mostraMappature" type="checkbox" role="switch" class="sr-only" />
+          <MapPin class="size-4 shrink-0 text-macchia" aria-hidden="true" />
+          <span class="min-w-0 flex-1 leading-tight">
+            <span class="block text-[.86rem] font-semibold">Mappature dei cittadini</span>
+            <span class="cifre block text-[.72rem] text-testo-2">{{ nMappature }} completate dalle missioni</span>
+          </span>
+          <span class="interruttore" :class="mostraMappature && 'acceso'" aria-hidden="true" />
+        </label>
+        <div v-if="mostraMappature" class="px-3 pt-1 pb-1 text-[.74rem]">
+          <p v-if="!nMappature" class="text-testo-2">Ancora nessuna mappatura: arrivano dalle missioni dei cittadini.</p>
+          <ul v-else class="flex flex-wrap gap-x-3 gap-y-1">
+            <li v-for="t in TIPI_MAPPATURA" :key="t.codice" class="flex items-center gap-1.5 whitespace-nowrap text-testo-2">
+              <span class="size-2 rounded-full" :style="{ background: t.colore === 'viola' ? '#b48cf2' : `var(--${t.colore})` }" aria-hidden="true" />{{ t.etichetta }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </PulsanteLivelli>
+
+    <!-- legenda (solo informativa): priorita' delle segnalazioni, hotspot se il livello e' acceso -->
+    <div class="pillola pointer-events-none absolute bottom-4 left-4 z-10 flex h-9 items-center gap-3 px-3 text-[.74rem] whitespace-nowrap" aria-label="Legenda della mappa">
+      <span class="etichetta">Priorità</span>
+      <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-alta" />Alta <span class="cifre text-testo-3">60+</span></span>
+      <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
+      <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
+      <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Hotspot</span>
     </div>
 
     <!-- esito delle azioni dell'operatore -->
@@ -336,12 +371,22 @@ const contatori = computed(() => [
 </template>
 
 <style>
-/* barra in basso a destra: attribuzione e zoom in riga, alla stessa altezza delle pillole della legenda */
-.cruscotto-mappa .maplibregl-ctrl-bottom-right { display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; right: 16px; bottom: 16px; }
-.cruscotto-mappa .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 !important; }
-.cruscotto-mappa .maplibregl-ctrl-group { display: flex; }
-.cruscotto-mappa .maplibregl-ctrl-group button { width: 36px; height: 34px; }
-.cruscotto-mappa .maplibregl-ctrl-group button + button { border-top: 0 !important; border-left: 1px solid var(--bordo) !important; }
+/* colonna destra a passo unico come nell'app: Livelli (44, top 76) -> +/- (44) -> "i" (36 centrata), 14 px tra i bordi */
+.cruscotto-mappa .maplibregl-ctrl-top-right { top: calc(4.75rem + 44px); right: 0; z-index: 15; } /* sopra la scheda (10): la "i" aperta non ci finisce sotto */
+.cruscotto-mappa .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 14px 16px 0 0; }
+.cruscotto-mappa .maplibregl-ctrl-group button { width: 42px; height: 42px; }
+.cruscotto-mappa .maplibregl-ctrl-attrib.maplibregl-compact { margin-right: 20px; min-height: 36px; }
+.cruscotto-mappa .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { width: 36px; height: 36px; padding: 0; }
+.cruscotto-mappa .maplibregl-ctrl-attrib.maplibregl-compact-show { height: 36px; padding: 0 36px 0 14px; display: flex; align-items: center; }
+.cruscotto-mappa .maplibregl-ctrl-attrib-inner { font-size: 11px; line-height: 1; white-space: nowrap; }
+.cruscotto-mappa .maplibregl-ctrl-attrib-button { width: 28px; height: 28px; top: 4px !important; right: 4px !important; background-color: transparent !important; background-position: center !important; background-repeat: no-repeat !important; box-shadow: none !important; outline: none !important; }
+/* focus da tastiera sulla "i": anello sul contenitore (il pulsante ha il filtro invert in tema scuro) */
+.cruscotto-mappa .maplibregl-ctrl-attrib:has(.maplibregl-ctrl-attrib-button:focus-visible) { outline: 2px solid var(--cielo); outline-offset: 2px; }
+/* interruttore on/off delle sezioni del pannello Livelli */
+.interruttore { position: relative; width: 34px; height: 20px; flex-shrink: 0; border-radius: 999px; background: var(--vetro-forte); box-shadow: inset 0 0 0 1px var(--bordo-luce); transition: background .18s; }
+.interruttore::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 999px; background: var(--testo-3); transition: transform .18s cubic-bezier(.22, 1, .36, 1), background .18s; }
+.interruttore.acceso { background: var(--macchia); box-shadow: none; }
+.interruttore.acceso::after { transform: translateX(14px); background: #fff; }
 /* nuove segnalazioni: entrano scivolando e restano evidenziate per qualche secondo */
 .coda-enter-active { transition: opacity .3s ease-out, transform .35s cubic-bezier(.22, 1, .36, 1); }
 .coda-leave-active { transition: opacity .2s ease-in; position: absolute; left: .75rem; right: .75rem; }
