@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `7245a0e` — 2026-10-10
+> **Riferimento:** commit `cfc0baf` — 2026-10-10
 
 ## Fase
 
@@ -28,6 +28,10 @@ FastAPI + PostGIS; avvio in `README.md`.
 - Accesso da telefono in HTTPS: `scripts/tunnel.sh` (proxy `/api`).
 - Linguaggio visivo in `docs/interfaccia/linguaggio-visivo.md` (scuro per
   primo, raggi concentrici, pin pulsanti, controlli Lucide).
+
+**Onboarding del team:** clone pronto all'uso con `./scripts/setup.sh` (dati
+dal dump della release GitHub `dati-v1`) e `./scripts/avvia.sh`; guida in
+`ONBOARDING.md`. Provato su clone pulito (conteggi corretti, backend attivo).
 
 **Prossimo passo:** decidere col team i prossimi miglioramenti (candidati:
 modalita' scenario con hotspot simulati dichiarati, pitch con numeri CFVA).
@@ -66,7 +70,8 @@ Ognuno modifica solo la propria riga.
 
 - [ ] Condividere specifica e ruoli con Nicholas, Andrea, Nicola.
 - [ ] Scegliere il nome dell'app.
-- [ ] Decidere come condividere `dati/` col team (dump o download).
+- [x] Decidere come condividere `dati/` col team: dump PostGIS nella release
+      GitHub `dati-v1`, scaricato da `scripts/setup.sh`.
 - [ ] Trovare l'URL del bollettino giornaliero di pericolo incendi (Protezione
       Civile Sardegna).
 - [ ] Un membro registra la MAP_KEY gratuita NASA FIRMS (solo email).

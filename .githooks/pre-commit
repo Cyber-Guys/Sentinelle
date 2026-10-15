@@ -9,7 +9,7 @@
 
 # "Codice" = tutto cio' che non e' documentazione o configurazione degli agenti.
 codice=$(git diff --cached --name-only --diff-filter=ACMR \
-	| grep -vE '^(docs/|STATO\.md$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|README\.md$|\.githooks/|\.gitignore$|\.env\.example$)' \
+	| grep -vE '^(docs/|STATO\.md$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|README\.md$|ONBOARDING\.md$|\.githooks/|\.gitignore$|\.env\.example$)' \
 	| head -1)
 stato=$(git diff --cached --name-only --diff-filter=ACMR | grep -c '^STATO\.md$')
 

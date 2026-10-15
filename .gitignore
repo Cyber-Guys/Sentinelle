@@ -14,3 +14,9 @@ dist/
 # dati geografici pesanti (~280 MB): si rigenerano con scripts/scarica_dati.py o si condividono come dump
 dati/*.geojson
 backend/foto/
+*.egg-info/
+*.log
+
+# artefatti degli strumenti degli agenti
+.playwright-mcp/
+.superpowers/

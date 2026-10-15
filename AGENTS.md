@@ -8,6 +8,41 @@ qui: le regole si modificano solo in questo file, cosi' le guide non divergono.
 > copia si sovrascrivono le modifiche non committate senza accorgersene. Per
 > lavorare in parallelo sulla stessa macchina serve un `git worktree` separato.
 
+## Primo avvio in un nuovo clone
+
+Una volta per clone, dalla radice del repository:
+
+1. `./scripts/setup.sh`: verifica i prerequisiti (stampa cosa manca e come
+   installarlo), attiva gli hook, crea l'ambiente Python (conda, altrimenti uv,
+   altrimenti `backend/.venv`), `npm ci`, avvia PostGIS e carica i dati demo.
+   Idempotente: in caso di dubbio si rilancia. Deve finire con `Pronto.` e i
+   conteggi 377 comuni / 27544 incendi.
+2. Avvio: `./scripts/avvia.sh` (backend + frontend, Ctrl+C ferma), oppure in
+   Claude Code `.claude/launch.json` (`backend`, `frontend`). Entrambi passano
+   per `scripts/backend.sh`, che trova da solo l'ambiente Python.
+3. Verifica: `curl localhost:8000/salute` risponde `{"ok":true}` e
+   http://localhost:3000/app mostra la mappa.
+
+Comandi Python del progetto sempre con `./scripts/python.sh <script>`: funziona
+con conda e con venv. Problemi frequenti e guida per le persone in
+`ONBOARDING.md`.
+
+## Come lavorare qui da agente
+
+Il flusso, in ordine; i dettagli sono nelle sezioni indicate.
+
+- **Inizio sessione:** leggi `STATO.md` e verifica i commit successivi al
+  riferimento ("Prima cosa da fare in ogni sessione"). La parola chiave
+  **«riprendi»** fa solo questo, senza modificare nulla.
+- **Branch:** uno per persona o feature (`nome/feature`), merge piccoli e
+  frequenti su `main` ("Lavoro in team"). Un agente per working tree.
+- **Lavoro:** SDD snello, un implementer alla volta, nessun reviewer, una
+  verifica eseguibile per consegna ("Implementazione", "Economia del
+  progetto"). Ogni contenuto nella cartella giusta ("Dove si scrive cosa").
+- **Fine sessione:** la parola chiave **«consegna»** aggiorna `STATO.md` (SHA di
+  riferimento e solo la propria riga in "Chi fa cosa") e propone il commit
+  ("Consegna e ripresa"). Commit e push solo su richiesta.
+
 ## Prima cosa da fare in ogni sessione
 
 1. Leggi `STATO.md`.
@@ -31,8 +66,14 @@ Alla fine della sessione aggiorna `STATO.md` prima dell'ultimo commit (vedi
 Hackathon a tema incendi, lavoro di gruppo. Challenge e vincoli ufficiali in
 `docs/materiali/` (sintesi in `docs/materiali/README.md`).
 
-> Da completare dopo l'analisi dei materiali: challenge scelta, problema,
-> utente, demo che vogliamo mostrare, criteri di valutazione della giuria.
+**Sentinelle** (nome provvisorio), challenge 2 + 3 fuse: le comunita' locali
+diventano sentinelle del territorio tutto l'anno grazie a missioni di
+prevenzione (gamification); d'estate le loro segnalazioni arrivano agli
+operatori gia' verificate (satellite FIRMS, meteo, vegetazione Corine, storico
+CFVA) e ordinate per priorita'. Due interfacce: app cittadino (`/app`, da
+telefono) e cruscotto operatori (`/cruscotto`). Specifica
+`docs/specifiche/2026-10-09-sentinelle-incendi.md`, decisione
+`docs/decisioni/2026-10-09-direzione-e-architettura.md`.
 
 ## Mantra
 
@@ -118,16 +159,22 @@ sequenza e verificando ognuno.
 ```text
 AGENTS.md          come si lavora qui (CLAUDE.md e GEMINI.md lo importano)
 STATO.md           dove siamo adesso: volatile, si riscrive a ogni sessione
+README.md          avvio e comandi, per le persone
+ONBOARDING.md      guida per i nuovi del team e i loro agenti, problemi frequenti
 .githooks/         hook versionati, vedi "Attivazione degli hook"
 docs/              memoria del progetto, tabella sotto
 ```
 
 ```text
-infra/             docker compose PostGIS + schema.sql
+infra/             compose.yaml (PostGIS, progetto Docker "sentinelle") + schema.sql
 dati/              GeoJSON CFVA, pericolo AIB, comuni (ignorati da Git) + offline/
-scripts/           scarica_dati, carica_dati, prova_percorso, reset_demo.sql
-backend/           FastAPI (src/sentinelle: fonti/, api/, rischio, verifica), conda env `sentinelle`
-frontend/          Nuxt 4: pages/app.vue (cittadino), pages/cruscotto.vue (operatori)
+scripts/           setup.sh (primo avvio), avvia.sh, backend.sh, python.sh,
+                   pubblica_dati.sh (dump -> release "dati-v1"), scarica_dati,
+                   carica_dati, semina_demo, reset_demo.sql, prova_*, genera_tiles, tunnel.sh
+backend/           FastAPI (src/sentinelle: fonti/ FIRMS meteo Corine, api/, rischio,
+                   verifica = priorita', gioco, eventi = SSE), config/*.toml, tests/
+frontend/          Nuxt 4: pages/app.vue (cittadino), pages/cruscotto.vue (operatori),
+                   public/tiles/*.pmtiles (mappa base offline e storico)
 ```
 
 Avvio e comandi in `README.md`; `.claude/launch.json` ha `backend` e `frontend`.
@@ -191,7 +238,7 @@ creduto.
 
 ### Attivazione degli hook
 
-`.git/hooks` non e' versionato. Una volta per clone:
+`.git/hooks` non e' versionato. Lo attiva `scripts/setup.sh`; a mano, una volta per clone:
 
 ```bash
 git config core.hooksPath .githooks
