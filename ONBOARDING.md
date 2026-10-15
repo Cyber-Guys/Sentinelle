@@ -74,7 +74,66 @@ dell'agente: cosi' chiunque (persona o agente) riprende da dove si era rimasti.
 Con l'app avviata: `./scripts/tunnel.sh` in un altro terminale. Inquadra il QR
 code: si apre `/app` in HTTPS (serve per GPS e fotocamera).
 
-## 7. Problemi frequenti
+## 7. Prompt per lavorare con l'agente
+
+Da incollare cosi' come sono (Claude Code, Codex, Gemini, Cursor). L'agente
+trova le regole in `AGENTS.md` da solo: i prompt servono a far partire il
+flusso giusto.
+
+**Prima sessione, subito dopo il clone**
+
+```text
+Leggi AGENTS.md e ONBOARDING.md. Esegui ./scripts/setup.sh e verifica che
+termini con "Pronto." e i conteggi 377 comuni / 27544 incendi. Poi avvia l'app
+(launch.json se sei Claude Code, altrimenti ./scripts/avvia.sh) e controlla
+http://localhost:3000/api/salute. Infine aggiungi la mia riga in STATO.md,
+tabella "Chi fa cosa": sono <Nome>, branch <nome>/<feature>. Non committare.
+```
+
+**Inizio di ogni sessione**
+
+```text
+riprendi
+```
+
+**Nuovo lavoro (funzionalita' o modifica non banale)**
+
+```text
+Voglio <obiettivo>. Crea il branch <nome>/<feature> da main aggiornato.
+Segui AGENTS.md: se richiede piu' di un'ora fai prima brainstorming (domande
+una alla volta, 2-3 opzioni con raccomandazione), poi un piano breve in
+docs/piani/ con contratti e verifiche, poi implementa con SDD snello
+(un implementer alla volta, nessun reviewer, una verifica eseguibile per task).
+Per il frontend leggi prima docs/interfaccia/linguaggio-visivo.md e controlla
+nel browser su desktop e a larghezza telefono.
+```
+
+**Correzione o rifinitura piccola**
+
+```text
+<descrizione del problema, meglio con screenshot>. Trova la causa prima di
+correggere (classifica il componente responsabile), correggi li', verifica
+nel browser o con un comando e mostrami l'esito. Non committare.
+```
+
+**Fine sessione**
+
+```text
+consegna
+```
+
+Poi, se va bene: `committa e pusha` sul proprio branch; merge su `main`
+piccoli e frequenti, dopo aver verificato che `main` si avvii.
+
+Note:
+- **Claude Code**: installa il plugin `superpowers` (skill di brainstorming,
+  piani e subagent-driven-development, citate in AGENTS.md).
+- **Codex / Gemini / altri senza subagent**: stesso flusso, i task del piano
+  si eseguono in sequenza verificandoli uno per uno.
+- **Mai** due agenti sulla stessa cartella: per lavorare in parallelo usa
+  `git worktree add ../hackaton-<feature> -b <nome>/<feature>`.
+
+## 8. Problemi frequenti
 
 | Sintomo | Causa | Soluzione |
 |---|---|---|
