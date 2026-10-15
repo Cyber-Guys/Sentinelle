@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, type Alone } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, type Alone } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
@@ -200,9 +200,12 @@ function avviaMappa() {
   mappaPronta.value = mappa
   // sorgenti e layer si (ri)aggiungono a ogni stile caricato: anche dopo il cambio tema
   mappa.on('style.load', aggiungiLivelli)
-  mappa.on('load', () => {
-    const m = mappa!
-    clicIncendio(m, ['mie'], () => pannello.value || !!missione.value)
+  // Gestori registrati subito, non su 'load': i clic per livello valgono anche prima che il
+  // livello esista, e 'load' puo' non arrivare mai se una risorsa della mappa fallisce.
+  {
+    const m = mappa
+    clicIncendio(m, ['mie', 'hotspot'], () => pannello.value || !!missione.value)
+    clicHotspot(m, ['mie'], () => pannello.value || !!missione.value)
     m.on('click', 'mie', (ev) => {
       if (pannello.value || missione.value) return
       const s = mie.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
@@ -215,7 +218,7 @@ function avviaMappa() {
       impostaPos(ev.lngLat.lat, ev.lngLat.lng)
     })
     caricaHotspot()
-  })
+  }
 }
 
 function aggiungiLivelli() {

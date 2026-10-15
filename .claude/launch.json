@@ -4,7 +4,7 @@
     {
       "name": "backend",
       "runtimeExecutable": "/bin/sh",
-      "runtimeArgs": ["-c", "cd backend && conda run --no-capture-output -n sentinelle python -m uvicorn sentinelle.main:app --app-dir src --port 8000 --reload"],
+      "runtimeArgs": ["-c", "cd backend && conda run --no-capture-output -n sentinelle python -m uvicorn sentinelle.main:app --app-dir src --port 8000 --reload --timeout-graceful-shutdown 2"],
       "port": 8000
     },
     {

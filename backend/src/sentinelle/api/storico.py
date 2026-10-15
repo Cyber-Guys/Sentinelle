@@ -63,6 +63,17 @@ def storico_statistiche(comune: str | None = None, anno_da: int = 2005, anno_a: 
 @router.get("/hotspot")
 def hotspot():
     hs = hotspot_sardegna() or []
+    comuni: dict[int, str | None] = {}
+    if hs:
+        with engine.connect() as c:
+            for i, h in enumerate(hs):
+                r = c.execute(text(
+                    "SELECT nome FROM comune WHERE geom && ST_SetSRID(ST_MakePoint(:lon, :lat), 4326) "
+                    "AND ST_Intersects(geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)) LIMIT 1"),
+                    {"lon": h.lon, "lat": h.lat}).first()
+                comuni[i] = r.nome if r else None
     return {"type": "FeatureCollection", "features": [
         {"type": "Feature", "geometry": {"type": "Point", "coordinates": [h.lon, h.lat]},
-         "properties": {"rilevato_il": h.rilevato_il.isoformat(), "confidenza": h.confidenza}} for h in hs]}
+         "properties": {"rilevato_il": h.rilevato_il.isoformat(), "confidenza": h.confidenza, "comune": comuni.get(i),
+                        "frp": h.frp, "luminosita": h.luminosita, "satellite": h.satellite, "giorno": h.giorno}}
+        for i, h in enumerate(hs)]}

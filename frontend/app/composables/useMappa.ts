@@ -5,6 +5,7 @@ import type { Tema } from './useTema'
 import { h, render, type Component } from 'vue'
 import type { Segnalazione } from './useApi'
 import PopupIncendio from '~/components/PopupIncendio.vue'
+import PopupHotspot from '~/components/PopupHotspot.vue'
 
 // Protocollo pmtiles:// (storico incendi statico), registrato una sola volta
 let pmtilesOk = false
@@ -260,6 +261,26 @@ export function clicIncendio(m: MappaLibre, pin: string[], bloccato: () => boole
     if (layers.length && m.queryRenderedFeatures(ev.point, { layers }).length) return
     apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
   })
+}
+
+// Tocco su un hotspot satellitare: popup informativo; `pin` (segnalazioni) vince, l'hotspot vince su storico e mappature.
+export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false) {
+  m.on('click', 'hotspot', (ev) => {
+    const f = ev.features?.[0]
+    if (!f || bloccato()) return
+    const layers = pin.filter((l) => m.getLayer(l))
+    if (layers.length && m.queryRenderedFeatures(ev.point, { layers }).length) return
+    const p = f.properties ?? {}
+    const n = (v: unknown) => (v == null || v === 'null' || v === '' ? null : Number(v))
+    const [lon, lat] = (f.geometry as any).coordinates
+    apriPopup(m, [lon, lat], PopupHotspot, {
+      lat, lon, rilevato_il: p.rilevato_il, confidenza: p.confidenza, comune: p.comune && p.comune !== 'null' ? String(p.comune) : null,
+      frp: n(p.frp), luminosita: n(p.luminosita), satellite: p.satellite && p.satellite !== 'null' ? String(p.satellite) : null,
+      giorno: p.giorno == null || p.giorno === 'null' ? null : p.giorno === true || p.giorno === 'true',
+    })
+  })
+  m.on('mouseenter', 'hotspot', () => (m.getCanvas().style.cursor = 'pointer'))
+  m.on('mouseleave', 'hotspot', () => (m.getCanvas().style.cursor = ''))
 }
 
 /*

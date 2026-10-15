@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import OperationalError
 
 from . import eventi
 from .api import gioco as api_gioco
@@ -14,8 +15,16 @@ from .gioco import prepara_db
 
 @asynccontextmanager
 async def ciclo_vita(_):
-    with engine.begin() as conn:  # tabelle e missioni del gioco (idempotente)
-        prepara_db(conn)
+    # Il database puo' essere ancora in avvio (docker compose appena lanciato): si aspetta fino a 60 s.
+    for tentativo in range(30):
+        try:
+            with engine.begin() as conn:  # tabelle e missioni del gioco (idempotente)
+                prepara_db(conn)
+            break
+        except OperationalError:
+            if tentativo == 29:
+                raise
+            await asyncio.sleep(2)
     compiti = [asyncio.create_task(eventi.ascolta()), asyncio.create_task(eventi.controlla_hotspot())]
     yield
     for c in compiti:

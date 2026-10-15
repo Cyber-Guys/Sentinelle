@@ -21,9 +21,24 @@ class Hotspot:
     lon: float
     rilevato_il: datetime
     confidenza: str
+    frp: float | None = None
+    luminosita: float | None = None
+    satellite: str | None = None
+    giorno: bool | None = None
 
 
-def _leggi_csv(testo: str) -> list[Hotspot]:
+SATELLITI = {"N": "Suomi NPP", "1": "NOAA-20", "N20": "NOAA-20"}
+
+
+def _num(v: str | None) -> float | None:
+    try:
+        return float(v) if v not in (None, "") else None
+    except ValueError:
+        return None
+
+
+def _leggi_csv(testo: str, url: str = "") -> list[Hotspot]:
+    dedotto = "Suomi NPP" if "suomi" in url.lower() else "NOAA-20" if "noaa-20" in url.lower() else None
     out = []
     for r in csv.DictReader(io.StringIO(testo)):
         lat, lon = float(r["latitude"]), float(r["longitude"])
@@ -31,7 +46,10 @@ def _leggi_csv(testo: str) -> list[Hotspot]:
             continue
         ora = r["acq_time"].zfill(4)
         quando = datetime.strptime(f"{r['acq_date']} {ora}", "%Y-%m-%d %H%M").replace(tzinfo=timezone.utc)
-        out.append(Hotspot(lat, lon, quando, r["confidence"]))
+        dn = r.get("daynight")
+        out.append(Hotspot(lat, lon, quando, r["confidence"], _num(r.get("frp")), _num(r.get("bright_ti4")),
+                           SATELLITI.get((r.get("satellite") or "").strip().upper()) or dedotto,
+                           dn == "D" if dn in ("D", "N") else None))
     return out
 
 
@@ -41,9 +59,9 @@ def _scarica() -> list[Hotspot]:
     with ThreadPoolExecutor(len(URLS)) as pool:
         risposte = list(pool.map(client.get, URLS))
     out = []
-    for r in risposte:
+    for u, r in zip(URLS, risposte):
         r.raise_for_status()
-        out += _leggi_csv(r.text)
+        out += _leggi_csv(r.text, u)
     return out
 
 

@@ -19,7 +19,7 @@ conda run -n sentinelle python scripts/carica_dati.py
 conda run -n sentinelle python scripts/genera_tiles.py
 
 # 2. backend su :8000
-cd backend && conda run --no-capture-output -n sentinelle python -m uvicorn sentinelle.main:app --app-dir src --port 8000 --reload
+cd backend && conda run --no-capture-output -n sentinelle python -m uvicorn sentinelle.main:app --app-dir src --port 8000 --reload --timeout-graceful-shutdown 2
 
 # 3. frontend su :3000
 cd frontend && npm install && npm run dev

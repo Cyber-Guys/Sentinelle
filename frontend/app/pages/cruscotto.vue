@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
@@ -225,11 +225,12 @@ onMounted(() => {
   segnapostiMancanti(mappa, segnapostiMappature, () => tema.value)
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
   caricaMappature()
-  mappa.on('load', () => {
-    const m = mappa!
+  // Gestori registrati subito, non su 'load' (puo' non arrivare se una risorsa della mappa fallisce).
+  {
+    const m = mappa
     m.on('click', 'mappature', (ev) => {
       const p = ev.features?.[0]?.properties
-      if (!p) return
+      if (!p || m.queryRenderedFeatures(ev.point, { layers: ['hotspot'].filter((l) => m.getLayer(l)) }).length) return
       const t = TIPI_MAPPATURA.find((x) => x.codice === p.codice)
       const tinta = t ? [toniMappature('scuro')[t.colore], toniMappature('chiaro')[t.colore]] : ['var(--testo-2)', 'var(--testo-2)']
       apriPopup(m, ev.lngLat, PopupMappa, {
@@ -246,6 +247,7 @@ onMounted(() => {
       m.easeTo({ center: (f.geometry as any).coordinates, zoom: Math.min(z + 0.5, m.getMaxZoom()), padding: { left: 0, top: 80, right: 0, bottom: 60 } })
     })
     clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot'])
+    clicHotspot(m, ['coda', 'storico-segn'])
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })
     m.on('click', 'storico-segn', (ev) => {
       // la coda attiva sta sopra: se il clic e' anche su un pin della coda vince quello
@@ -266,7 +268,7 @@ onMounted(() => {
       { layer: 'coda-selezione', periodo: 1600, da: 13, a: 34, opacita: 0.9, tratto: true },
       ALONE_HOTSPOT,
     ])
-  })
+  }
   aggiorna()
   caricaStorico() // serve anche alla scheda in sola lettura
   // aggiornamenti dagli eventi SSE; il polling ogni 30 s e' solo una rete di sicurezza
