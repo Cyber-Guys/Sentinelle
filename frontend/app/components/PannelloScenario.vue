@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Flame, X, Play, Pause, RotateCcw, Navigation2, Droplets, Droplet, Info, MapPin, Building2 } from '@lucide/vue'
+import { Flame, X, Play, Pause, RotateCcw, Navigation2, Droplets, Droplet, Info, MapPin, Building2, Waves } from '@lucide/vue'
 import type { Simulazione } from '~/composables/useMappa'
 
 // Pannello dello scenario di propagazione (cruscotto): desktop `sospeso` al posto della scheda, telefono dentro il foglio.
@@ -140,12 +140,18 @@ const allaFine = computed(() => !!props.dati && cursore.value >= props.dati.ore 
         <section v-if="caricamento || dati" aria-labelledby="titolo-acqua">
           <h3 id="titolo-acqua" class="etichetta mb-1.5 px-1">Acqua più vicina al fronte</h3>
           <ul v-if="caricamento" class="space-y-1"><li v-for="i in 2" :key="i" class="scheletro h-9 rounded-m" /></ul>
-          <p v-else-if="!dati!.acqua.length" class="flex items-center gap-2 rounded-m px-3 py-2 text-[.8rem] text-testo-2"><Droplet class="size-4 shrink-0 text-testo-3" aria-hidden="true" />Nessuna fonte d'acqua nota entro 25 km</p>
+          <p v-else-if="!dati!.acqua.length" class="flex items-center gap-2 rounded-m px-3 py-2 text-[.8rem] text-testo-2"><Droplet class="size-4 shrink-0 text-testo-3" aria-hidden="true" />Nessuna fonte d'acqua nota: né invasi entro 40 km né punti segnalati entro 25 km</p>
           <ul v-else class="space-y-1">
             <li v-for="(a, i) in dati!.acqua" :key="i">
               <button type="button" class="flex min-h-9 w-full items-center gap-2.5 rounded-m px-3 py-1.5 text-left text-[.82rem] transition-colors hover:bg-vetro-forte" :class="telefono && 'min-h-11'" @click="emit('vai', a.lon, a.lat)">
-                <Droplet class="size-4 shrink-0 text-cielo" aria-hidden="true" />
-                <span class="min-w-0 flex-1 truncate">{{ a.nome }}</span>
+                <component :is="a.tipo === 'invaso' ? Waves : Droplet" class="size-4 shrink-0 text-cielo" aria-hidden="true" />
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate">{{ a.nome }}</span>
+                  <span v-if="a.tipo === 'invaso' && a.riempimento != null" class="mt-1 flex items-center gap-1.5">
+                    <span class="h-1 flex-1 overflow-hidden rounded-full bg-vetro-forte" aria-hidden="true"><span class="block h-full rounded-full bg-cielo" :style="{ width: `${Math.min(100, a.riempimento)}%` }" /></span>
+                    <span class="cifre text-[.7rem] text-testo-2">{{ a.riempimento }}%<span class="sr-only"> di riempimento</span></span>
+                  </span>
+                </span>
                 <span class="cifre shrink-0 text-[.74rem] text-testo-2">{{ a.distanza_km.toLocaleString('it-IT') }} km</span>
                 <MapPin class="size-3.5 shrink-0 text-testo-3" aria-hidden="true" />
               </button>

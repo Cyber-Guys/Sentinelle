@@ -11,6 +11,7 @@ from .api import scenario, segnalazioni, storico
 from .config import impostazioni
 from .db import engine
 from .gioco import prepara_db
+from .invasi import carica as carica_invasi
 
 
 @asynccontextmanager
@@ -20,6 +21,7 @@ async def ciclo_vita(_):
         try:
             with engine.begin() as conn:  # tabelle e missioni del gioco (idempotente)
                 prepara_db(conn)
+                carica_invasi(conn)
             break
         except OperationalError:
             if tentativo == 29:

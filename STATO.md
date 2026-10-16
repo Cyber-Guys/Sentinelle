@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `b67e283` — 2026-10-16
+> **Riferimento:** commit `c620c93` — 2026-10-16
 
 ## Fase
 
@@ -14,6 +14,7 @@ Specifica `docs/specifiche/2026-10-09-sentinelle-incendi.md`, decisione
 FastAPI + PostGIS; avvio in `README.md`.
 
 **Cosa c'e' (piani chiusi in `docs/piani/`):**
+- Acqua per spegnere (ponte challenge 4): 33 invasi CeDoc in `dati/invasi.json` (riempimento 09-2026), tabella `invaso` caricata all'avvio, `GET /invasi`, livello "Risorse idriche" (cruscotto acceso, app spento) e invasi entro 40 km nello scenario
 - Dati: perimetri CFVA 2005-2025 in PostGIS e come PMTiles statico
   (`frontend/public/tiles/storico.pmtiles`); mappa base offline Protomaps
   (`sardegna.pmtiles`); FIRMS, Open-Meteo, Corine in parallelo con cache.

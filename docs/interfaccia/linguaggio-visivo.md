@@ -108,6 +108,7 @@ alone che si muove. Colore per significato, sempre accompagnato da testo altrove
   `segnapostiMancanti()` su `styleimagemissing`); diametro ~17 px a zoom 6, 24 px da zoom 11.
   **Cluster** fino a zoom 11 (raggio 40): cerchio di vetro con anello tenue e numero `testo-2`, cresce
   poco col conteggio; clic = zoom di espansione. Legenda nel pannello Livelli con lo stesso badge.
+- **Invasi (risorse idriche):** stesso segnaposto con icona Waves in `cielo`, percentuale di riempimento sotto da zoom 8 (testo cielo con alone vetro); popup PopupMappa con barra di riempimento, volumi, data e fonte; nello scenario righe con icona Waves e barra sottile.
 - **Reduced-motion:** niente animazione; i valori statici dei layer e la base di `.pin::before`
   sono un alone fisso, quindi il pin resta leggibile.
 

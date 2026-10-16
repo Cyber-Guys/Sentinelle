@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, type Alone, type GrigliaRischio } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiInvasi, impostaInvasi, clicInvasi, segnapostiMancanti, SEGNAPOSTO_INVASO, type Alone, type GrigliaRischio } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
@@ -204,8 +204,10 @@ function avviaMappa() {
   // livello esista, e 'load' puo' non arrivare mai se una risorsa della mappa fallisce.
   {
     const m = mappa
-    clicIncendio(m, ['mie', 'hotspot'], () => pannello.value || !!missione.value)
-    clicHotspot(m, ['mie'], () => pannello.value || !!missione.value)
+    clicIncendio(m, ['mie', 'hotspot', 'invasi'], () => pannello.value || !!missione.value)
+    clicHotspot(m, ['mie', 'invasi'], () => pannello.value || !!missione.value)
+    clicInvasi(m, () => pannello.value || !!missione.value)
+    segnapostiMancanti(m, () => [SEGNAPOSTO_INVASO(tema.value)], () => tema.value)
     m.on('click', 'mie', (ev) => {
       if (pannello.value || missione.value) return
       const s = mie.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
@@ -228,6 +230,7 @@ function aggiungiLivelli() {
   aggiungiStoricoIncendi(m, c, filtro.value)
   aggiungiRischio(m, c, geojsonRischio(griglia.value), mostraRischio.value, 'storico-riempimento') // sotto lo storico
   aggiungiHotspot(m, c, datiHotspot)
+  aggiungiInvasi(m, tema.value, invasi.value, mostraInvasi.value)
   // proprie segnalazioni sopra storico e hotspot: in valutazione ambra con onda, confermate macchia, falsi allarmi ad anello
   aggiungiPinSegnalazioni(m, 'mie', c, geojsonSegnalazioni(mie.value), { nuova: c.ambra, confermata: c.macchia })
 }
@@ -236,6 +239,11 @@ watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
 
 // Rischio di oggi: spento di default, la griglia si scarica alla prima accensione
 const mostraRischio = ref(false)
+// Risorse idriche: spente di default nell'app, invasi scaricati alla prima accensione
+const mostraInvasi = ref(false)
+const invasi = shallowRef<any>({ type: 'FeatureCollection', features: [] })
+watch(mostraInvasi, (v) => { if (v && !invasi.value.features.length) chiama<any>('/invasi').then((g) => (invasi.value = g)).catch(() => {}) })
+watch([invasi, mostraInvasi], () => impostaInvasi(mappa, invasi.value, mostraInvasi.value))
 const griglia = shallowRef<GrigliaRischio | null>(null)
 const carRischio = ref(false)
 const errRischio = ref(false)
@@ -424,7 +432,7 @@ async function invia() {
 
       <!-- colonna destra sotto il tema: Livelli, zoom, "i" (passo 14 px dal flex; il posto di Livelli resta anche se nascosto) -->
       <div class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20 flex w-11 flex-col items-center gap-[14px]">
-        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="relative"><LivelloRischio v-model="mostraRischio" class="mt-2 border-t border-bordo pt-2" :griglia="griglia" :caricamento="carRischio" :errore="errRischio" /></PulsanteLivelli></div>
+        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="relative"><LivelloRischio v-model="mostraRischio" class="mt-2 border-t border-bordo pt-2" :griglia="griglia" :caricamento="carRischio" :errore="errRischio" /><LivelloInvasi v-model="mostraInvasi" :n="invasi.features.length || 33" /></PulsanteLivelli></div>
         <ControlliMappa :mappa="mappaPronta" />
       </div>
 

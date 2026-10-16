@@ -1,0 +1,338 @@
+{
+ "fonte": "CeDoc Regione Sardegna, sardegnacedoc.it",
+ "url": "https://www.sardegnacedoc.it/invasi/volumi",
+ "data_dato": "2026-09",
+ "unita": "Mm3",
+ "invasi": [
+  {
+   "nome": "Flumineddu (Capanna Silicheri)",
+   "nome_fonte": "Capanna Silicheri (Flumineddu)",
+   "lat": 39.83,
+   "lon": 9.39,
+   "coord_incerta": true,
+   "capacita_mm3": 1.44,
+   "volume_mm3": 1.405,
+   "riempimento": 98
+  },
+  {
+   "nome": "Lago del Flumendosa (Nuraghe Arrubiu)",
+   "nome_fonte": "Nuraghe Arrubiu (Flumendosa)",
+   "lat": 39.7244,
+   "lon": 9.2659,
+   "coord_incerta": false,
+   "capacita_mm3": 262.66,
+   "volume_mm3": 168.793,
+   "riempimento": 64
+  },
+  {
+   "nome": "Lago Mulargia (Monte su Rei)",
+   "nome_fonte": "Monte su Rei (Rio Mulargia)",
+   "lat": 39.6182,
+   "lon": 9.2484,
+   "coord_incerta": false,
+   "capacita_mm3": 320.0,
+   "volume_mm3": 238.272,
+   "riempimento": 74
+  },
+  {
+   "nome": "Sa Forada de S'Acqua",
+   "nome_fonte": "Sa Forada de S'Acqua",
+   "lat": 39.5375,
+   "lon": 8.9712,
+   "coord_incerta": false,
+   "capacita_mm3": 1.33,
+   "volume_mm3": 1.038,
+   "riempimento": 78
+  },
+  {
+   "nome": "Casa Fiume",
+   "nome_fonte": "Casa Fiume",
+   "lat": 39.45,
+   "lon": 9.36,
+   "coord_incerta": true,
+   "capacita_mm3": 0.75,
+   "volume_mm3": 0.464,
+   "riempimento": 62
+  },
+  {
+   "nome": "Lago di Monte Arbus (Rio Leni)",
+   "nome_fonte": "Monte Arbus (Rio Leni)",
+   "lat": 39.48,
+   "lon": 8.67,
+   "coord_incerta": true,
+   "capacita_mm3": 19.5,
+   "volume_mm3": 7.024,
+   "riempimento": 36
+  },
+  {
+   "nome": "Lago del Cixerri (Genna Is Abis)",
+   "nome_fonte": "Genna Is Abis (Rio Cixerri)",
+   "lat": 39.27,
+   "lon": 8.79,
+   "coord_incerta": true,
+   "capacita_mm3": 24.0,
+   "volume_mm3": 15.935,
+   "riempimento": 66
+  },
+  {
+   "nome": "Corongiu",
+   "nome_fonte": "Corongiu 3",
+   "lat": 39.2231,
+   "lon": 9.2786,
+   "coord_incerta": true,
+   "capacita_mm3": 4.3,
+   "volume_mm3": 1.752,
+   "riempimento": 41
+  },
+  {
+   "nome": "Simbirizzi",
+   "nome_fonte": "Simbirizzi",
+   "lat": 39.255,
+   "lon": 9.215,
+   "coord_incerta": true,
+   "capacita_mm3": 20.2,
+   "volume_mm3": 9.242,
+   "riempimento": 46
+  },
+  {
+   "nome": "Lago di Bau Pressiu",
+   "nome_fonte": "Bau Pressiu",
+   "lat": 39.1858,
+   "lon": 8.7666,
+   "coord_incerta": false,
+   "capacita_mm3": 8.25,
+   "volume_mm3": 4.093,
+   "riempimento": 50
+  },
+  {
+   "nome": "Lago di Is Barrocus",
+   "nome_fonte": "Is Barrocus (Flumini Mannu Ca)",
+   "lat": 39.7554,
+   "lon": 9.0951,
+   "coord_incerta": false,
+   "capacita_mm3": 11.96,
+   "volume_mm3": 8.879,
+   "riempimento": 74
+  },
+  {
+   "nome": "Lago di Monte Pranu",
+   "nome_fonte": "Monte Pranu",
+   "lat": 39.0989,
+   "lon": 8.6023,
+   "coord_incerta": false,
+   "capacita_mm3": 49.3,
+   "volume_mm3": 33.498,
+   "riempimento": 68
+  },
+  {
+   "nome": "Crabosu (Rio Torrei)",
+   "nome_fonte": "Crabosu (Rio Torrei)",
+   "lat": 39.25,
+   "lon": 8.62,
+   "coord_incerta": true,
+   "capacita_mm3": 0.86,
+   "volume_mm3": 0.181,
+   "riempimento": 21
+  },
+  {
+   "nome": "Lago Omodeo (Cantoniera)",
+   "nome_fonte": "E. D'Arborea (Cantoniera)",
+   "lat": 40.0844,
+   "lon": 8.882,
+   "coord_incerta": false,
+   "capacita_mm3": 420.0,
+   "volume_mm3": 302.141,
+   "riempimento": 72
+  },
+  {
+   "nome": "Lago Sos Canales",
+   "nome_fonte": "Sos Canales",
+   "lat": 40.5554,
+   "lon": 9.3146,
+   "coord_incerta": false,
+   "capacita_mm3": 3.58,
+   "volume_mm3": 2.082,
+   "riempimento": 58
+  },
+  {
+   "nome": "Lago di Pattada (Monte Lerno)",
+   "nome_fonte": "Monte Lerno (Pattada)",
+   "lat": 40.5806,
+   "lon": 9.1647,
+   "coord_incerta": false,
+   "capacita_mm3": 34.45,
+   "volume_mm3": 19.762,
+   "riempimento": 57
+  },
+  {
+   "nome": "Lago Bidighinzu",
+   "nome_fonte": "Bidighinzu",
+   "lat": 40.5468,
+   "lon": 8.6745,
+   "coord_incerta": false,
+   "capacita_mm3": 10.9,
+   "volume_mm3": 3.137,
+   "riempimento": 29
+  },
+  {
+   "nome": "Lago del Cuga",
+   "nome_fonte": "Cuga",
+   "lat": 40.6119,
+   "lon": 8.4632,
+   "coord_incerta": false,
+   "capacita_mm3": 20.4,
+   "volume_mm3": 1.451,
+   "riempimento": 7
+  },
+  {
+   "nome": "Lago del Temo (Monteleone Roccadoria)",
+   "nome_fonte": "Monte Leone Roccadoria (Temo)",
+   "lat": 40.45,
+   "lon": 8.58,
+   "coord_incerta": true,
+   "capacita_mm3": 77.576,
+   "volume_mm3": 47.485,
+   "riempimento": 61
+  },
+  {
+   "nome": "Lago del Liscia",
+   "nome_fonte": "Calamaiu (Liscia)",
+   "lat": 40.9875,
+   "lon": 9.2716,
+   "coord_incerta": false,
+   "capacita_mm3": 104.0,
+   "volume_mm3": 68.144,
+   "riempimento": 66
+  },
+  {
+   "nome": "Lago Maccheronis (Posada)",
+   "nome_fonte": "Maccheronis (Posada)",
+   "lat": 40.6346,
+   "lon": 9.5973,
+   "coord_incerta": false,
+   "capacita_mm3": 22.84,
+   "volume_mm3": 2.154,
+   "riempimento": 9
+  },
+  {
+   "nome": "Lago del Cedrino (Pedra 'e Othoni)",
+   "nome_fonte": "Pedra 'e Othoni (Cedrino)",
+   "lat": 40.3079,
+   "lon": 9.541,
+   "coord_incerta": false,
+   "capacita_mm3": 16.003,
+   "volume_mm3": 2.83,
+   "riempimento": 18
+  },
+  {
+   "nome": "Lago Alto Flumendosa (Bau Muggeris)",
+   "nome_fonte": "Bau Muggeris",
+   "lat": 39.9426,
+   "lon": 9.4466,
+   "coord_incerta": false,
+   "capacita_mm3": 56.615,
+   "volume_mm3": 19.694,
+   "riempimento": 35
+  },
+  {
+   "nome": "Lago di Santa Lucia",
+   "nome_fonte": "Santa Lucia",
+   "lat": 39.9659,
+   "lon": 9.5939,
+   "coord_incerta": false,
+   "capacita_mm3": 3.1,
+   "volume_mm3": 3.1,
+   "riempimento": 100
+  },
+  {
+   "nome": "Lago di Punta Gennarta",
+   "nome_fonte": "Punta Gennarta",
+   "lat": 39.3281,
+   "lon": 8.5451,
+   "coord_incerta": false,
+   "capacita_mm3": 12.1,
+   "volume_mm3": 4.662,
+   "riempimento": 39
+  },
+  {
+   "nome": "Lago di Medau Zirimilis",
+   "nome_fonte": "Medau Zirimilis",
+   "lat": 39.2324,
+   "lon": 8.826,
+   "coord_incerta": false,
+   "capacita_mm3": 6.7,
+   "volume_mm3": 0.0,
+   "riempimento": 0
+  },
+  {
+   "nome": "Lago di Gusana",
+   "nome_fonte": "Gusana",
+   "lat": 40.1261,
+   "lon": 9.2067,
+   "coord_incerta": false,
+   "capacita_mm3": 58.254,
+   "volume_mm3": 32.25,
+   "riempimento": 55
+  },
+  {
+   "nome": "Lago di Cucchinadorza",
+   "nome_fonte": "Cucchinadorza",
+   "lat": 40.1221,
+   "lon": 9.1372,
+   "coord_incerta": false,
+   "capacita_mm3": 15.051,
+   "volume_mm3": 9.869,
+   "riempimento": 66
+  },
+  {
+   "nome": "Lago Benzone",
+   "nome_fonte": "Benzone",
+   "lat": 40.1379,
+   "lon": 9.0369,
+   "coord_incerta": false,
+   "capacita_mm3": 1.545,
+   "volume_mm3": 1.078,
+   "riempimento": 70
+  },
+  {
+   "nome": "Lago del Coghinas (Muzzone)",
+   "nome_fonte": "Muzzone (Coghinas)",
+   "lat": 40.8,
+   "lon": 9.05,
+   "coord_incerta": true,
+   "capacita_mm3": 221.643,
+   "volume_mm3": 105.7,
+   "riempimento": 48
+  },
+  {
+   "nome": "Lago di Casteldoria",
+   "nome_fonte": "Casteldoria",
+   "lat": 40.8692,
+   "lon": 8.8968,
+   "coord_incerta": false,
+   "capacita_mm3": 2.899,
+   "volume_mm3": 0.975,
+   "riempimento": 34
+  },
+  {
+   "nome": "Lago di Olai",
+   "nome_fonte": "Olai",
+   "lat": 40.1442,
+   "lon": 9.3356,
+   "coord_incerta": false,
+   "capacita_mm3": 12.343,
+   "volume_mm3": 11.43,
+   "riempimento": 93
+  },
+  {
+   "nome": "Lago di Govossai",
+   "nome_fonte": "Govossai",
+   "lat": 40.124,
+   "lon": 9.2845,
+   "coord_incerta": false,
+   "capacita_mm3": 0.451,
+   "volume_mm3": 0.074,
+   "riempimento": 16
+  }
+ ]
+}

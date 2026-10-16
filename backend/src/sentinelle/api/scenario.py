@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from .. import rischio_oggi, simulazione
+from .. import invasi, rischio_oggi, simulazione
+from ..db import engine
 
 router = APIRouter()
 
@@ -20,3 +21,9 @@ def rischio_griglia():
 @router.post("/simulazione")
 def simula(r: Richiesta):
     return simulazione.simula(r.lat, r.lon, r.ore)
+
+
+@router.get("/invasi")
+def lista_invasi():
+    with engine.connect() as c:
+        return invasi.geojson(c)

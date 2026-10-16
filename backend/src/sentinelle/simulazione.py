@@ -166,9 +166,20 @@ def _acqua(pol, lat0: float, lon0: float, mx: float) -> list[dict]:
         righe = c.execute(text(
             "SELECT ST_Y(mc.geom) lat, ST_X(mc.geom) lon FROM missione_completata mc JOIN missione m ON m.id = mc.missione_id "
             "WHERE m.codice = 'punto_acqua' AND mc.geom IS NOT NULL")).all()
+        try:
+            invasi = c.execute(text("SELECT nome, riempimento, volume_mm3, ST_Y(geom) lat, ST_X(geom) lon FROM invaso WHERE volume_mm3 > 0")).all()
+        except Exception:  # tabella assente: si prosegue con i soli punti dei cittadini
+            invasi = []
     rif = pol if pol is not None else shapely.Point(0, 0)
-    out = [{"nome": "Punto d'acqua segnalato", "tipo": "punto_acqua",
-            "distanza_km": round(rif.distance(shapely.Point((r.lon - lon0) * mx, (r.lat - lat0) * M_LAT)) / 1000, 1),
+
+    def km(lat, lon):
+        return round(rif.distance(shapely.Point((lon - lon0) * mx, (lat - lat0) * M_LAT)) / 1000, 1)
+
+    # Raggi dichiarati: 25 km per i punti segnalati (vasche, piccoli specchi), 40 km per gli invasi,
+    # gittata realistica per elicotteri con benna che fanno la spola tra bacino e fronte.
+    out = [{"nome": "Punto d'acqua segnalato", "tipo": "punto_acqua", "distanza_km": km(r.lat, r.lon),
             "lat": r.lat, "lon": r.lon} for r in righe]
-    # solo fonti utili davvero ai mezzi: oltre 25 km dal fronte non si elencano
-    return sorted([a for a in out if a["distanza_km"] <= 25], key=lambda a: a["distanza_km"])[:5]
+    out = [a for a in out if a["distanza_km"] <= 25]
+    out += [a for a in ({"nome": r.nome, "tipo": "invaso", "distanza_km": km(r.lat, r.lon), "riempimento": r.riempimento,
+                         "volume_mm3": r.volume_mm3, "lat": r.lat, "lon": r.lon} for r in invasi) if a["distanza_km"] <= 40]
+    return sorted(out, key=lambda a: a["distanza_km"])[:6]

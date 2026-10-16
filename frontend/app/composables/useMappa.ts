@@ -6,6 +6,9 @@ import { h, render, type Component } from 'vue'
 import type { Segnalazione } from './useApi'
 import PopupIncendio from '~/components/PopupIncendio.vue'
 import PopupHotspot from '~/components/PopupHotspot.vue'
+import PopupMappa from '~/components/PopupMappa.vue'
+import DettaglioInvaso from '~/components/DettaglioInvaso.vue'
+import { Waves } from '@lucide/vue'
 
 // Protocollo pmtiles:// (storico incendi statico), registrato una sola volta
 let pmtilesOk = false
@@ -416,7 +419,7 @@ export type Simulazione = {
   origine: { lat: number; lon: number; comune?: string | null }; inizio: string; ore: number; risoluzione_m: number
   fotogrammi: { ora: number; area: any; ettari: number; fronte_km: number; vento: { kmh: number; da_gradi: number }; umidita: number }[]
   comuni: { nome: string; raggiunto_ora: number }[]
-  acqua: { nome: string; tipo: string; distanza_km: number; lat: number; lon: number }[]
+  acqua: { nome: string; tipo: 'punto_acqua' | 'invaso' | string; distanza_km: number; lat: number; lon: number; riempimento?: number; volume_mm3?: number }[]
   note: string; durata_s?: number
 }
 const LAYER_SCENARIO = ['scenario-aree', 'scenario-bagliore', 'scenario-fronte', 'scenario-origine-alone', 'scenario-origine']
@@ -457,4 +460,41 @@ export function limitiScenario(s: Simulazione): [[number, number], [number, numb
   const visita = (x: any) => { if (typeof x[0] === 'number') { o = Math.min(o, x[0]); e = Math.max(e, x[0]); so = Math.min(so, x[1]); n = Math.max(n, x[1]) } else x.forEach(visita) }
   if (g?.coordinates) visita(g.coordinates)
   return isFinite(o) ? [[o, so], [e, n]] : null
+}
+
+/*
+  Risorse idriche (GET /invasi): i ~33 invasi del sistema regionale, dove elicotteri e Canadair attingono.
+  Segnaposto a icona Waves in cielo (come le mappature) con la percentuale di riempimento sotto, da zoom 8.
+*/
+export const SEGNAPOSTO_INVASO = (t: Tema): Segnaposto => ({ id: 'invaso', icona: Waves, colore: toniMappature(t).cielo })
+export function aggiungiInvasi(m: MappaLibre, t: Tema, dati: any, visibile: boolean) {
+  if (m.getSource('invasi')) return
+  const tm = toniMappature(t)
+  registraSegnaposti(m, [SEGNAPOSTO_INVASO(t)], t)
+  m.addSource('invasi', { type: 'geojson', data: dati })
+  m.addLayer({ id: 'invasi', type: 'symbol', source: 'invasi', layout: {
+    visibility: visibile ? 'visible' : 'none',
+    'icon-image': 'invaso', 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.75, 11, 1] as any,
+    'text-field': ['step', ['zoom'], '', 8, ['concat', ['to-string', ['get', 'riempimento']], '%']] as any,
+    'text-font': ['Noto Sans Medium'], 'text-size': 11, 'text-anchor': 'top', 'text-offset': [0, 0.15], 'text-optional': true,
+  }, paint: { 'text-color': tm.cielo, 'text-halo-color': tm.vetro, 'text-halo-width': 1.5 } })
+}
+export function impostaInvasi(m: MappaLibre | null, dati: any, visibile: boolean) {
+  if (!m?.getLayer('invasi')) return
+  ;(m.getSource('invasi') as maplibregl.GeoJSONSource).setData(dati)
+  m.setLayoutProperty('invasi', 'visibility', visibile ? 'visible' : 'none')
+}
+export function clicInvasi(m: MappaLibre, bloccato: () => boolean = () => false) {
+  m.on('click', 'invasi', (ev) => {
+    const f = ev.features?.[0]
+    if (!f || bloccato()) return
+    const p = f.properties ?? {}
+    apriPopup(m, (f.geometry as any).coordinates, PopupMappa, {
+      icona: Waves, tinta: [toniMappature('scuro').cielo, toniMappature('chiaro').cielo],
+      etichetta: 'Risorsa idrica · invaso', titolo: p.nome, sottotitolo: 'Attingimento per elicotteri e Canadair',
+    }, () => h(DettaglioInvaso, { riempimento: Number(p.riempimento), volume: Number(p.volume_mm3), capacita: Number(p.capacita_mm3), data: String(p.data_dato), fonte: String(p.fonte) }))
+  })
+  m.on('mouseenter', 'invasi', () => (m.getCanvas().style.cursor = 'pointer'))
+  m.on('mouseleave', 'invasi', () => (m.getCanvas().style.cursor = ''))
 }

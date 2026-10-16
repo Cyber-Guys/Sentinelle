@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, aggiungiInvasi, impostaInvasi, clicInvasi, SEGNAPOSTO_INVASO, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
@@ -29,6 +29,11 @@ let fermaEventi: (() => void)[] = []
 let fermaAloni = () => {}
 
 const mostraMappature = ref(false)
+// risorse idriche (invasi regionali): accese, sono la risorsa dei mezzi aerei
+const mostraInvasi = ref(true)
+const invasi = shallowRef<any>({ type: 'FeatureCollection', features: [] })
+const dataInvasi = computed(() => { const d = invasi.value.features[0]?.properties?.data_dato; if (!d) return ''; const [a, m] = d.split('-'); return new Date(+a, +m - 1).toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }) })
+watch([invasi, mostraInvasi], () => impostaInvasi(mappa, invasi.value, mostraInvasi.value))
 const mostraHotspot = ref(true)
 const livelliAperti = ref(false)
 const mostraStorico = ref(false)
@@ -111,7 +116,7 @@ const FILTRI_STORICO = [
 ] as const
 // segnalazioni gia' valutate: si ricaricano all'accensione del livello e dopo ogni valutazione (non nel polling)
 const storico = ref<Segnalazione[]>([])
-const nLivelli = computed(() => Number(mostraRischio.value) + Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
+const nLivelli = computed(() => Number(mostraRischio.value) + Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraInvasi.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
 const TIPI_MAPPATURA = [
   { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplet },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
@@ -272,6 +277,7 @@ function aggiungiLivelli() {
     'icon-allow-overlap': true, 'icon-ignore-placement': true,
     'symbol-sort-key': ['get', 'ordine'],
   } })
+  aggiungiInvasi(m, tema.value, invasi.value, mostraInvasi.value)
   // storico delle segnalazioni valutate: sotto la coda attiva, pin fermi (confermata piena, falso allarme ad anello)
   aggiungiPinSegnalazioni(m, 'storico-segn', c, geojsonSegnalazioni(storico.value, selezionata.value), { nuova: prio, confermata: prio })
   livelloStorico()
@@ -297,7 +303,8 @@ onMounted(() => {
   paddingMappa()
   mappaPronta.value = mappa
   mappa.on('style.load', aggiungiLivelli)
-  segnapostiMancanti(mappa, segnapostiMappature, () => tema.value)
+  segnapostiMancanti(mappa, () => [...segnapostiMappature(), SEGNAPOSTO_INVASO(tema.value)], () => tema.value)
+  chiama<any>('/invasi').then((g) => (invasi.value = g)).catch(() => {})
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
   caricaMappature()
   // Gestori registrati subito, non su 'load' (puo' non arrivare se una risorsa della mappa fallisce).
@@ -305,7 +312,7 @@ onMounted(() => {
     const m = mappa
     m.on('click', 'mappature', (ev) => {
       const p = ev.features?.[0]?.properties
-      if (!p || m.queryRenderedFeatures(ev.point, { layers: ['hotspot'].filter((l) => m.getLayer(l)) }).length) return
+      if (!p || m.queryRenderedFeatures(ev.point, { layers: ['hotspot', 'invasi'].filter((l) => m.getLayer(l)) }).length) return
       const t = TIPI_MAPPATURA.find((x) => x.codice === p.codice)
       const tinta = t ? [toniMappature('scuro')[t.colore], toniMappature('chiaro')[t.colore]] : ['var(--testo-2)', 'var(--testo-2)']
       apriPopup(m, ev.lngLat, PopupMappa, {
@@ -321,7 +328,8 @@ onMounted(() => {
       // centro reale della mappa: il box segnalazioni in alto a sinistra e' basso, non serve compensarlo
       m.easeTo({ center: (f.geometry as any).coordinates, zoom: Math.min(z + 0.5, m.getMaxZoom()), padding: { left: 0, top: 80, right: 0, bottom: 60 } })
     })
-    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot'])
+    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot', 'invasi'])
+    clicInvasi(m)
     clicHotspot(m, ['coda', 'storico-segn'], () => false, avviaScenario)
     // clic destro (desktop) o pressione lunga (touch) su un punto qualunque: scenario da li'
     let ultimaPressione = 0
@@ -657,6 +665,7 @@ const contatoriBrevi = computed(() => [
             </li>
           </ul>
         </div>
+        <LivelloInvasi v-model="mostraInvasi" :n="invasi.features.length" :data="dataInvasi" />
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
           <input v-model="mostraStorico" type="checkbox" role="switch" class="sr-only" />
           <History class="size-4 shrink-0 text-testo-2" aria-hidden="true" />
