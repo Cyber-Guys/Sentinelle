@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `8d200be` — 2026-10-16
+> **Riferimento:** commit `5ae9bc7` — 2026-10-16
 
 ## Fase
 
@@ -44,8 +44,8 @@ dal dump della release GitHub `dati-v1`) e `./scripts/avvia.sh`; guida in
 mentor all'hackathon): mappa condivisa delle segnalazioni, segnala in due tocchi,
 conferme/"non c'e' piu'", affidabilita' e alert di prossimita'. Bozza in
 discussione, **non implementata**: `docs/specifiche/2026-10-16-waze-per-gli-incendi.md`
-(decisioni prese, proposte da validare, domande aperte). Prima di scrivere
-codice: chiudere le domande aperte, poi piano in `docs/piani/`.
+(decisioni prese, proposte da validare, domande aperte). Piano pronto, non
+iniziato: `docs/piani/2026-10-16-waze-per-gli-incendi.md` (5 task).
 
 ## Chi fa cosa
 
