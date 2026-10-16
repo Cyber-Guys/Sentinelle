@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ExternalLink } from '@lucide/vue'
+import { ExternalLink, Flame, ChevronRight } from '@lucide/vue'
 
 // Corpo della scheda di una segnalazione nel cruscotto (desktop e foglio su telefono): foto, posizione, priorita' scomposta.
 defineProps<{ s: Segnalazione }>()
+defineEmits<{ simula: [] }>()
 const { urlFoto } = useApi()
 </script>
 
@@ -18,5 +19,13 @@ const { urlFoto } = useApi()
       <div v-if="!s.foto_url" class="flex gap-2"><dt class="w-16 shrink-0 text-testo-3">Foto</dt><dd class="text-testo-3">nessuna</dd></div>
     </dl>
   </div>
+  <button type="button" class="vetro flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-vetro-forte" @click="$emit('simula')">
+    <span class="flex size-8 shrink-0 items-center justify-center rounded-s bg-brace/12"><Flame class="size-4 text-brace" aria-hidden="true" /></span>
+    <span class="min-w-0 flex-1 leading-tight">
+      <span class="block text-[.86rem] font-semibold">Simula scenario</span>
+      <span class="block text-[.72rem] text-testo-2">Dove arriverebbe il fuoco nelle prossime ore</span>
+    </span>
+    <ChevronRight class="size-4 shrink-0 text-testo-3" aria-hidden="true" />
+  </button>
   <ScomposizionePriorita :priorita="s.priorita" :fattori="s.fattori" :motivazioni="s.motivazioni" />
 </template>

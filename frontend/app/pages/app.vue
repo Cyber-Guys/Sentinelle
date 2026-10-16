@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, type Alone } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, type Alone, type GrigliaRischio } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
@@ -226,12 +226,27 @@ function aggiungiLivelli() {
   if (!m || m.getSource('storico')) return
   const c = coloriMappa(tema.value)
   aggiungiStoricoIncendi(m, c, filtro.value)
+  aggiungiRischio(m, c, geojsonRischio(griglia.value), mostraRischio.value, 'storico-riempimento') // sotto lo storico
   aggiungiHotspot(m, c, datiHotspot)
   // proprie segnalazioni sopra storico e hotspot: in valutazione ambra con onda, confermate macchia, falsi allarmi ad anello
   aggiungiPinSegnalazioni(m, 'mie', c, geojsonSegnalazioni(mie.value), { nuova: c.ambra, confermata: c.macchia })
 }
 
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
+
+// Rischio di oggi: spento di default, la griglia si scarica alla prima accensione
+const mostraRischio = ref(false)
+const griglia = shallowRef<GrigliaRischio | null>(null)
+const carRischio = ref(false)
+const errRischio = ref(false)
+watch(mostraRischio, async (v) => {
+  if (v && !griglia.value && !carRischio.value) {
+    carRischio.value = true; errRischio.value = false
+    try { griglia.value = await chiama<GrigliaRischio>('/rischio/griglia') } catch { errRischio.value = true }
+    carRischio.value = false
+  }
+  impostaRischio(mappa, geojsonRischio(griglia.value), mostraRischio.value)
+})
 
 // filtro anni istantaneo: i dati sono gia' nei tile
 watch(filtro, (f) => impostaStoricoIncendi(mappa, f))
@@ -409,7 +424,7 @@ async function invia() {
 
       <!-- colonna destra sotto il tema: Livelli, zoom, "i" (passo 14 px dal flex; il posto di Livelli resta anche se nascosto) -->
       <div class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20 flex w-11 flex-col items-center gap-[14px]">
-        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="relative" /></div>
+        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="relative"><LivelloRischio v-model="mostraRischio" class="mt-2 border-t border-bordo pt-2" :griglia="griglia" :caricamento="carRischio" :errore="errRischio" /></PulsanteLivelli></div>
         <ControlliMappa :mappa="mappaPronta" />
       </div>
 

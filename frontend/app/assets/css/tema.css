@@ -373,3 +373,9 @@ html[data-tema='chiaro'] .popup-mappa .popup-icona { color: var(--tinta-chiaro);
   .scheletro { background: var(--vetro-forte); }
   .pin::before { animation: none; }
 }
+
+/* interruttore on/off delle sezioni del pannello Livelli (cruscotto e app) */
+.interruttore { position: relative; width: 34px; height: 20px; flex-shrink: 0; border-radius: 999px; background: var(--vetro-forte); box-shadow: inset 0 0 0 1px var(--bordo-luce); transition: background .18s; }
+.interruttore::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 999px; background: var(--testo-3); transition: transform .18s cubic-bezier(.22, 1, .36, 1), background .18s; }
+.interruttore.acceso { background: var(--macchia); box-shadow: none; }
+.interruttore.acceso::after { transform: translateX(14px); background: #fff; }

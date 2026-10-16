@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `cfc0baf` — 2026-10-10
+> **Riferimento:** commit `b67e283` — 2026-10-16
 
 ## Fase
 
@@ -23,6 +23,10 @@ FastAPI + PostGIS; avvio in `README.md`.
 - Cruscotto: coda con schede In coda / Confermate / Falsi allarmi, scheda con
   scomposizione e azioni, livelli (incendi storici, hotspot, mappature a icona
   con cluster, storico segnalazioni), versione telefono con foglio a tre altezze.
+- Simulazione di scenario (cruscotto): da popup hotspot, scheda o clic destro /
+  pressione lunga; aree ora per ora fino a 24 h con meteo orario, cursore e
+  play, comuni raggiunti, acqua vicina, nota di onesta'. Livello "Rischio di
+  oggi" a celle 2 km in app e cruscotto (piano `2026-10-16-simulazione-scenario`).
 - Live: trigger Postgres -> NOTIFY -> SSE `/eventi` -> `useEventi()`; polling
   di riserva 30 s (`docs/esperimenti/2026-10-10-eventi-live.md`).
 - Accesso da telefono in HTTPS: `scripts/tunnel.sh` (proxy `/api`).

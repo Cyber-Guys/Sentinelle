@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot } from '~/composables/useMappa'
+import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
@@ -32,6 +32,77 @@ const mostraMappature = ref(false)
 const mostraHotspot = ref(true)
 const livelliAperti = ref(false)
 const mostraStorico = ref(false)
+// Rischio di oggi: spento di default, la griglia si scarica alla prima accensione
+const mostraRischio = ref(false)
+const griglia = shallowRef<GrigliaRischio | null>(null)
+const carRischio = ref(false)
+const errRischio = ref(false)
+async function caricaRischio() {
+  if (griglia.value || carRischio.value) return
+  carRischio.value = true; errRischio.value = false
+  try { griglia.value = await chiama<GrigliaRischio>('/rischio/griglia') } catch { errRischio.value = true }
+  carRischio.value = false
+  impostaRischio(mappa, geojsonRischio(griglia.value), mostraRischio.value)
+}
+watch(mostraRischio, (v) => { if (v) caricaRischio(); impostaRischio(mappa, geojsonRischio(griglia.value), v) })
+
+/*
+  Scenario di propagazione: avvio da popup hotspot, scheda segnalazione, clic destro / pressione lunga.
+  Il pannello sostituisce la scheda (desktop) o il contenuto del foglio (telefono).
+*/
+const scenario = ref<{ lat: number; lon: number; titolo: string } | null>(null)
+const oreScenario = ref(6)
+const cursore = ref(6)
+const datiScenario = shallowRef<Simulazione | null>(null)
+const carScenario = ref(false)
+const errScenario = ref('')
+let richiesta = 0
+const coordinate = (lat: number, lon: number) => `${lat.toFixed(3)}, ${lon.toFixed(3)}`
+function avviaScenario(lat: number, lon: number, titolo = '') {
+  chiudiPopup()
+  livelliAperti.value = false
+  selezionata.value = null
+  scenario.value = { lat, lon, titolo: titolo ? nomeComune(titolo) : coordinate(lat, lon) }
+  datiScenario.value = null
+  rimuoviScenario(mappa)
+  if (mobile.value && foglio.value === 'chiuso') foglio.value = 'meta'
+  calcolaScenario(true)
+}
+async function calcolaScenario(adatta = false) {
+  const s = scenario.value
+  if (!s) return
+  const n = ++richiesta
+  carScenario.value = true; errScenario.value = ''
+  try {
+    const d = await chiama<Simulazione>('/simulazione', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lat: s.lat, lon: s.lon, ore: oreScenario.value }) })
+    if (n !== richiesta || !scenario.value) return
+    datiScenario.value = d
+    cursore.value = d.ore
+    if (mappa) aggiungiScenario(mappa, coloriMappa(tema.value), d, d.ore)
+    const b = limitiScenario(d)
+    // primo calcolo: inquadra l'area finale; dopo un cambio di orizzonte solo se l'area esce dalla vista
+    const fuori = () => { const v = mappa!.getBounds(); return !v.contains(b![0]) || !v.contains(b![1]) }
+    if (b && mappa && (adatta || fuori())) mappa.fitBounds(b, { padding: paddingScenario(), maxZoom: 13, duration: 900 })
+  } catch (e) {
+    if (n === richiesta) errScenario.value = messaggioErrore(e, 'calcolare lo scenario')
+  }
+  if (n === richiesta) carScenario.value = false
+}
+// spazio libero per l'area, in aggiunta al padding della mappa (paddingMappa: coda a sinistra / header e foglio chiuso):
+// a destra il pannello (desktop), in basso il foglio a meta' (telefono)
+const paddingScenario = () => (mobile.value
+  ? { top: 24, bottom: ALTEZZE.value.meta - ALTEZZE.value.chiuso + 24, left: 24, right: 72 }
+  : { top: 40, bottom: 70, left: 40, right: 74 + 416 + 40 })
+function chiudiScenario() {
+  richiesta++
+  scenario.value = null
+  datiScenario.value = null
+  carScenario.value = false; errScenario.value = ''
+  rimuoviScenario(mappa)
+}
+watch(oreScenario, () => calcolaScenario())
+watch(cursore, (o) => impostaOraScenario(mappa, coloriMappa(tema.value), o))
+const vaiAcqua = (lon: number, lat: number) => mappa?.flyTo({ center: [lon, lat], zoom: Math.max(mappa.getZoom(), 12), padding: paddingScenario() })
 const mostraIncendi = ref(true)
 const filtroIncendi = ref('2025')
 const filtroStorico = ref<'entrambe' | 'confermata' | 'archiviata'>('entrambe')
@@ -40,7 +111,7 @@ const FILTRI_STORICO = [
 ] as const
 // segnalazioni gia' valutate: si ricaricano all'accensione del livello e dopo ogni valutazione (non nel polling)
 const storico = ref<Segnalazione[]>([])
-const nLivelli = computed(() => Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
+const nLivelli = computed(() => Number(mostraRischio.value) + Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
 const TIPI_MAPPATURA = [
   { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplet },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
@@ -161,12 +232,13 @@ async function aggiorna() {
   } catch { errore.value = 'Connessione persa' }
 }
 
-watch(selezionata, aggiornaMappa)
+watch(selezionata, (id) => { aggiornaMappa(); if (id && scenario.value) chiudiScenario() })
 const LIVELLI_MAPPATURE = ['mappature-cluster', 'mappature-conteggio', 'mappature']
 watch(mostraMappature, (v) => { for (const l of LIVELLI_MAPPATURE) mappa?.setLayoutProperty(l, 'visibility', v ? 'visible' : 'none') })
 const visibilitaHotspot = () => { for (const l of ['hotspot-alone', 'hotspot']) mappa?.setLayoutProperty(l, 'visibility', mostraHotspot.value ? 'visible' : 'none') }
 watch(mostraHotspot, visibilitaHotspot)
-watch([mostraIncendi, filtroIncendi], () => impostaStoricoIncendi(mappa, filtroIncendi.value, mostraIncendi.value))
+// durante lo scenario lo storico (stessi colori caldi) si nasconde: l'area simulata resta l'unico fuoco sulla carta
+watch([mostraIncendi, filtroIncendi, () => !!scenario.value], () => impostaStoricoIncendi(mappa, filtroIncendi.value, mostraIncendi.value && !scenario.value))
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
 
 // sorgenti e layer: richiamata a ogni stile caricato (anche dopo il cambio tema)
@@ -175,7 +247,8 @@ function aggiungiLivelli() {
   if (!m || m.getSource('coda')) return
   const c = coloriMappa(tema.value)
   const prio: any = ['step', ['get', 'priorita'], c.macchia, 30, c.ambra, 60, c.brace]
-  aggiungiStoricoIncendi(m, c, filtroIncendi.value, mostraIncendi.value) // sotto a tutto il resto
+  aggiungiStoricoIncendi(m, c, filtroIncendi.value, mostraIncendi.value && !scenario.value) // sotto a tutto il resto
+  aggiungiRischio(m, c, geojsonRischio(griglia.value), mostraRischio.value, 'storico-riempimento') // sotto lo storico
   aggiungiHotspot(m, c, datiHotspot)
   visibilitaHotspot()
   // mappature: raggruppate fino a zoom 11 (cerchio di vetro con numero), poi segnaposto a icona
@@ -213,6 +286,8 @@ function aggiungiLivelli() {
     'circle-stroke-color': ['case', ['==', ['get', 'selezionata'], 1], c.testo, c.bordo],
     'circle-stroke-width': ['case', ['==', ['get', 'selezionata'], 1], 3, 2],
   } })
+  // scenario attivo: sopra a tutto, ripristinato anche dopo il cambio tema
+  if (datiScenario.value) aggiungiScenario(m, c, datiScenario.value, cursore.value)
 }
 
 onMounted(() => {
@@ -247,7 +322,28 @@ onMounted(() => {
       m.easeTo({ center: (f.geometry as any).coordinates, zoom: Math.min(z + 0.5, m.getMaxZoom()), padding: { left: 0, top: 80, right: 0, bottom: 60 } })
     })
     clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot'])
-    clicHotspot(m, ['coda', 'storico-segn'])
+    clicHotspot(m, ['coda', 'storico-segn'], () => false, avviaScenario)
+    // clic destro (desktop) o pressione lunga (touch) su un punto qualunque: scenario da li'
+    let ultimaPressione = 0
+    m.on('contextmenu', (ev) => {
+      ev.preventDefault()
+      if (Date.now() - ultimaPressione < 1000) return
+      avviaScenario(ev.lngLat.lat, ev.lngLat.lng)
+    })
+    let pressione: ReturnType<typeof setTimeout> | undefined
+    let inizio: { x: number; y: number } | null = null
+    const annulla = () => { clearTimeout(pressione); inizio = null }
+    m.on('touchstart', (ev) => {
+      annulla()
+      if (ev.originalEvent.touches.length !== 1) return
+      inizio = { x: ev.point.x, y: ev.point.y }
+      const ll = ev.lngLat
+      pressione = setTimeout(() => { ultimaPressione = Date.now(); inizio = null; navigator.vibrate?.(15); avviaScenario(ll.lat, ll.lng) }, 600)
+    })
+    m.on('touchmove', (ev) => { if (inizio && Math.hypot(ev.point.x - inizio.x, ev.point.y - inizio.y) > 10) annulla() })
+    m.on('touchend', annulla)
+    m.on('touchcancel', annulla)
+    m.on('movestart', (ev: any) => { if (ev.originalEvent) annulla() })
     m.on('click', 'coda', (ev) => { selezionata.value = ev.features?.[0]?.properties?.id ?? null })
     m.on('click', 'storico-segn', (ev) => {
       // la coda attiva sta sopra: se il clic e' anche su un pin della coda vince quello
@@ -267,6 +363,7 @@ onMounted(() => {
       { layer: 'coda-alone', periodo: 2600, da: 9, a: 27, opacita: 0.45 },
       { layer: 'coda-selezione', periodo: 1600, da: 13, a: 34, opacita: 0.9, tratto: true },
       ALONE_HOTSPOT,
+      ALONE_SCENARIO,
     ])
   }
   aggiorna()
@@ -485,7 +582,7 @@ const contatoriBrevi = computed(() => [
     <!-- scheda della segnalazione selezionata -->
     <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0 translate-x-3" leave-active-class="transition duration-150" leave-to-class="opacity-0 translate-x-3">
       <!-- a sinistra della colonna destra (16 + 44 + 14); col pannello Livelli aperto scorre a sinistra del pannello -->
-      <section v-if="scheda && !mobile" class="sospeso absolute top-[4.75rem] z-10 flex max-h-[calc(100%-4.75rem-1rem)] w-[26rem] flex-col overflow-hidden transition-[right] duration-200 ease-out" :style="{ right: livelliAperti ? 'calc(68px + min(17.5rem, 100vw - 5.5rem) + 14px)' : '74px' }" aria-labelledby="titolo-scheda">
+      <section v-if="scheda && !mobile && !scenario" class="sospeso absolute top-[4.75rem] z-10 flex max-h-[calc(100%-4.75rem-1rem)] w-[26rem] flex-col overflow-hidden transition-[right] duration-200 ease-out" :style="{ right: livelliAperti ? 'calc(68px + min(17.5rem, 100vw - 5.5rem) + 14px)' : '74px' }" aria-labelledby="titolo-scheda">
         <header class="flex shrink-0 items-start justify-between gap-3 border-b border-bordo px-5 py-3.5">
           <div class="min-w-0">
             <p class="flex items-center gap-2 text-[.72rem] text-testo-3">
@@ -501,7 +598,7 @@ const contatoriBrevi = computed(() => [
           <button type="button" aria-label="Chiudi la scheda" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="selezionata = null"><X class="size-4" /></button>
         </header>
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <CorpoScheda :s="scheda" />
+          <CorpoScheda :s="scheda" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" />
         </div>
         <!-- valutata: esito al posto delle azioni -->
         <footer v-if="sola" class="flex shrink-0 items-center gap-3 border-t border-bordo px-5 py-3.5">
@@ -521,11 +618,19 @@ const contatoriBrevi = computed(() => [
       </section>
     </Transition>
 
+    <!-- scenario: stesso posto e larghezza della scheda -->
+    <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0 translate-x-3" leave-active-class="transition duration-150" leave-to-class="opacity-0 translate-x-3">
+      <section v-if="scenario && !mobile" class="sospeso absolute top-[4.75rem] z-10 flex max-h-[calc(100%-4.75rem-1rem)] w-[26rem] flex-col overflow-hidden transition-[right] duration-200 ease-out" :style="{ right: livelliAperti ? 'calc(68px + min(17.5rem, 100vw - 5.5rem) + 14px)' : '74px' }" aria-labelledby="titolo-scenario">
+        <PannelloScenario v-model:ore="oreScenario" v-model:cursore="cursore" :titolo="scenario.titolo" :dati="datiScenario" :caricamento="carScenario" :errore="errScenario" @chiudi="chiudiScenario" @riprova="calcolaScenario()" @vai="vaiAcqua" />
+      </section>
+    </Transition>
+
     <!-- colonna destra come nell'app: Livelli, zoom, "i" (passo 14 px dal flex) -->
     <!-- telefono: stessa colonna dell'app (sotto l'header, passo 14 px); sparisce quando il foglio la coprirebbe -->
     <div ref="colonna" class="absolute z-20 flex w-11 flex-col items-center gap-[14px]" :class="mobile ? ['top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 transition-opacity duration-200', colonnaCoperta && 'pointer-events-none opacity-0'] : 'top-[4.75rem] right-4'" :inert="colonnaCoperta || undefined">
     <PulsanteLivelli v-model:aperto="livelliAperti" v-model="filtroIncendi" v-model:acceso="mostraIncendi" :filtri="FILTRI_STORICO_INCENDI" :badge="String(nLivelli)" :descrizione="`${nLivelli} attivi`" :max-altezza="mobile ? maxLivelli : undefined" class="relative">
       <div class="space-y-1">
+        <LivelloRischio v-model="mostraRischio" :griglia="griglia" :caricamento="carRischio" :errore="errRischio" />
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
           <input v-model="mostraHotspot" type="checkbox" role="switch" class="sr-only" />
           <span class="size-2.5 shrink-0 rounded-full bg-brace ring-2 ring-fondo" aria-hidden="true" />
@@ -596,8 +701,10 @@ const contatoriBrevi = computed(() => [
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
       <span v-if="mostraStorico" class="flex items-center gap-3 border-l border-bordo pl-3"><span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" />Confermata</span><span class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" />Falso allarme</span></span>
-      <span v-if="mostraIncendi" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-storico h-1.5 w-8 rounded-full" />Incendi storici</span>
+      <span v-if="mostraIncendi && !scenario" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-storico h-1.5 w-8 rounded-full" />Incendi storici</span>
       <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Hotspot</span>
+      <span v-if="mostraRischio" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-rischio h-1.5 w-8 rounded-full" />Rischio di oggi</span>
+      <span v-if="!scenario" class="border-l border-bordo pl-3 text-testo-3">Clic destro: simula scenario</span>
     </div>
 
     <!-- telefono: foglio Segnalazioni a tre altezze; si sposta con transform, l'altezza resta quella massima -->
@@ -612,8 +719,9 @@ const contatoriBrevi = computed(() => [
         <button data-maniglia type="button" class="tocco flex h-4 w-full items-end justify-center" :aria-label="foglio === 'chiuso' ? 'Apri il foglio delle segnalazioni' : 'Riduci il foglio delle segnalazioni'" :aria-expanded="foglio !== 'chiuso'">
           <span class="h-1 w-9 rounded-full bg-bordo-luce" aria-hidden="true" />
         </button>
-        <!-- elenco: riepilogo; dettaglio: indietro + titolo -->
-        <div v-if="!scheda" class="flex h-12 items-center gap-3 px-4">
+        <!-- elenco: riepilogo; dettaglio: indietro + titolo; scenario: intestazione nel pannello -->
+        <div v-if="scenario" />
+        <div v-else-if="!scheda" class="flex h-12 items-center gap-3 px-4">
           <template v-if="errore">
             <span class="punto-vivo punto-ambra shrink-0" aria-hidden="true" />
             <p class="min-w-0 flex-1 truncate text-[.92rem]"><span class="font-semibold">Connessione persa</span> <span class="text-testo-2">· riprovo da solo</span></p>
@@ -640,12 +748,13 @@ const contatoriBrevi = computed(() => [
           </div>
         </div>
       </div>
-      <div v-if="!scheda" class="shrink-0 border-b border-bordo px-3 pb-3">
+      <PannelloScenario v-if="scenario" v-model:ore="oreScenario" v-model:cursore="cursore" telefono :pad-fondo="padScroll" :titolo="scenario.titolo" :dati="datiScenario" :caricamento="carScenario" :errore="errScenario" @chiudi="chiudiScenario" @riprova="calcolaScenario()" @vai="vaiAcqua" />
+      <div v-else-if="!scheda" class="shrink-0 border-b border-bordo px-3 pb-3">
         <SchedeStato v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" grande />
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain" :class="scheda && 'border-t border-bordo'" :style="{ paddingBottom: `${padScroll}px` }">
+      <div v-if="!scenario" class="min-h-0 flex-1 overflow-y-auto overscroll-contain" :class="scheda && 'border-t border-bordo'" :style="{ paddingBottom: `${padScroll}px` }">
         <ElencoSegnalazioni v-if="!scheda" :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
-        <div v-else class="space-y-4 px-4 pt-4"><CorpoScheda :s="scheda" /></div>
+        <div v-else class="space-y-4 px-4 pt-4"><CorpoScheda :s="scheda" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" /></div>
       </div>
     </section>
     <!-- piede del dettaglio: azioni (in coda) o esito (valutata), sempre visibile sopra il foglio -->
@@ -682,11 +791,6 @@ const contatoriBrevi = computed(() => [
 </template>
 
 <style>
-/* interruttore on/off delle sezioni del pannello Livelli */
-.interruttore { position: relative; width: 34px; height: 20px; flex-shrink: 0; border-radius: 999px; background: var(--vetro-forte); box-shadow: inset 0 0 0 1px var(--bordo-luce); transition: background .18s; }
-.interruttore::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 999px; background: var(--testo-3); transition: transform .18s cubic-bezier(.22, 1, .36, 1), background .18s; }
-.interruttore.acceso { background: var(--macchia); box-shadow: none; }
-.interruttore.acceso::after { transform: translateX(14px); background: #fff; }
 /* nuove segnalazioni: entrano scivolando e restano evidenziate per qualche secondo */
 .coda-enter-active { transition: opacity .3s ease-out, transform .35s cubic-bezier(.22, 1, .36, 1); }
 .coda-leave-active { transition: opacity .2s ease-in; position: absolute; left: .75rem; right: .75rem; }

@@ -120,6 +120,11 @@ else
   exit 1
 fi
 ./scripts/python.sh scripts/semina_demo.py >/dev/null && ok "classifica demo seminata (utenti '(demo)')"
+if [ "$(conta 'SELECT count(*) FROM cella')" -gt 0 ] 2>/dev/null; then
+  ok "celle del rischio gia' calcolate"
+else
+  ./scripts/python.sh scripts/prepara_celle.py && ok "celle del rischio calcolate"
+fi
 
 # --- 7. verifica -----------------------------------------------------------------------------------
 passo "7/7 Verifica"

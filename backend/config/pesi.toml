@@ -4,3 +4,19 @@ suolo = 0.15
 pericolo = 0.10
 vicine = 0.10
 storico = 0.10
+
+# rischio di oggi per cella (somma 1)
+[rischio_oggi]
+storico = 0.35
+pericolo = 0.35
+meteo = 0.30
+
+# simulazione di scenario: automa su griglia 200 m (tarato a occhio, vedi piano)
+[simulazione]
+base_m_min = 2.5        # velocita' senza vento su combustibile pieno
+combustibile_min = 0.3  # pericolo Basso: frazione della velocita' base
+bonus_storico = 0.3     # celle che bruciano spesso: +30% al massimo
+k_vento = 0.06          # fattore exp(k * v_kmh * cos)
+umidita_rif = 30        # sotto questa umidita' nessun rallentamento
+k_umidita = 0.02        # rallentamento per punto di umidita' oltre il riferimento
+pioggia_fattore = 0.3   # ora con pioggia > 0,5 mm

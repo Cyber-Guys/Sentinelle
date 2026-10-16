@@ -264,7 +264,8 @@ export function clicIncendio(m: MappaLibre, pin: string[], bloccato: () => boole
 }
 
 // Tocco su un hotspot satellitare: popup informativo; `pin` (segnalazioni) vince, l'hotspot vince su storico e mappature.
-export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false) {
+// `simula` (cruscotto): il popup mostra "Simula scenario" e lo avvia dal punto dell'hotspot.
+export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false, simula?: (lat: number, lon: number, titolo: string) => void) {
   m.on('click', 'hotspot', (ev) => {
     const f = ev.features?.[0]
     if (!f || bloccato()) return
@@ -277,6 +278,7 @@ export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolea
       lat, lon, rilevato_il: p.rilevato_il, confidenza: p.confidenza, comune: p.comune && p.comune !== 'null' ? String(p.comune) : null,
       frp: n(p.frp), luminosita: n(p.luminosita), satellite: p.satellite && p.satellite !== 'null' ? String(p.satellite) : null,
       giorno: p.giorno == null || p.giorno === 'null' ? null : p.giorno === true || p.giorno === 'true',
+      onSimula: simula ? () => { chiudiPopup(); simula(lat, lon, p.comune && p.comune !== 'null' ? String(p.comune) : '') } : undefined,
     })
   })
   m.on('mouseenter', 'hotspot', () => (m.getCanvas().style.cursor = 'pointer'))
@@ -371,4 +373,88 @@ export function segnapostiMancanti(m: MappaLibre, segnaposti: () => Segnaposto[]
     const s = segnaposti().find((x) => x.id === e.id)
     if (s && !m.hasImage(s.id)) registraSegnaposti(m, [s], tema())
   })
+}
+
+/*
+  Rischio di oggi (GET /rischio/griglia): celle ~2 km (0,02 lat x 0,025 lon) colorate con la scala della
+  priorita' (macchia -> ambra -> brace), semi-trasparenti, sotto storico e pin. Spento di default.
+*/
+export type GrigliaRischio = { celle: [number, number, number][]; aggiornato_il: string; meteo_simulato?: boolean }
+export function geojsonRischio(g: GrigliaRischio | null) {
+  const dx = 0.0125, dy = 0.01
+  return {
+    type: 'FeatureCollection' as const,
+    features: (g?.celle ?? []).map(([lon, lat, v]) => ({
+      type: 'Feature' as const,
+      properties: { v },
+      geometry: { type: 'Polygon' as const, coordinates: [[[lon - dx, lat - dy], [lon + dx, lat - dy], [lon + dx, lat + dy], [lon - dx, lat + dy], [lon - dx, lat - dy]]] },
+    })),
+  }
+}
+export const SOGLIE_RISCHIO = [0.45, 0.65] // sotto: basso, in mezzo: medio, sopra: alto (legenda)
+export function aggiungiRischio(m: MappaLibre, c: ReturnType<typeof coloriMappa>, dati: any, visibile: boolean, prima?: string) {
+  m.addSource('rischio', { type: 'geojson', data: dati })
+  m.addLayer({ id: 'rischio', type: 'fill', source: 'rischio', layout: { visibility: visibile ? 'visible' : 'none' }, paint: {
+    'fill-color': ['interpolate', ['linear'], ['get', 'v'], 0.3, c.macchia, 0.55, c.ambra, 0.8, c.brace] as any,
+    // piu' trasparente da vicino: si legge la carta sotto
+    'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.42, 11, 0.22] as any,
+    'fill-antialias': false,
+  } }, prima && m.getLayer(prima) ? prima : undefined)
+}
+export function impostaRischio(m: MappaLibre | null, dati: any, visibile: boolean) {
+  if (!m?.getLayer('rischio')) return
+  ;(m.getSource('rischio') as maplibregl.GeoJSONSource).setData(dati)
+  m.setLayoutProperty('rischio', 'visibility', visibile ? 'visible' : 'none')
+}
+
+/*
+  Scenario di propagazione (POST /simulazione): un'area per ora (cumulativa), filtrate per `ora <= cursore`.
+  Le ore vecchie sono ambra tenue, la corrente brace; si disegnano le piu' recenti sotto (sort-key) cosi'
+  ogni ora resta un anello leggibile. Fronte corrente = linea brace con bagliore; origine = pin brace pulsante.
+*/
+export type Simulazione = {
+  origine: { lat: number; lon: number; comune?: string | null }; inizio: string; ore: number; risoluzione_m: number
+  fotogrammi: { ora: number; area: any; ettari: number; fronte_km: number; vento: { kmh: number; da_gradi: number }; umidita: number }[]
+  comuni: { nome: string; raggiunto_ora: number }[]
+  acqua: { nome: string; tipo: string; distanza_km: number; lat: number; lon: number }[]
+  note: string; durata_s?: number
+}
+const LAYER_SCENARIO = ['scenario-aree', 'scenario-bagliore', 'scenario-fronte', 'scenario-origine-alone', 'scenario-origine']
+export const ALONE_SCENARIO: Alone = { layer: 'scenario-origine-alone', periodo: 2000, da: 9, a: 30, opacita: 0.55 }
+export function aggiungiScenario(m: MappaLibre, c: ReturnType<typeof coloriMappa>, s: Simulazione, ora: number) {
+  if (m.getSource('scenario')) rimuoviScenario(m)
+  m.addSource('scenario', { type: 'geojson', data: { type: 'FeatureCollection', features: s.fotogrammi.map((f) => ({ type: 'Feature', properties: { ora: f.ora }, geometry: f.area })) } as any })
+  m.addSource('scenario-origine', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [s.origine.lon, s.origine.lat] } } as any })
+  m.addLayer({ id: 'scenario-aree', type: 'fill', source: 'scenario', layout: { 'fill-sort-key': ['-', 0, ['get', 'ora']] as any }, paint: { 'fill-antialias': false } })
+  m.addLayer({ id: 'scenario-bagliore', type: 'line', source: 'scenario', paint: { 'line-color': c.brace, 'line-width': 9, 'line-blur': 6, 'line-opacity': 0.45 } })
+  m.addLayer({ id: 'scenario-fronte', type: 'line', source: 'scenario', layout: { 'line-join': 'round' }, paint: { 'line-color': c.brace, 'line-width': 2.4 } })
+  m.addLayer({ id: 'scenario-origine-alone', type: 'circle', source: 'scenario-origine', paint: { 'circle-radius': 18, 'circle-color': c.brace, 'circle-opacity': 0.3, 'circle-blur': 0.3 } })
+  m.addLayer({ id: 'scenario-origine', type: 'circle', source: 'scenario-origine', paint: { 'circle-radius': 7, 'circle-color': c.brace, 'circle-stroke-color': c.testo, 'circle-stroke-width': 2.5 } })
+  impostaOraScenario(m, c, ora)
+}
+export function impostaOraScenario(m: MappaLibre | null, c: ReturnType<typeof coloriMappa>, ora: number) {
+  if (!m?.getLayer('scenario-aree')) return
+  const o = ['get', 'ora']
+  m.setFilter('scenario-aree', ['<=', o, ora])
+  m.setFilter('scenario-bagliore', ['==', o, ora])
+  m.setFilter('scenario-fronte', ['==', o, ora])
+  // gradiente relativo al cursore: ore vecchie ambra tenue, ora corrente brace piena
+  const eta: any = ['-', ora, o]
+  m.setPaintProperty('scenario-aree', 'fill-color', ['interpolate', ['linear'], eta, 0, c.brace, 3, c.ambra] as any)
+  // le aree sono cumulative e si sovrappongono: l'opacita' delle ore passate si divide tra loro, cosi' il nucleo
+  // (bruciato da piu' tempo) resta il piu' denso ma non supera ~55% anche a +24 h
+  const vecchie = Math.min(0.2, 1 - Math.pow(1 - 0.5, 1 / Math.max(1, ora - 1)))
+  m.setPaintProperty('scenario-aree', 'fill-opacity', ['case', ['==', eta, 0], 0.34, vecchie] as any)
+}
+export function rimuoviScenario(m: MappaLibre | null) {
+  if (!m) return
+  for (const l of LAYER_SCENARIO) if (m.getLayer(l)) m.removeLayer(l)
+  for (const s of ['scenario', 'scenario-origine']) if (m.getSource(s)) m.removeSource(s)
+}
+export function limitiScenario(s: Simulazione): [[number, number], [number, number]] | null {
+  const g = s.fotogrammi.at(-1)?.area
+  let o = Infinity, so = Infinity, e = -Infinity, n = -Infinity
+  const visita = (x: any) => { if (typeof x[0] === 'number') { o = Math.min(o, x[0]); e = Math.max(e, x[0]); so = Math.min(so, x[1]); n = Math.max(n, x[1]) } else x.forEach(visita) }
+  if (g?.coordinates) visita(g.coordinates)
+  return isFinite(o) ? [[o, so], [e, n]] : null
 }

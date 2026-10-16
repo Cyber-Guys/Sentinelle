@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Satellite } from '@lucide/vue'
+import { Satellite, Flame } from '@lucide/vue'
 import { nomeComune } from '~/composables/useApi'
 
 // Popup di un hotspot satellitare NASA FIRMS (layer `hotspot`): proprieta' di /hotspot, campi mancanti omessi.
 const props = defineProps<{
   lat: number; lon: number; rilevato_il?: string; confidenza?: string; comune?: string | null
   frp?: number | null; luminosita?: number | null; satellite?: string | null; giorno?: boolean | null
+  onSimula?: () => void
 }>()
 defineEmits<{ chiudi: [] }>()
 
@@ -55,5 +56,6 @@ const celsius = props.luminosita != null ? Math.round(props.luminosita - 273.15)
       </div>
     </dl>
     <p class="cifre mt-2.5 text-[.7rem] leading-snug text-testo-3">Fonte: NASA FIRMS · risoluzione ~375 m<br />{{ lat.toFixed(4) }}, {{ lon.toFixed(4) }}</p>
+    <button v-if="onSimula" type="button" class="primario mt-3 flex h-9 w-full items-center justify-center gap-1.5 text-[.8rem]" @click="onSimula"><Flame class="size-3.5" aria-hidden="true" />Simula scenario</button>
   </PopupMappa>
 </template>

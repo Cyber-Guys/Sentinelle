@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS missione_completata (id serial PRIMARY KEY,
   utente_id int NOT NULL REFERENCES utente, missione_id int NOT NULL REFERENCES missione,
   punti int NOT NULL, geom geometry(Point,4326), foto text,
   completata_il timestamptz NOT NULL DEFAULT now());
+-- rischio di oggi: celle ~2 km precalcolate da scripts/prepara_celle.py
+CREATE TABLE IF NOT EXISTS cella (id serial PRIMARY KEY, i int NOT NULL, j int NOT NULL,
+  lon double precision NOT NULL, lat double precision NOT NULL, geom geometry(Polygon,4326) NOT NULL,
+  storico double precision NOT NULL DEFAULT 0, pericolo double precision NOT NULL DEFAULT 0, UNIQUE (i, j));
+CREATE INDEX IF NOT EXISTS cella_geom_idx ON cella USING gist (geom);
 -- scomposizione della priorita' per fattore (vuota per le segnalazioni precedenti)
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT '[]'::jsonb;
 -- storico: data di valutazione e punti guadagnati con la segnalazione
