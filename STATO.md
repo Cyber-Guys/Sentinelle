@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `fab3ce9` — 2026-10-16
+> **Riferimento:** commit `5ab1eaa` — 2026-10-16
 
 ## Fase
 
@@ -40,8 +40,12 @@ FastAPI + PostGIS; avvio in `README.md`.
 dal dump della release GitHub `dati-v1`) e `./scripts/avvia.sh`; guida in
 `ONBOARDING.md`. Provato su clone pulito (conteggi corretti, backend attivo).
 
-**Prossimo passo:** decidere col team i prossimi miglioramenti (candidati:
-modalita' scenario con hotspot simulati dichiarati, pitch con numeri CFVA).
+**Prossimo passo:** "Waze per gli incendi" nell'app cittadino (idea nata coi
+mentor all'hackathon): mappa condivisa delle segnalazioni, segnala in due tocchi,
+conferme/"non c'e' piu'", affidabilita' e alert di prossimita'. Bozza in
+discussione, **non implementata**: `docs/specifiche/2026-10-16-waze-per-gli-incendi.md`
+(decisioni prese, proposte da validare, domande aperte). Prima di scrivere
+codice: chiudere le domande aperte, poi piano in `docs/piani/`.
 
 ## Chi fa cosa
 
