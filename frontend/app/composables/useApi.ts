@@ -25,6 +25,11 @@ export type Missione = {
   id: number; codice: string; titolo: string; descrizione: string; punti: number
   tipo: 'quiz' | 'posizione' | 'esplora'; disponibile: boolean; motivo: string | null
 }
+export type MissioneMirata = {
+  id: number; titolo: string; motivo: string; punti: number; valore_rischio: number
+  livello_rischio: 'medio' | 'alto' | 'molto alto'; lon: number; lat: number; distanza_km: number
+  scade_il: string; completata: boolean
+}
 export type DomandaQuiz = { indice: number; domanda: string; opzioni: string[] }
 export type EsitoQuiz = { indice: number; giusta: boolean; corretta: number; spiegazione: string }
 export type EsitoMissione = { punti_ottenuti: number; punti: number; livello: Livello; esiti?: EsitoQuiz[] }

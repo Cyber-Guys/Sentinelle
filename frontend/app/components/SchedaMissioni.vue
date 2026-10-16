@@ -1,8 +1,20 @@
 <script setup lang="ts">
-import { Check, Droplets, Leaf, Trash2, Compass, HelpCircle, Star, X, Loader2, CircleCheck, CircleX, Flame } from '@lucide/vue'
+import { Check, Droplets, Leaf, Trash2, Compass, HelpCircle, Star, X, Loader2, CircleCheck, CircleX, Flame, Target, Clock, MapPin } from '@lucide/vue'
 
-const props = defineProps<{ utente: Utente }>()
-const emit = defineEmits<{ esito: [EsitoMissione]; posizione: [Missione] }>()
+const props = defineProps<{ utente: Utente; mirate: MissioneMirata[] }>()
+const emit = defineEmits<{ esito: [EsitoMissione]; posizione: [Missione]; mirata: [MissioneMirata] }>()
+
+// scala del rischio: medio ambra, alto e molto alto brace (molto alto piu' pieno)
+const COLORE_RISCHIO: Record<string, string> = {
+  medio: 'bg-ambra/12 text-ambra ring-ambra/30', alto: 'bg-brace/12 text-brace ring-brace/30', 'molto alto': 'bg-brace/22 text-brace ring-brace/50',
+}
+function scadenza(iso: string) {
+  const d = new Date(iso)
+  const ora = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
+  const giorno = (x: Date) => x.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
+  const domani = new Date(Date.now() + 864e5)
+  return `scade ${giorno(d) === giorno(new Date()) ? 'oggi' : giorno(d) === giorno(domani) ? 'domani' : giorno(d)} alle ${ora}`
+}
 const { chiama } = useApi()
 
 const missioni = ref<Missione[]>([])
@@ -96,6 +108,30 @@ async function completaEsplora() {
 
     <!-- elenco -->
     <template v-if="!attiva">
+      <template v-if="mirate.length">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-lg font-semibold tracking-tight">Missioni mirate di oggi</h2>
+          <span class="flex items-center gap-1 rounded-full bg-brace/12 px-2 py-0.5 text-[.72rem] font-semibold text-brace ring-1 ring-brace/25"><Flame class="size-3" aria-hidden="true" />dal rischio</span>
+        </div>
+        <p class="mt-0.5 mb-3 text-[.8rem] text-testo-2">Dove il rischio è più alto vicino a te, secondo meteo delle prossime 24 ore, storico e vegetazione.</p>
+        <ul class="mb-5 space-y-2">
+          <li v-for="mm in mirate" :key="mm.id">
+            <button type="button" class="vetro w-full space-y-2 p-3 text-left transition-colors" :class="mm.completata ? 'opacity-75' : 'hover:bg-vetro-forte active:bg-vetro-forte'" :disabled="mm.completata" @click="emit('mirata', mm)">
+              <span class="flex items-center gap-2">
+                <span class="flex items-center gap-1 rounded-full px-2 py-0.5 text-[.72rem] font-semibold ring-1" :class="COLORE_RISCHIO[mm.livello_rischio]"><Target class="size-3" aria-hidden="true" />Rischio {{ mm.livello_rischio }}</span>
+                <span v-if="mm.completata" class="ml-auto flex items-center gap-1 text-[.8rem] font-semibold text-macchia"><Check class="size-3.5" aria-hidden="true" />Fatta</span>
+                <span v-else class="cifre ml-auto flex items-center gap-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3 fill-current" aria-hidden="true" />{{ mm.punti }}</span>
+              </span>
+              <span class="block text-[.9rem] font-semibold leading-tight">{{ mm.titolo }}</span>
+              <span class="block text-[.8rem] leading-snug text-testo-2">{{ mm.motivo }}</span>
+              <span class="cifre flex flex-wrap gap-x-3 gap-y-1 text-[.74rem] text-testo-3">
+                <span class="flex items-center gap-1"><MapPin class="size-3" aria-hidden="true" />{{ mm.distanza_km.toLocaleString('it-IT') }} km dal centro</span>
+                <span v-if="!mm.completata" class="flex items-center gap-1"><Clock class="size-3" aria-hidden="true" />{{ scadenza(mm.scade_il) }}</span>
+              </span>
+            </button>
+          </li>
+        </ul>
+      </template>
       <p class="etichetta">Oggi</p>
       <h2 class="mt-0.5 mb-3 text-lg font-semibold tracking-tight">Missioni di prevenzione</h2>
       <StatoErrore v-if="erroreElenco" :messaggio="erroreElenco" @riprova="carica" />

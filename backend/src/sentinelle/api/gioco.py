@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..config import DIR_FOTO
 from ..db import engine
+from .. import missioni_mirate
 from ..gioco import PUNTI_PER_RISPOSTA, carica_domande, correggi_quiz, livello, oggi, quiz_del_giorno
 
 router = APIRouter()
@@ -28,7 +29,8 @@ def _utente(s: Session, utente_id: int):
 def _conteggi(s: Session, utente_id: int, missione_id: int) -> tuple[int, int]:
     """(completamenti oggi, completamenti totali) dell'utente per la missione."""
     r = s.execute(text(f"SELECT count(*) FILTER (WHERE {GIORNO_LOCALE} = :g), count(*) FROM missione_completata "
-                       "WHERE utente_id = :u AND missione_id = :m"),
+                       "mc WHERE utente_id = :u AND missione_id = :m "
+                       "AND NOT EXISTS (SELECT 1 FROM missione_mirata mm WHERE mm.completamento_id = mc.id)"),
                   {"g": oggi(), "u": utente_id, "m": missione_id}).one()
     return r[0], r[1]
 
@@ -68,6 +70,50 @@ def quiz_oggi():
             for i, q in enumerate(quiz_del_giorno(oggi(), DOMANDE))]
 
 
+def _salva_foto(foto: UploadFile | None) -> str | None:
+    if not (foto and foto.filename):
+        return None
+    DIR_FOTO.mkdir(exist_ok=True)
+    nome = uuid.uuid4().hex + Path(foto.filename).suffix.lower()
+    (DIR_FOTO / nome).write_bytes(foto.file.read())
+    return nome
+
+
+@router.get("/missioni/mirate")
+def mirate(utente_id: int):
+    with engine.begin() as c:
+        with Session(bind=c) as s:
+            _utente(s, utente_id)
+        return missioni_mirate.di_oggi(c, utente_id)
+
+
+@router.post("/missioni/mirate/{id}/completa")
+def completa_mirata(id: int, lat: float = Form(), lon: float = Form(), foto: UploadFile | None = File(None)):
+    with Session(engine) as s:
+        m = s.execute(text(
+            "SELECT id, utente_id, punti, completata_il, scade_il < now() AS scaduta, ST_Distance(geom::geography, "
+            "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography) AS dist FROM missione_mirata WHERE id = :i FOR UPDATE"),
+            {"i": id, "lon": lon, "lat": lat}).one_or_none()
+        if m is None:
+            raise HTTPException(404, "missione non trovata")
+        if m.completata_il is not None:
+            raise HTTPException(409, "Già completata")
+        if m.scaduta:
+            raise HTTPException(409, "Missione scaduta")
+        if m.dist > missioni_mirate.RAGGIO_COMPLETAMENTO_M:
+            raise HTTPException(422, f"Sei a {m.dist / 1000:.1f} km dal punto: avvicinati entro 1 km")
+        mc = s.execute(text(
+            "INSERT INTO missione_completata (utente_id, missione_id, punti, geom, foto) SELECT :u, id, :p, "
+            "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f FROM missione WHERE codice = 'sterpaglie' RETURNING id"),
+            {"u": m.utente_id, "p": m.punti, "lon": lon, "lat": lat, "f": _salva_foto(foto)}).scalar()
+        s.execute(text("UPDATE missione_mirata SET completata_il = now(), completamento_id = :c WHERE id = :i"),
+                  {"c": mc, "i": id})
+        totale = s.execute(text("UPDATE utente SET punti = punti + :p WHERE id = :u RETURNING punti"),
+                           {"p": m.punti, "u": m.utente_id}).scalar()
+        s.commit()
+    return {"punti_ottenuti": m.punti, "punti": totale, "livello": livello(totale)}
+
+
 @router.post("/missioni/{id}/completa")
 def completa(id: int, utente_id: int = Form(), lat: float | None = Form(None), lon: float | None = Form(None),
              foto: UploadFile | None = File(None), risposte: str | None = Form(None)):
@@ -91,10 +137,7 @@ def completa(id: int, utente_id: int = Form(), lat: float | None = Form(None), l
             if lat is None or lon is None:
                 raise HTTPException(422, "lat e lon obbligatori")
             geom = (lon, lat)
-            if foto and foto.filename:
-                DIR_FOTO.mkdir(exist_ok=True)
-                nome_foto = uuid.uuid4().hex + Path(foto.filename).suffix.lower()
-                (DIR_FOTO / nome_foto).write_bytes(foto.file.read())
+            nome_foto = _salva_foto(foto)
 
         s.execute(text(
             "INSERT INTO missione_completata (utente_id, missione_id, punti, geom, foto) VALUES "
@@ -132,11 +175,12 @@ def classifica_utenti(comune_id: int):
 def mappature():
     with engine.connect() as c:
         righe = c.execute(text(
-            "SELECT m.codice, m.titolo, u.nome AS utente, mc.completata_il, ST_AsGeoJSON(mc.geom) AS g "
+            "SELECT m.codice, m.titolo, u.nome AS utente, mc.completata_il, ST_AsGeoJSON(mc.geom) AS g, "
+            "EXISTS (SELECT 1 FROM missione_mirata mm WHERE mm.completamento_id = mc.id) AS mirata "
             "FROM missione_completata mc JOIN missione m ON m.id = mc.missione_id "
             "JOIN utente u ON u.id = mc.utente_id WHERE m.tipo = 'posizione' AND mc.geom IS NOT NULL "
             "ORDER BY mc.completata_il DESC LIMIT 2000")).all()
     return {"type": "FeatureCollection", "features": [
         {"type": "Feature", "geometry": json.loads(r.g), "properties": {
-            "codice": r.codice, "titolo": r.titolo, "utente": r.utente, "completata_il": r.completata_il.isoformat()}}
+            "codice": r.codice, "titolo": r.titolo, "utente": r.utente, "completata_il": r.completata_il.isoformat(), "mirata": r.mirata}}
         for r in righe]}

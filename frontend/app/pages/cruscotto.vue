@@ -4,7 +4,7 @@ import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAlo
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
-import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, MapPin, History, Inbox, ArrowLeft, ChevronUp } from '@lucide/vue'
+import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, MapPin, History, Inbox, ArrowLeft, ChevronUp, Target } from '@lucide/vue'
 
 const { chiama } = useApi()
 const { tema } = useTema()
@@ -318,7 +318,10 @@ onMounted(() => {
       apriPopup(m, ev.lngLat, PopupMappa, {
         icona: t?.icona ?? MapPin, tinta, etichetta: `Mappatura · ${t?.breve ?? 'cittadino'}`, titolo: p.titolo,
         sottotitolo: [p.utente, p.comune ? nomeComune(String(p.comune)) : ''].filter(Boolean).join(' · '),
-      }, () => h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`))
+      }, () => [
+        String(p.mirata) === 'true' ? h('p', { class: 'mt-2 flex items-center gap-1.5 text-[.78rem] font-semibold text-brace' }, [h(Target, { class: 'size-3.5', 'aria-hidden': 'true' }), 'Da missione mirata (rischio)']) : null,
+        h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`),
+      ])
     })
     // cluster: zoom fino a dove il gruppo si separa
     m.on('click', 'mappature-cluster', async (ev) => {

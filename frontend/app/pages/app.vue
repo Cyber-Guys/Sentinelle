@@ -2,7 +2,7 @@
 import maplibregl from 'maplibre-gl'
 import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiInvasi, impostaInvasi, clicInvasi, segnapostiMancanti, SEGNAPOSTO_INVASO, type Alone, type GrigliaRischio } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
-import { Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
+import { Target, Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
 
 const { chiama, urlFoto } = useApi()
@@ -26,6 +26,9 @@ const esito = ref<Segnalazione | null>(null)
 
 const scheda = ref<Scheda>('mappa')
 const missione = ref<Missione | null>(null) // missione `posizione` in attesa del punto sulla mappa
+// missioni mirate dal rischio: pin obiettivo sulla mappa; `mirata` = quella in corso (con `missione` come vista)
+const mirate = ref<MissioneMirata[]>([])
+const mirata = ref<MissioneMirata | null>(null)
 const toast = ref<{ id: number; testo: string; nota?: string; esito?: 'ok' | 'no' } | null>(null)
 const nuovoLivello = ref<{ nome: string; punti: number } | null>(null)
 let tToast: ReturnType<typeof setTimeout> | undefined
@@ -80,6 +83,7 @@ async function scegli(u: Utente) {
   try { localStorage.setItem('utenteId', String(u.id)) } catch {}
   caricaRischio()
   caricaMie()
+  caricaMirate()
   clearInterval(tMie); tMie = setInterval(caricaMie, 30000) // rete di sicurezza: gli eventi SSE aggiornano subito
   await nextTick()
   avviaMappa()
@@ -182,7 +186,7 @@ function caricaRischio() {
 function cambiaUtente() {
   fermaAloni(); mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO; chiaveAloni = ''
   clearInterval(tMie); note = null; mie.value = []; mieCaricamento.value = true; mieNovita.value = false; popupMia = null
-  utente.value = null; pannello.value = false; esito.value = null; missione.value = null; scheda.value = 'mappa'
+  utente.value = null; pannello.value = false; esito.value = null; missione.value = null; mirata.value = null; mirate.value = []; scheda.value = 'mappa'
   try { localStorage.removeItem('utenteId') } catch {}
 }
 
@@ -221,6 +225,7 @@ function avviaMappa() {
     })
     caricaHotspot()
   }
+  aggiornaPinMirate()
 }
 
 function aggiungiLivelli() {
@@ -232,6 +237,9 @@ function aggiungiLivelli() {
   aggiungiHotspot(m, c, datiHotspot)
   aggiungiInvasi(m, tema.value, invasi.value, mostraInvasi.value)
   // proprie segnalazioni sopra storico e hotspot: in valutazione ambra con onda, confermate macchia, falsi allarmi ad anello
+  m.addSource('obiettivo', { type: 'geojson', data: geoObiettivo() })
+  m.addLayer({ id: 'obiettivo-area', type: 'fill', source: 'obiettivo', paint: { 'fill-color': c.ambra, 'fill-opacity': 0.08 } })
+  m.addLayer({ id: 'obiettivo-bordo', type: 'line', source: 'obiettivo', paint: { 'line-color': c.ambra, 'line-width': 2, 'line-dasharray': [2, 2] } })
   aggiungiPinSegnalazioni(m, 'mie', c, geojsonSegnalazioni(mie.value), { nuova: c.ambra, confermata: c.macchia })
 }
 
@@ -318,6 +326,47 @@ watch(scheda, async (s) => {
   if (s === 'mappa') { await nextTick(); mappa?.resize() }
 })
 
+// missioni mirate: pin Target (ambra rischio medio, brace alto e molto alto), tocco -> apri la missione
+async function caricaMirate() {
+  const u = utente.value
+  if (!u) return
+  try { mirate.value = await chiama<MissioneMirata[]>(`/missioni/mirate?utente_id=${u.id}`) } catch {}
+}
+let pinMirate: maplibregl.Marker[] = []
+const ICONA_TARGET = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'
+function aggiornaPinMirate() {
+  pinMirate.forEach((p) => p.remove()); pinMirate = []
+  if (!mappa) return
+  for (const mm of mirate.value.filter((x) => !x.completata)) {
+    const el = document.createElement('button')
+    el.type = 'button'
+    el.className = `pin-mirata ${mm.livello_rischio === 'medio' ? 'text-ambra' : 'text-brace'}`
+    el.setAttribute('aria-label', `Missione mirata: ${mm.titolo}`)
+    el.innerHTML = ICONA_TARGET
+    el.addEventListener('click', (ev) => { ev.stopPropagation(); if (!pannello.value && !missione.value) avviaMirata(mm) })
+    pinMirate.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([mm.lon, mm.lat]).addTo(mappa))
+  }
+}
+watch(mirate, aggiornaPinMirate)
+
+// area obiettivo: cerchio di 1 km attorno al punto della missione mirata in corso
+function geoObiettivo(): any {
+  const mm = mirata.value
+  if (!mm) return VUOTO
+  const anello = Array.from({ length: 65 }, (_, k) => {
+    const a = (k / 64) * 2 * Math.PI
+    return [mm.lon + Math.sin(a) / (111.32 * Math.cos(mm.lat * Math.PI / 180)), mm.lat + Math.cos(a) / 110.57]
+  })
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [anello] } }] }
+}
+watch(mirata, () => (mappa?.getSource('obiettivo') as maplibregl.GeoJSONSource | undefined)?.setData(geoObiettivo()))
+
+async function avviaMirata(mm: MissioneMirata) {
+  mirata.value = mm
+  await scegliPunto({ id: mm.id, codice: 'sterpaglie', titolo: mm.titolo, descrizione: mm.motivo, punti: mm.punti, tipo: 'posizione', disponibile: true, motivo: null })
+  mappa?.flyTo({ center: [mm.lon, mm.lat], zoom: 13.5, duration: 1200, padding: { top: 60, bottom: 260, left: 0, right: 0 } })
+}
+
 // missione `posizione`: passa alla mappa in modalita' "scegli punto"
 async function scegliPunto(m: Missione) {
   missione.value = m; pos.value = null; foto.value = null; errore.value = ''
@@ -327,7 +376,7 @@ async function scegliPunto(m: Missione) {
 }
 
 async function annullaMissione() {
-  missione.value = null; pos.value = null; marcatore?.remove(); errore.value = ''
+  missione.value = null; mirata.value = null; pos.value = null; marcatore?.remove(); errore.value = ''
   scheda.value = 'missioni'
 }
 
@@ -340,12 +389,16 @@ async function confermaMissione() {
   f.append('lon', String(pos.value.lon))
   if (foto.value) f.append('foto', foto.value)
   try {
-    const r = await chiama<EsitoMissione>(`/missioni/${missione.value.id}/completa`, { method: 'POST', body: f })
+    const url = mirata.value ? `/missioni/mirate/${mirata.value.id}/completa` : `/missioni/${missione.value.id}/completa`
+    const r = await chiama<EsitoMissione>(url, { method: 'POST', body: f })
+    if (mirata.value) { mirata.value = null; caricaMirate() }
     marcatore?.remove(); pos.value = null; missione.value = null
     scheda.value = 'missioni'
     applicaEsito(r)
   } catch (e: any) {
-    errore.value = String(e.message).startsWith('409') ? 'Hai raggiunto il limite di oggi per questa missione.' : messaggioErrore(e, 'inviare la missione')
+    const m = String(e.message)
+    if (mirata.value && m.startsWith('422')) errore.value = (() => { try { return JSON.parse(m.slice(4)).detail } catch { return 'Punto troppo lontano dall\'obiettivo.' } })()
+    else errore.value = m.startsWith('409') && mirata.value ? 'Missione già completata o scaduta.' : m.startsWith('409') ? 'Hai raggiunto il limite di oggi per questa missione.' : messaggioErrore(e, 'inviare la missione')
   }
   inCorso.value = false
 }
@@ -440,8 +493,9 @@ async function invia() {
       <Transition name="foglio">
         <section v-if="scheda === 'mappa' && missione" class="sospeso fixed inset-x-2 bottom-[5.25rem] z-20 mx-auto max-w-[440px] space-y-3 p-3">
           <div>
-            <p class="etichetta">Missione · +{{ missione.punti }} punti</p>
+            <p class="etichetta">{{ mirata ? 'Missione mirata' : 'Missione' }} · +{{ missione.punti }} punti</p>
             <p class="mt-0.5 text-base font-semibold">{{ missione.titolo }}</p>
+            <p v-if="mirata" class="mt-1 flex items-start gap-1.5 text-[.8rem] text-testo-2"><Target class="mt-0.5 size-3.5 shrink-0 text-ambra" aria-hidden="true" />Scegli un punto entro 1 km dall'obiettivo (cerchio tratteggiato).</p>
           </div>
           <p class="flex items-center gap-2 rounded-m border p-3 text-sm" :class="pos ? 'border-macchia/40 bg-macchia/10 font-semibold text-macchia' : 'border-bordo bg-vetro text-testo-2'">
             <MapPin class="size-4 shrink-0" aria-hidden="true" />
@@ -545,7 +599,7 @@ async function invia() {
       <!-- missioni e classifica: fogli sopra la mappa -->
       <Transition name="foglio">
         <section v-if="scheda === 'missioni'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] bottom-[5.25rem] z-20 mx-auto max-w-[480px] overflow-y-auto sm:bottom-auto sm:max-h-[calc(100dvh-9.75rem)]">
-          <SchedaMissioni :utente="utente" @esito="applicaEsito" @posizione="scegliPunto" />
+          <SchedaMissioni :utente="utente" :mirate="mirate" @esito="applicaEsito" @posizione="scegliPunto" @mirata="avviaMirata" />
         </section>
       </Transition>
       <Transition name="foglio">

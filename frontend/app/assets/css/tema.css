@@ -316,6 +316,14 @@ body::after {
 .pin-ambra { --pin: var(--ambra); }
 .pin-macchia { --pin: var(--macchia); }
 .pin-cielo { --pin: var(--cielo); }
+/* Missione mirata dal rischio: pin discreto con icona Target (colore = rischio, via text-ambra/text-brace) */
+.pin-mirata {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 999px; cursor: pointer;
+  background: var(--fondo-3);
+  box-shadow: 0 0 0 1.5px currentColor, 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.pin-mirata:hover { scale: 1.1; }
 /* Punto di stato (es. "in diretta"): stesso linguaggio dei pin, in piccolo */
 .punto-vivo {
   --pin: var(--macchia);

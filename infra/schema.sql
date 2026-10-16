@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS cella (id serial PRIMARY KEY, i int NOT NULL, j int N
   lon double precision NOT NULL, lat double precision NOT NULL, geom geometry(Polygon,4326) NOT NULL,
   storico double precision NOT NULL DEFAULT 0, pericolo double precision NOT NULL DEFAULT 0, UNIQUE (i, j));
 CREATE INDEX IF NOT EXISTS cella_geom_idx ON cella USING gist (geom);
+-- missioni mirate dal rischio: generate per utente e giorno, completamento = mappatura 'sterpaglie'
+CREATE TABLE IF NOT EXISTS missione_mirata (id serial PRIMARY KEY, utente_id int NOT NULL REFERENCES utente,
+  cella_id int REFERENCES cella, geom geometry(Point,4326) NOT NULL, titolo text NOT NULL, motivo text NOT NULL,
+  punti int NOT NULL, valore_rischio double precision NOT NULL, creata_il timestamptz NOT NULL DEFAULT now(),
+  scade_il timestamptz NOT NULL, completata_il timestamptz,
+  completamento_id int REFERENCES missione_completata ON DELETE SET NULL);
 -- scomposizione della priorita' per fattore (vuota per le segnalazioni precedenti)
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT '[]'::jsonb;
 -- storico: data di valutazione e punti guadagnati con la segnalazione
