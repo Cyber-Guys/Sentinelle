@@ -23,9 +23,15 @@ necessarie.
 
 ## Decisioni prese (Alessandro)
 
-- **Visibilita':** una segnalazione e' visibile a tutti solo sopra una soglia
-  di affidabilita'. Sotto soglia la vedono l'autore, gli operatori e i
-  cittadini vicini a cui si chiede di verificarla (vedi Alert).
+- **Visibilita':** tutte le segnalazioni attive sono visibili sulla mappa a chi
+  guarda quella zona. Sotto soglia appaiono come "Da verificare" (pin tenue,
+  senza alone, testo esplicito); sopra soglia con lo stato pieno.
+- **Conferma solo sul posto:** si puo' confermare o dire "Non c'e' piu'" solo
+  se il GPS e' entro il raggio della segnalazione (2 km); fuori raggio i
+  pulsanti sono disattivati con il motivo ("Avvicinati entro 2 km per
+  confermare").
+- **Tipi nella demo:** Fuoco, Fumo, Area a rischio, Strada bloccata, Persone o
+  animali in pericolo (tutti e cinque).
 - **Chiusura:** possono chiuderla sia i cittadini ("Non c'e' piu'") sia
   l'operatore.
 - **Privacy:** mai i nomi; solo conteggi ("8 cittadini hanno confermato").
@@ -88,15 +94,24 @@ punteggio = somma dei pesi delle conferme indipendenti (peso = r dell'utente, au
 Soglie:
 | Punteggio | Stato per i cittadini | Visibile a |
 |---|---|---|
-| < 1,0 | Da verificare | autore, operatori, cittadini vicini (richiesta di verifica) |
+| < 1,0 | Da verificare | tutti (pin tenue); confermabile solo entro 2 km |
 | >= 1,0 | Probabile | tutti |
 | >= 2,5 | Confermata dalla comunita' | tutti |
 | conferma operatore | Confermata dagli operatori | tutti |
 
 Conseguenze: un utente molto affidabile con una foto vicino a un hotspot
 supera subito la soglia; un utente nuovo da solo no, servono 1-2 conferme.
-Le conferme danno punti di gioco solo se la segnalazione viene poi confermata
-dall'operatore (i falsi allarmi non convengono, come oggi).
+Punti di gioco (scelta del controller), assegnati solo all'esito
+dell'operatore, cosi' i falsi allarmi non convengono:
+| Azione | Punti | Quando |
+|---|---|---|
+| Prima segnalazione (fuoco/fumo) | +50 | confermata dall'operatore (come oggi) |
+| Prima segnalazione (altri tipi) | +20 | confermata dall'operatore |
+| Conferma "C'e' ancora" | +10 | se la segnalazione e' confermata dall'operatore |
+| "Non c'e' piu'" corretto | +10 | se l'operatore la chiude come spenta |
+| Voto smentito dall'operatore | 0 punti, l'affidabilita' cala | sempre |
+Bonus "primo a confermare" +5. Le conferme migliorano anche l'affidabilita'
+dell'utente, che vale piu' dei punti.
 
 Anti-abuso minimo per la demo: un voto per utente, limite di segnalazioni per
 ora, conferme che contano solo se il GPS e' entro 2 km dal punto.
@@ -125,12 +140,12 @@ ora, conferme che contano solo se il GPS e' entro 2 km dal punto.
 
 ## Domande ancora aperte
 
-1. Chi vede le segnalazioni "Da verificare": solo chi e' entro 2 km o anche chi
-   apre la mappa in quella zona?
-2. Stati ufficiali del cruscotto: bastano i quattro proposti?
-3. Strada bloccata e persone/animali in pericolo: entrano nella demo o sono
-   sviluppi futuri?
-4. Punti di gioco per le conferme: quanti, e solo a conferma operatore?
+1. Stati ufficiali del cruscotto: bastano i quattro proposti (In verifica,
+   Operatori allertati, Mezzi sul posto, Spento)? In mancanza di risposta si
+   usano questi.
+
+Chiuse il 2026-10-16: visibilita' (tutti vedono, conferma solo entro 2 km),
+cinque tipi nella demo, punti (tabella sopra).
 
 ## Fuori perimetro della demo
 
