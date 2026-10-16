@@ -14,7 +14,8 @@ export default defineNuxtConfig({
     server: { allowedHosts: ['.trycloudflare.com'] }, // tunnel per il telefono (scripts/tunnel.sh)
   },
   // stessa origine: il browser chiama /api/**, Nitro inoltra al backend (niente CORS, funziona dal tunnel HTTPS)
-  routeRules: { '/api/**': { proxy: 'http://localhost:8000/**' } },
+  // BACKEND_URL: solo per nuxt dev in Docker (compose.dev.yaml), dove il backend e' http://backend:8000
+  routeRules: { '/api/**': { proxy: `${process.env.BACKEND_URL ?? 'http://localhost:8000'}/**` } },
   app: {
     head: {
       htmlAttrs: { lang: 'it' },

@@ -1,0 +1,11 @@
+# Contesto del backend (radice del repo): solo cio' che entra nell'immagine.
+# Il frontend ha il suo contesto (frontend/) e il suo frontend/.dockerignore.
+*
+!backend/requirements.txt
+!backend/config
+!backend/src
+!infra/schema.sql
+!dati/*.json
+!dati/offline
+!scripts/*.py
+**/__pycache__

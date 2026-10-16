@@ -1,0 +1,76 @@
+# Stack completo in Docker: db + dati (ripristino una tantum) + backend + frontend.
+#   ./scripts/docker.sh        scarica il dump dei dati se manca e avvia tutto
+#   docker compose up -d --build --wait
+# Sviluppo con hot reload: vedi compose.dev.yaml. Il flusso senza Docker (infra/compose.yaml) resta com'e'.
+# Porte: SENTINELLE_PORTA_APP (default 3000), SENTINELLE_PORTA_API (default 8000, solo localhost).
+name: sentinelle-docker
+
+x-db: &db
+  image: imresamu/postgis:17-3.5-alpine
+  environment:
+    POSTGRES_USER: sentinelle
+    POSTGRES_PASSWORD: sentinelle
+    POSTGRES_DB: sentinelle
+
+services:
+  db:
+    <<: *db
+    restart: unless-stopped
+    # Profilo per un portatile e una demo: poca memoria, niente JIT (rallenta le query brevi di PostGIS).
+    command: >
+      postgres -c shared_buffers=128MB -c effective_cache_size=512MB -c work_mem=16MB
+      -c maintenance_work_mem=128MB -c max_connections=30 -c jit=off
+      -c synchronous_commit=off -c random_page_cost=1.1
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sentinelle -d sentinelle"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    volumes:
+      - dati_db:/var/lib/postgresql/data
+
+  # Una tantum: ripristina dati/sentinelle.dump se il database e' vuoto, poi termina.
+  dati:
+    <<: *db
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGHOST: db
+      PGUSER: sentinelle
+      PGPASSWORD: sentinelle
+      PGDATABASE: sentinelle
+    entrypoint: ["sh", "/ripristina.sh"]
+    volumes:
+      - ./dati:/dati:ro
+      - ./infra/ripristina.sh:/ripristina.sh:ro
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      dati: { condition: service_completed_successfully }
+    environment:
+      DATABASE_URL: postgresql+psycopg://sentinelle:sentinelle@db:5432/sentinelle
+      MODALITA_OFFLINE: ${MODALITA_OFFLINE:-0}
+    ports:
+      - "127.0.0.1:${SENTINELLE_PORTA_API:-8000}:8000"
+    volumes:
+      - foto:/app/backend/foto
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "${SENTINELLE_PORTA_APP:-3000}:80"
+    volumes:
+      - ./frontend/public/tiles:/usr/share/nginx/html/tiles:ro
+
+volumes:
+  dati_db:
+  foto:

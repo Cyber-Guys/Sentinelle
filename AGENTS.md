@@ -10,6 +10,11 @@ qui: le regole si modificano solo in questo file, cosi' le guide non divergono.
 
 ## Primo avvio in un nuovo clone
 
+**Con Docker (consigliato, nessuna dipendenza sul sistema):** `./scripts/docker.sh`
+(oppure `./scripts/docker.sh dev` per l'hot reload). Verifica come al punto 3. Comandi Python
+nel container: `./scripts/docker.sh exec backend python scripts/<script>.py`. I punti 1-2 qui sotto
+descrivono il percorso sul sistema, alternativo.
+
 Una volta per clone, dalla radice del repository:
 
 1. `./scripts/setup.sh`: verifica i prerequisiti (stampa cosa manca e come

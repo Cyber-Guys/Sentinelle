@@ -24,6 +24,19 @@ poi `gh auth login` (serve anche per scaricare i dati).
 
 ## 3. Setup e avvio
 
+**Percorso Docker (consigliato):** servono solo git, Docker e `gh` (punto 2). Salta Node, Python e conda.
+
+```bash
+git clone https://github.com/ale24cocco/hackaton-incendi.git && cd hackaton-incendi
+./scripts/docker.sh        # ~2 minuti la prima volta, poi pochi secondi
+```
+
+Poi http://localhost:3000/app e http://localhost:3000/cruscotto. Per lavorare sul codice con hot reload:
+`./scripts/docker.sh dev`. Fermare: `./scripts/docker.sh down`. Dettagli nel `README.md`.
+Il percorso sotto (setup.sh + avvia.sh) resta valido ma non serve se usi Docker; non farli girare insieme (stessa porta 3000).
+
+**Percorso sul sistema (setup.sh):**
+
 ```bash
 git clone https://github.com/ale24cocco/hackaton-incendi.git
 cd hackaton-incendi

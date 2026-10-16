@@ -1,0 +1,5 @@
+node_modules
+.nuxt
+.output
+# i tile (74 MB) non entrano nell'immagine: compose li monta in sola lettura
+public/tiles

@@ -13,6 +13,7 @@ dist/
 
 # dati geografici pesanti (~280 MB): si rigenerano con scripts/scarica_dati.py o si condividono come dump
 dati/*.geojson
+dati/*.dump
 backend/foto/
 *.egg-info/
 *.log

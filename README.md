@@ -5,7 +5,23 @@ Segnalazione partecipata e gamification contro gli incendi in Sardegna
 completano missioni di prevenzione, gli operatori ricevono le segnalazioni gia'
 verificate e ordinate per priorita'.
 
-## Avvio rapido
+## Avvio con Docker (consigliato)
+
+Prerequisiti: Docker con compose, git, `gh` autenticato con accesso al repo (solo per il dump dei dati).
+Niente Node, Python o conda sul sistema: tutto gira nei container, uguale per tutti.
+
+```bash
+./scripts/docker.sh        # prima volta: scarica il dump dei dati (~140 MB), costruisce, ripristina, avvia (~2 min)
+./scripts/docker.sh dev    # alternativa per sviluppare: hot reload su backend e frontend
+./scripts/docker.sh down   # ferma (i dati restano); "down -v" riparte da zero
+```
+
+Stesse URL di sotto (3000 app, 8000 API). Stack leggero: frontend statico + nginx (~7 MB di RAM), backend
+(~100 MB), PostGIS (~300 MB). Porte: `SENTINELLE_PORTA_APP`, `SENTINELLE_PORTA_API`. Senza `gh`: copiare
+`sentinelle.dump` in `dati/` e lanciare lo script. Comandi nel backend: `./scripts/docker.sh exec backend python scripts/prova_percorso.py`.
+Dipendenze Python bloccate in `backend/requirements.txt` (comando di rigenerazione in `backend/Dockerfile`).
+
+## Avvio rapido senza Docker per l'app (ambiente sul sistema)
 
 Prerequisiti: Docker (acceso), Node >= 20, git, e uno tra conda, uv o Python 3.12.
 Per i dati serve `gh` autenticato con accesso al repo. Dettagli in `ONBOARDING.md`.
