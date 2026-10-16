@@ -87,8 +87,15 @@ def mirate(utente_id: int):
         return missioni_mirate.di_oggi(c, utente_id)
 
 
+# esito del sopralluogo -> tipo di mappatura creata (area pulita: sopralluogo vegetazione con esito negativo)
+ESITI_MIRATA = {"pulita": "sterpaglie", "sterpaglie": "sterpaglie", "rifiuti": "rifiuti_strada"}
+
+
 @router.post("/missioni/mirate/{id}/completa")
-def completa_mirata(id: int, lat: float = Form(), lon: float = Form(), foto: UploadFile | None = File(None)):
+def completa_mirata(id: int, lat: float = Form(), lon: float = Form(), esito: str = Form(),
+                    foto: UploadFile | None = File(None)):
+    if esito not in ESITI_MIRATA:
+        raise HTTPException(422, "Scegli cosa hai trovato: area pulita, sterpaglie secche o rifiuti infiammabili")
     with Session(engine) as s:
         m = s.execute(text(
             "SELECT id, utente_id, punti, completata_il, scade_il < now() AS scaduta, ST_Distance(geom::geography, "
@@ -103,11 +110,12 @@ def completa_mirata(id: int, lat: float = Form(), lon: float = Form(), foto: Upl
         if m.dist > missioni_mirate.RAGGIO_COMPLETAMENTO_M:
             raise HTTPException(422, f"Sei a {m.dist / 1000:.1f} km dal punto: avvicinati entro 1 km")
         mc = s.execute(text(
-            "INSERT INTO missione_completata (utente_id, missione_id, punti, geom, foto) SELECT :u, id, :p, "
-            "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f FROM missione WHERE codice = 'sterpaglie' RETURNING id"),
-            {"u": m.utente_id, "p": m.punti, "lon": lon, "lat": lat, "f": _salva_foto(foto)}).scalar()
-        s.execute(text("UPDATE missione_mirata SET completata_il = now(), completamento_id = :c WHERE id = :i"),
-                  {"c": mc, "i": id})
+            "INSERT INTO missione_completata (utente_id, missione_id, punti, geom, foto, esito) SELECT :u, id, :p, "
+            "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :e FROM missione WHERE codice = :k RETURNING id"),
+            {"u": m.utente_id, "p": m.punti, "lon": lon, "lat": lat, "f": _salva_foto(foto), "e": esito,
+             "k": ESITI_MIRATA[esito]}).scalar()
+        s.execute(text("UPDATE missione_mirata SET completata_il = now(), completamento_id = :c, esito = :e WHERE id = :i"),
+                  {"c": mc, "i": id, "e": esito})
         totale = s.execute(text("UPDATE utente SET punti = punti + :p WHERE id = :u RETURNING punti"),
                            {"p": m.punti, "u": m.utente_id}).scalar()
         s.commit()
@@ -175,12 +183,13 @@ def classifica_utenti(comune_id: int):
 def mappature():
     with engine.connect() as c:
         righe = c.execute(text(
-            "SELECT m.codice, m.titolo, u.nome AS utente, mc.completata_il, ST_AsGeoJSON(mc.geom) AS g, "
+            "SELECT m.codice, m.titolo, u.nome AS utente, mc.completata_il, mc.esito, ST_AsGeoJSON(mc.geom) AS g, "
             "EXISTS (SELECT 1 FROM missione_mirata mm WHERE mm.completamento_id = mc.id) AS mirata "
             "FROM missione_completata mc JOIN missione m ON m.id = mc.missione_id "
             "JOIN utente u ON u.id = mc.utente_id WHERE m.tipo = 'posizione' AND mc.geom IS NOT NULL "
             "ORDER BY mc.completata_il DESC LIMIT 2000")).all()
     return {"type": "FeatureCollection", "features": [
         {"type": "Feature", "geometry": json.loads(r.g), "properties": {
-            "codice": r.codice, "titolo": r.titolo, "utente": r.utente, "completata_il": r.completata_il.isoformat(), "mirata": r.mirata}}
+            "codice": r.codice, "titolo": r.titolo, "utente": r.utente, "completata_il": r.completata_il.isoformat(), "mirata": r.mirata,
+            "esito": r.esito}}
         for r in righe]}

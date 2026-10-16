@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, aggiungiInvasi, impostaInvasi, clicInvasi, SEGNAPOSTO_INVASO, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
+import { aggiungiHotspot, impostaHotspot, LIVELLI_HOTSPOT, TUTTI_LIVELLI_HOTSPOT, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, aggiungiInvasi, impostaInvasi, clicInvasi, SEGNAPOSTO_INVASO, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
@@ -55,7 +55,7 @@ watch(mostraRischio, (v) => { if (v) caricaRischio(); impostaRischio(mappa, geoj
   Scenario di propagazione: avvio da popup hotspot, scheda segnalazione, clic destro / pressione lunga.
   Il pannello sostituisce la scheda (desktop) o il contenuto del foglio (telefono).
 */
-const scenario = ref<{ lat: number; lon: number; titolo: string } | null>(null)
+const scenario = ref<{ lat: number; lon: number; titolo: string; area?: any } | null>(null)
 const oreScenario = ref(6)
 const cursore = ref(6)
 const datiScenario = shallowRef<Simulazione | null>(null)
@@ -63,11 +63,11 @@ const carScenario = ref(false)
 const errScenario = ref('')
 let richiesta = 0
 const coordinate = (lat: number, lon: number) => `${lat.toFixed(3)}, ${lon.toFixed(3)}`
-function avviaScenario(lat: number, lon: number, titolo = '', grezzo = false) {
+function avviaScenario(lat: number, lon: number, titolo = '', grezzo = false, area?: any) {
   chiudiPopup()
   livelliAperti.value = false
   selezionata.value = null
-  scenario.value = { lat, lon, titolo: titolo ? (grezzo ? titolo : nomeComune(titolo)) : coordinate(lat, lon) }
+  scenario.value = { lat, lon, titolo: titolo ? (grezzo ? titolo : nomeComune(titolo)) : coordinate(lat, lon), area }
   datiScenario.value = null
   rimuoviScenario(mappa)
   if (mobile.value && foglio.value === 'chiuso') foglio.value = 'meta'
@@ -79,7 +79,7 @@ async function calcolaScenario(adatta = false) {
   const n = ++richiesta
   carScenario.value = true; errScenario.value = ''
   try {
-    const d = await chiama<Simulazione>('/simulazione', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lat: s.lat, lon: s.lon, ore: oreScenario.value }) })
+    const d = await chiama<Simulazione>('/simulazione', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lat: s.lat, lon: s.lon, ore: oreScenario.value, area: s.area }) })
     if (n !== richiesta || !scenario.value) return
     datiScenario.value = d
     cursore.value = d.ore
@@ -130,7 +130,29 @@ const geojsonAree = () => ({ type: 'FeatureCollection' as const, features: (aree
 const impostaAree = () => (mappa?.getSource('aree') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonAree())
 watch(areaSel, impostaAree)
 // durante lo scenario il velo delle aree si spegne: resta solo il contorno
-watch(() => !!scenario.value, (v) => { if (mappa?.getLayer('aree-velo')) mappa.setLayoutProperty('aree-velo', 'visibility', v ? 'none' : 'visible') })
+watch(() => !!scenario.value, (v) => { for (const l of ['aree-velo', 'aree-hover']) if (mappa?.getLayer(l)) mappa.setLayoutProperty(l, 'visibility', v ? 'none' : 'visible') })
+// hover e clic sulle zone: i pin (segnalazioni, hotspot, invasi, mappature) vincono, la zona vince sugli incendi storici
+let areaHover: number | null = null
+const PIN_AREE = ['coda', 'storico-segn', ...LIVELLI_HOTSPOT, 'invasi', 'mappature', 'mappature-cluster']
+function areaSotto(m: maplibregl.Map, pt: maplibregl.PointLike): number | null {
+  if (!m.getLayer('aree-velo') || m.getLayoutProperty('aree-velo', 'visibility') === 'none') return null
+  if (m.queryRenderedFeatures(pt, { layers: PIN_AREE.filter((l) => m.getLayer(l)) }).length) return null
+  return m.queryRenderedFeatures(pt, { layers: ['aree-velo'] })[0]?.properties?.id ?? null
+}
+function evidenziaAree(m: maplibregl.Map, id: number | null) {
+  if (id === areaHover) return
+  areaHover = id
+  const f: any = id == null ? ['==', ['get', 'id'], -1] : ['all', ['==', ['get', 'id'], id], ['==', ['get', 'sel'], 0]]
+  for (const l of ['aree-hover', 'aree-hover-bordo']) if (m.getLayer(l)) m.setFilter(l, f)
+  m.getCanvas().style.cursor = id == null ? '' : 'pointer'
+}
+async function clicArea(m: maplibregl.Map, pt: maplibregl.PointLike) {
+  const id = areaSotto(m, pt)
+  const a = id == null ? null : aree.value?.aree.find((x) => x.id === id)
+  if (!a) return
+  vista.value = 'aree'
+  if (areaSel.value !== a.id) await selezionaArea(a)
+}
 function limitiArea(a: AreaCritica): [[number, number], [number, number]] {
   const p: number[][] = (a.area.type === 'MultiPolygon' ? a.area.coordinates.flat(2) : a.area.coordinates.flat(1))
   const xs = p.map((c) => c[0]!), ys = p.map((c) => c[1]!)
@@ -152,7 +174,7 @@ const simulaArea = (a: AreaCritica) => avviaScenario(a.punto_peggiore.lat, a.pun
 // prima apertura: con la coda vuota si parte dalle aree critiche, non da una mappa vuota
 watch(caricamento, (c) => { if (!c && !coda.value.length) vista.value = 'aree' }, { once: true })
 
-const mostraIncendi = ref(true)
+const mostraIncendi = ref(false) // storico incendi spento di default: si accende dai Livelli
 const filtroIncendi = ref('2025')
 const filtroStorico = ref<'entrambe' | 'confermata' | 'archiviata'>('entrambe')
 const FILTRI_STORICO = [
@@ -255,7 +277,7 @@ function mostraAvviso(testo: string, tipo: 'ok' | 'errore' = 'ok') {
 }
 
 function caricaHotspot() {
-  chiama<any>('/hotspot').then((g) => { datiHotspot = g; (mappa?.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g) }).catch(() => {})
+  chiama<any>('/incendi-attivi').then((g) => { datiHotspot = g; impostaHotspot(mappa, g) }).catch(() => {})
 }
 
 async function aggiorna() {
@@ -284,7 +306,7 @@ async function aggiorna() {
 watch(selezionata, (id) => { aggiornaMappa(); if (id && scenario.value) chiudiScenario() })
 const LIVELLI_MAPPATURE = ['mappature-cluster', 'mappature-conteggio', 'mappature']
 watch(mostraMappature, (v) => { for (const l of LIVELLI_MAPPATURE) mappa?.setLayoutProperty(l, 'visibility', v ? 'visible' : 'none') })
-const visibilitaHotspot = () => { for (const l of ['hotspot-alone', 'hotspot']) mappa?.setLayoutProperty(l, 'visibility', mostraHotspot.value ? 'visible' : 'none') }
+const visibilitaHotspot = () => { for (const l of TUTTI_LIVELLI_HOTSPOT) mappa?.setLayoutProperty(l, 'visibility', mostraHotspot.value ? 'visible' : 'none') }
 watch(mostraHotspot, visibilitaHotspot)
 // durante lo scenario lo storico (stessi colori caldi) si nasconde: l'area simulata resta l'unico fuoco sulla carta
 watch([mostraIncendi, filtroIncendi, () => !!scenario.value], () => impostaStoricoIncendi(mappa, filtroIncendi.value, mostraIncendi.value && !scenario.value))
@@ -304,6 +326,11 @@ function aggiungiLivelli() {
   m.addLayer({ id: 'aree-velo', type: 'fill', source: 'aree', layout: { visibility: scenario.value ? 'none' : 'visible' }, paint: { 'fill-color': tinta, 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.24, 0.07] as any } })
   m.addLayer({ id: 'aree-bordo', type: 'line', source: 'aree', filter: ['==', ['get', 'sel'], 0], paint: { 'line-color': tinta, 'line-width': 1.2, 'line-opacity': 0.75, 'line-dasharray': [2, 1.5] } })
   m.addLayer({ id: 'aree-selezione', type: 'line', source: 'aree', filter: ['==', ['get', 'sel'], 1], paint: { 'line-color': tinta, 'line-width': 2.5 } })
+  // hover: riempimento piu' deciso e bordo continuo sottile (la selezionata resta distinta: velo 24% e bordo 2,5 px)
+  const nessuna: any = ['==', ['get', 'id'], -1]
+  m.addLayer({ id: 'aree-hover', type: 'fill', source: 'aree', layout: { visibility: scenario.value ? 'none' : 'visible' }, filter: nessuna, paint: { 'fill-color': tinta, 'fill-opacity': 0.16 } })
+  m.addLayer({ id: 'aree-hover-bordo', type: 'line', source: 'aree', filter: nessuna, paint: { 'line-color': tinta, 'line-width': 1.8 } })
+  areaHover = null
   aggiungiHotspot(m, c, datiHotspot)
   visibilitaHotspot()
   // mappature: raggruppate fino a zoom 11 (cerchio di vetro con numero), poi segnaposto a icona
@@ -362,14 +389,14 @@ onMounted(() => {
     const m = mappa
     m.on('click', 'mappature', (ev) => {
       const p = ev.features?.[0]?.properties
-      if (!p || m.queryRenderedFeatures(ev.point, { layers: ['hotspot', 'invasi'].filter((l) => m.getLayer(l)) }).length) return
+      if (!p || m.queryRenderedFeatures(ev.point, { layers: [...LIVELLI_HOTSPOT, 'invasi'].filter((l) => m.getLayer(l)) }).length) return
       const t = TIPI_MAPPATURA.find((x) => x.codice === p.codice)
       const tinta = t ? [toniMappature('scuro')[t.colore], toniMappature('chiaro')[t.colore]] : ['var(--testo-2)', 'var(--testo-2)']
       apriPopup(m, ev.lngLat, PopupMappa, {
         icona: t?.icona ?? MapPin, tinta, etichetta: `Mappatura · ${t?.breve ?? 'cittadino'}`, titolo: p.titolo,
         sottotitolo: [p.utente, p.comune ? nomeComune(String(p.comune)) : ''].filter(Boolean).join(' · '),
       }, () => [
-        String(p.mirata) === 'true' ? h('p', { class: 'mt-2 flex items-center gap-1.5 text-[.78rem] font-semibold text-brace' }, [h(Target, { class: 'size-3.5', 'aria-hidden': 'true' }), 'Da missione mirata (rischio)']) : null,
+        String(p.mirata) === 'true' ? h('p', { class: 'mt-2 flex items-center gap-1.5 text-[.78rem] font-semibold text-brace' }, [h(Target, { class: 'size-3.5', 'aria-hidden': 'true' }), p.esito && p.esito !== 'null' ? `Sopralluogo mirato: ${({ pulita: 'area pulita', sterpaglie: 'sterpaglie secche', rifiuti: 'rifiuti infiammabili' } as Record<string, string>)[String(p.esito)] ?? p.esito}` : 'Da missione mirata (rischio)']) : null,
         h('p', { class: 'cifre mt-2.5 border-t border-bordo pt-2 text-[.75rem] text-testo-3' }, `Completata · ${ora(p.completata_il)}`),
       ])
     })
@@ -381,9 +408,12 @@ onMounted(() => {
       // centro reale della mappa: il box segnalazioni in alto a sinistra e' basso, non serve compensarlo
       m.easeTo({ center: (f.geometry as any).coordinates, zoom: Math.min(z + 0.5, m.getMaxZoom()), padding: { left: 0, top: 80, right: 0, bottom: 60 } })
     })
-    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', 'hotspot', 'invasi'])
+    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', ...LIVELLI_HOTSPOT, 'invasi'], (pt) => areaSotto(m, pt) != null)
+    m.on('mousemove', (ev) => evidenziaAree(m, areaSotto(m, ev.point)))
+    m.on('mouseout', () => evidenziaAree(m, null))
+    m.on('click', (ev) => clicArea(m, ev.point))
     clicInvasi(m)
-    clicHotspot(m, ['coda', 'storico-segn'], () => false, avviaScenario)
+    clicHotspot(m, ['coda', 'storico-segn'], () => false, (lat, lon, t, area) => avviaScenario(lat, lon, t ? `Incendio attivo · ${nomeComune(t)}` : '', true, area))
     // clic destro (desktop) o pressione lunga (touch) su un punto qualunque: scenario da li'
     let ultimaPressione = 0
     m.on('contextmenu', (ev) => {
@@ -700,8 +730,8 @@ const contatoriBrevi = computed(() => [
           <input v-model="mostraHotspot" type="checkbox" role="switch" class="sr-only" />
           <span class="size-2.5 shrink-0 rounded-full bg-brace ring-2 ring-fondo" aria-hidden="true" />
           <span class="min-w-0 flex-1 leading-tight">
-            <span class="block text-[.86rem] font-semibold">Hotspot satellitari</span>
-            <span class="block text-[.72rem] text-testo-2">VIIRS, ultime 24 h</span>
+            <span class="block text-[.86rem] font-semibold">Incendi attivi</span>
+            <span class="block text-[.72rem] text-testo-2">Hotspot VIIRS raggruppati, ultime 24 h</span>
           </span>
           <span class="interruttore" :class="mostraHotspot && 'acceso'" aria-hidden="true" />
         </label>
@@ -768,7 +798,7 @@ const contatoriBrevi = computed(() => [
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
       <span v-if="mostraStorico" class="flex items-center gap-3 border-l border-bordo pl-3"><span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" />Confermata</span><span class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" />Falso allarme</span></span>
       <span v-if="mostraIncendi && !scenario" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-storico h-1.5 w-8 rounded-full" />Incendi storici</span>
-      <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Hotspot</span>
+      <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Incendi attivi</span>
       <span v-if="mostraRischio" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-rischio h-1.5 w-8 rounded-full" />Rischio di oggi</span>
       <span v-if="!scenario" class="border-l border-bordo pl-3 text-testo-3">Clic destro: simula scenario</span>
     </div>

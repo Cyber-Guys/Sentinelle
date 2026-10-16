@@ -191,12 +191,52 @@ export function animaAloni(m: MappaLibre, aloni: Alone[]) {
   return () => cancelAnimationFrame(raf)
 }
 
-// Hotspot satellitari (app e cruscotto): punto brace piccolo + alone che respira, piu' lento delle segnalazioni.
-export const ALONE_HOTSPOT: Alone = { layer: 'hotspot-alone', periodo: 3800, da: 7, a: 16, opacita: 0.4, respiro: true }
+/*
+  Incendi attivi (app e cruscotto, da /incendi-attivi): hotspot FIRMS vicini raggruppati. Fino a zoom 11 un pin
+  brace per incendio con alone che respira (raggio che cresce poco con le rilevazioni, badge col numero se >1);
+  da zoom 11 l'area reale (pixel VIIRS 375 m uniti, brace semitrasparente con bordo) con i singoli punti dentro.
+  Il layer cliccabile resta `hotspot` (pin) piu' `incendi-area` e `hotspot-punti`: vedi LIVELLI_HOTSPOT.
+*/
+export const ZOOM_AREA_INCENDI = 11
+export const LIVELLI_HOTSPOT = ['hotspot', 'incendi-area', 'hotspot-punti']
+export const TUTTI_LIVELLI_HOTSPOT = ['incendi-area', 'incendi-area-linea', 'hotspot-punti', 'hotspot-alone', 'hotspot', 'hotspot-badge']
+export const ALONE_HOTSPOT: Alone = { layer: 'hotspot-alone', periodo: 3800, da: 8, a: 18, opacita: 0.4, respiro: true }
+const geometrieIncendi = new Map<string, any>()
+function sorgentiIncendi(dati: any) {
+  const fs: any[] = dati?.features ?? []
+  geometrieIncendi.clear()
+  for (const f of fs) geometrieIncendi.set(f.properties.id, { area: f.geometry, centro: f.properties.centro })
+  const props = (p: any) => ({ ...p, satelliti: (p.satelliti ?? []).join(', '), centro: undefined, punti: undefined })
+  return {
+    area: { type: 'FeatureCollection', features: fs.map((f) => ({ type: 'Feature', geometry: f.geometry, properties: props(f.properties) })) },
+    pin: { type: 'FeatureCollection', features: fs.map((f) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: f.properties.centro }, properties: props(f.properties) })) },
+    punti: { type: 'FeatureCollection', features: fs.flatMap((f) => (f.properties.punti ?? []).map((c: number[]) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: props(f.properties) }))) },
+  }
+}
 export function aggiungiHotspot(m: MappaLibre, c: ReturnType<typeof coloriMappa>, dati: any) {
-  m.addSource('hotspot', { type: 'geojson', data: dati })
-  m.addLayer({ id: 'hotspot-alone', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 12, 'circle-color': c.brace, 'circle-opacity': 0.22, 'circle-blur': 0.5 } })
-  m.addLayer({ id: 'hotspot', type: 'circle', source: 'hotspot', paint: { 'circle-radius': 5, 'circle-color': c.brace, 'circle-stroke-color': c.bordo, 'circle-stroke-width': 1.5 } })
+  const s = sorgentiIncendi(dati)
+  m.addSource('incendi-area', { type: 'geojson', data: s.area as any })
+  m.addSource('hotspot-punti', { type: 'geojson', data: s.punti as any })
+  m.addSource('hotspot', { type: 'geojson', data: s.pin as any })
+  const z = ZOOM_AREA_INCENDI
+  m.addLayer({ id: 'incendi-area', type: 'fill', source: 'incendi-area', minzoom: z, paint: { 'fill-color': c.brace, 'fill-opacity': 0.28 } })
+  m.addLayer({ id: 'incendi-area-linea', type: 'line', source: 'incendi-area', minzoom: z, paint: { 'line-color': c.brace, 'line-width': 1.6, 'line-opacity': 0.9 } })
+  m.addLayer({ id: 'hotspot-punti', type: 'circle', source: 'hotspot-punti', minzoom: z, paint: { 'circle-radius': 3.5, 'circle-color': c.brace, 'circle-stroke-color': c.bordo, 'circle-stroke-width': 1.2 } })
+  m.addLayer({ id: 'hotspot-alone', type: 'circle', source: 'hotspot', maxzoom: z, paint: { 'circle-radius': 12, 'circle-color': c.brace, 'circle-opacity': 0.22, 'circle-blur': 0.5 } })
+  m.addLayer({ id: 'hotspot', type: 'circle', source: 'hotspot', maxzoom: z, paint: {
+    'circle-radius': ['interpolate', ['linear'], ['get', 'rilevazioni'], 1, 5, 10, 8.5] as any,
+    'circle-color': c.brace, 'circle-stroke-color': c.bordo, 'circle-stroke-width': 1.5 } })
+  m.addLayer({ id: 'hotspot-badge', type: 'symbol', source: 'hotspot', maxzoom: z, filter: ['>', ['get', 'rilevazioni'], 1], layout: {
+    'text-field': ['to-string', ['get', 'rilevazioni']], 'text-font': ['Noto Sans Medium'], 'text-size': 10,
+    'text-offset': [0.95, -0.95], 'text-allow-overlap': true, 'text-ignore-placement': true } as any,
+    paint: { 'text-color': c.testo, 'text-halo-color': c.bordo, 'text-halo-width': 1.6 } })
+}
+export function impostaHotspot(m: MappaLibre | null, dati: any) {
+  if (!m?.getSource('hotspot')) return
+  const s = sorgentiIncendi(dati)
+  ;(m.getSource('incendi-area') as maplibregl.GeoJSONSource).setData(s.area as any)
+  ;(m.getSource('hotspot-punti') as maplibregl.GeoJSONSource).setData(s.punti as any)
+  ;(m.getSource('hotspot') as maplibregl.GeoJSONSource).setData(s.pin as any)
 }
 
 /*
@@ -256,36 +296,38 @@ export function impostaStoricoIncendi(m: MappaLibre | null, filtro: string, visi
 }
 // Tocco su un perimetro: popup dell'incendio, a meno che sotto il puntatore ci sia un pin (vince il pin).
 // `pin`: id dei layer pin; `bloccato`: es. si sta scegliendo un punto sulla mappa.
-export function clicIncendio(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false) {
+export function clicIncendio(m: MappaLibre, pin: string[], bloccato: (pt: maplibregl.PointLike) => boolean = () => false) {
   m.on('click', 'storico-riempimento', (ev) => {
     const p = ev.features?.[0]?.properties
-    if (!p || bloccato()) return
+    if (!p || bloccato(ev.point)) return
     const layers = pin.filter((l) => m.getLayer(l))
     if (layers.length && m.queryRenderedFeatures(ev.point, { layers }).length) return
     apriPopup(m, ev.lngLat, PopupIncendio, { anno: Number(p.anno), data: p.data, comune: p.comune ? String(p.comune) : undefined, ettari: p.ettari != null ? Number(p.ettari) : null, bosco: p.bosco_ha != null ? Number(p.bosco_ha) : null })
   })
 }
 
-// Tocco su un hotspot satellitare: popup informativo; `pin` (segnalazioni) vince, l'hotspot vince su storico e mappature.
-// `simula` (cruscotto): il popup mostra "Simula scenario" e lo avvia dal punto dell'hotspot.
-export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false, simula?: (lat: number, lon: number, titolo: string) => void) {
-  m.on('click', 'hotspot', (ev) => {
+// Tocco su un incendio attivo (pin, area o punto): popup informativo; `pin` (segnalazioni) vince, l'incendio vince su storico e mappature.
+// `simula` (cruscotto): il popup mostra "Simula scenario" e lo avvia dall'area dell'incendio.
+export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolean = () => false, simula?: (lat: number, lon: number, titolo: string, area?: any) => void) {
+  m.on('click', LIVELLI_HOTSPOT, (ev) => {
     const f = ev.features?.[0]
     if (!f || bloccato()) return
     const layers = pin.filter((l) => m.getLayer(l))
     if (layers.length && m.queryRenderedFeatures(ev.point, { layers }).length) return
     const p = f.properties ?? {}
     const n = (v: unknown) => (v == null || v === 'null' || v === '' ? null : Number(v))
-    const [lon, lat] = (f.geometry as any).coordinates
+    const str = (v: unknown) => (v == null || v === 'null' || v === '' ? null : String(v))
+    const inc = geometrieIncendi.get(String(p.id))
+    const area = inc?.area
+    const [lon, lat] = inc?.centro ?? [ev.lngLat.lng, ev.lngLat.lat]
     apriPopup(m, [lon, lat], PopupHotspot, {
-      lat, lon, rilevato_il: p.rilevato_il, confidenza: p.confidenza, comune: p.comune && p.comune !== 'null' ? String(p.comune) : null,
-      frp: n(p.frp), luminosita: n(p.luminosita), satellite: p.satellite && p.satellite !== 'null' ? String(p.satellite) : null,
-      giorno: p.giorno == null || p.giorno === 'null' ? null : p.giorno === true || p.giorno === 'true',
-      onSimula: simula ? () => { chiudiPopup(); simula(lat, lon, p.comune && p.comune !== 'null' ? String(p.comune) : '') } : undefined,
+      lat, lon, rilevazioni: n(p.rilevazioni) ?? 1, ettari: n(p.ettari), prima: str(p.prima), ultima: str(p.ultima), confidenza: str(p.confidenza),
+      comune: str(p.comune), frp_totale: n(p.frp_totale), frp_max: n(p.frp_max), satelliti: str(p.satelliti),
+      onSimula: simula ? () => { chiudiPopup(); simula(lat, lon, str(p.comune) ?? '', area) } : undefined,
     })
   })
-  m.on('mouseenter', 'hotspot', () => (m.getCanvas().style.cursor = 'pointer'))
-  m.on('mouseleave', 'hotspot', () => (m.getCanvas().style.cursor = ''))
+  m.on('mouseenter', LIVELLI_HOTSPOT, () => (m.getCanvas().style.cursor = 'pointer'))
+  m.on('mouseleave', LIVELLI_HOTSPOT, () => (m.getCanvas().style.cursor = ''))
 }
 
 /*

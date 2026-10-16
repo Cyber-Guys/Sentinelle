@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiInvasi, impostaInvasi, clicInvasi, segnapostiMancanti, SEGNAPOSTO_INVASO, type Alone, type GrigliaRischio } from '~/composables/useMappa'
+import { aggiungiHotspot, impostaHotspot, LIVELLI_HOTSPOT, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiInvasi, impostaInvasi, clicInvasi, segnapostiMancanti, SEGNAPOSTO_INVASO, type Alone, type GrigliaRischio } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
-import { Target, Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck } from '@lucide/vue'
+import { Target, Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck, Leaf, Trash2 } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
 
 const { chiama, urlFoto } = useApi()
@@ -35,6 +35,7 @@ let tToast: ReturnType<typeof setTimeout> | undefined
 let tLivello: ReturnType<typeof setTimeout> | undefined
 
 const filtro = ref<string>('2025')
+const mostraIncendi = ref(false) // storico incendi spento di default: si accende dai Livelli
 
 // proprie segnalazioni: pin sempre sulla mappa, elenco nella scheda, polling leggero dello stato
 const mie = ref<Segnalazione[]>([])
@@ -172,8 +173,8 @@ async function mostraSuMappa(s: Segnalazione) {
 }
 
 function caricaHotspot() {
-  chiama<any>('/hotspot').then((g) => {
-    datiHotspot = g; (mappa?.getSource('hotspot') as maplibregl.GeoJSONSource | undefined)?.setData(g)
+  chiama<any>('/incendi-attivi').then((g) => {
+    datiHotspot = g; impostaHotspot(mappa, g)
     // gli aloni si animano solo se ci sono pin: niente ridisegno continuo della mappa a vuoto
     aggiornaAloni()
   }).catch(() => {})
@@ -209,7 +210,7 @@ function avviaMappa() {
   // livello esista, e 'load' puo' non arrivare mai se una risorsa della mappa fallisce.
   {
     const m = mappa
-    clicIncendio(m, ['mie', 'hotspot', 'invasi'], () => pannello.value || !!missione.value)
+    clicIncendio(m, ['mie', ...LIVELLI_HOTSPOT, 'invasi'], () => pannello.value || !!missione.value)
     clicHotspot(m, ['mie', 'invasi'], () => pannello.value || !!missione.value)
     clicInvasi(m, () => pannello.value || !!missione.value)
     segnapostiMancanti(m, () => [SEGNAPOSTO_INVASO(tema.value)], () => tema.value)
@@ -222,6 +223,8 @@ function avviaMappa() {
     m.on('mouseleave', 'mie', () => (m.getCanvas().style.cursor = ''))
     m.on('click', (ev) => {
       if (!pannello.value && !missione.value) return
+      // missione mirata: si sceglie solo dentro il cerchio; un tocco fuori esce dalla missione
+      if (mirata.value && kmDaObiettivo(ev.lngLat.lat, ev.lngLat.lng) > 1) { annullaMissione(); return }
       impostaPos(ev.lngLat.lat, ev.lngLat.lng)
     })
     caricaHotspot()
@@ -233,7 +236,7 @@ function aggiungiLivelli() {
   const m = mappa
   if (!m || m.getSource('storico')) return
   const c = coloriMappa(tema.value)
-  aggiungiStoricoIncendi(m, c, filtro.value)
+  aggiungiStoricoIncendi(m, c, filtro.value, mostraIncendi.value)
   aggiungiRischio(m, c, geojsonRischio(griglia.value), mostraRischio.value, 'storico-riempimento') // sotto lo storico
   aggiungiHotspot(m, c, datiHotspot)
   aggiungiInvasi(m, tema.value, invasi.value, mostraInvasi.value)
@@ -266,7 +269,7 @@ watch(mostraRischio, async (v) => {
 })
 
 // filtro anni istantaneo: i dati sono gia' nei tile
-watch(filtro, (f) => impostaStoricoIncendi(mappa, f))
+watch([filtro, mostraIncendi], () => impostaStoricoIncendi(mappa, filtro.value, mostraIncendi.value))
 
 // punto scelto: pin pulsante (`.pin` in tema.css) del colore del significato:
 // fuoco brace, area a rischio ambra, missione di mappatura macchia
@@ -289,7 +292,10 @@ function impostaPos(lat: number, lon: number) {
 function usaGps() {
   errore.value = ''
   navigator.geolocation.getCurrentPosition(
-    (p) => { impostaPos(p.coords.latitude, p.coords.longitude); mappa?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 15 }) },
+    (p) => {
+      const d = mirata.value ? kmDaObiettivo(p.coords.latitude, p.coords.longitude) : 0
+      if (d > 1) { errore.value = `Sei a ${d.toLocaleString('it-IT', { maximumFractionDigits: 1 })} km dall'area: avvicinati entro 1 km`; return }
+      impostaPos(p.coords.latitude, p.coords.longitude); mappa?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 15 }) },
     () => (errore.value = 'GPS non disponibile: tocca la mappa per scegliere il punto'),
     { enableHighAccuracy: true, timeout: 8000 },
   )
@@ -385,10 +391,24 @@ function geoObiettivo(): any {
 }
 watch(mirata, () => (mappa?.getSource('obiettivo') as maplibregl.GeoJSONSource | undefined)?.setData(geoObiettivo()))
 
+function kmDaObiettivo(lat: number, lon: number) {
+  const mm = mirata.value!
+  return Math.hypot((lon - mm.lon) * 111.32 * Math.cos(mm.lat * Math.PI / 180), (lat - mm.lat) * 110.57)
+}
+// sopralluogo mirato: cosa ha trovato il cittadino (obbligatorio)
+const ESITI_SOPRALLUOGO = [
+  { valore: 'pulita', etichetta: 'Area pulita', nota: 'Nessun rischio', icona: CircleCheck, colore: 'text-macchia' },
+  { valore: 'sterpaglie', etichetta: 'Sterpaglie secche', nota: 'Da sfalciare', icona: Leaf, colore: 'text-ambra' },
+  { valore: 'rifiuti', etichetta: 'Rifiuti infiammabili', nota: 'Da rimuovere', icona: Trash2, colore: 'text-brace' },
+] as const
+const esitoMirata = ref<string | null>(null)
+
 async function avviaMirata(mm: MissioneMirata) {
-  mirata.value = mm
+  mirata.value = mm; esitoMirata.value = null
   await scegliPunto({ id: mm.id, codice: 'sterpaglie', titolo: mm.titolo, descrizione: mm.motivo, punti: mm.punti, tipo: 'posizione', disponibile: true, motivo: null })
-  mappa?.flyTo({ center: [mm.lon, mm.lat], zoom: 13.5, duration: 1200, padding: { top: 60, bottom: 260, left: 0, right: 0 } })
+  // dopo il cambio scheda la mappa si ridimensiona: il volo parte al frame successivo, altrimenti si interrompe
+  await new Promise((r) => setTimeout(r, 60))
+  if (mirata.value?.id === mm.id) mappa?.flyTo({ center: [mm.lon, mm.lat], zoom: window.innerWidth < 500 ? 12.6 : 13.5, duration: 1200, padding: { top: 60, bottom: 360, left: 0, right: 0 } })
 }
 
 // missione `posizione`: passa alla mappa in modalita' "scegli punto"
@@ -412,6 +432,7 @@ async function confermaMissione() {
   f.append('lat', String(pos.value.lat))
   f.append('lon', String(pos.value.lon))
   if (foto.value) f.append('foto', foto.value)
+  if (mirata.value) f.append('esito', esitoMirata.value ?? '')
   try {
     const url = mirata.value ? `/missioni/mirate/${mirata.value.id}/completa` : `/missioni/${missione.value.id}/completa`
     const r = await chiama<EsitoMissione>(url, { method: 'POST', body: f })
@@ -421,7 +442,12 @@ async function confermaMissione() {
     applicaEsito(r)
   } catch (e: any) {
     const m = String(e.message)
-    if (mirata.value && m.startsWith('422')) errore.value = (() => { try { return JSON.parse(m.slice(4)).detail } catch { return 'Punto troppo lontano dall\'obiettivo.' } })()
+    const dettaglio = (() => { try { return String(JSON.parse(m.slice(4)).detail) } catch { return '' } })()
+    if (mirata.value && /^40[49]/.test(m)) {
+      // missione sparita (reset) o gia' fatta: si chiude il foglio e si ricaricano le mirate
+      const msg = m.startsWith('404') ? 'Questa missione non è più disponibile.' : /scadut/i.test(dettaglio) ? 'Missione scaduta.' : 'Missione già completata.'
+      await annullaMissione(); caricaMirate(); mostraToast({ testo: msg, esito: 'no' }, 3500)
+    } else if (mirata.value && m.startsWith('422')) errore.value = dettaglio || 'Dati del sopralluogo non validi.'
     else errore.value = m.startsWith('409') && mirata.value ? 'Missione già completata o scaduta.' : m.startsWith('409') ? 'Hai raggiunto il limite di oggi per questa missione.' : messaggioErrore(e, 'inviare la missione')
   }
   inCorso.value = false
@@ -520,33 +546,49 @@ async function invia() {
 
       <!-- colonna destra sotto il tema: Livelli, zoom, "i" (passo 14 px dal flex; il posto di Livelli resta anche se nascosto) -->
       <div class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20 flex w-11 flex-col items-center gap-[14px]">
-        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" :filtri="FILTRI" class="relative"><LivelloRischio v-model="mostraRischio" class="mt-2 border-t border-bordo pt-2" :griglia="griglia" :caricamento="carRischio" :errore="errRischio" /><LivelloInvasi v-model="mostraInvasi" :n="invasi.features.length || 33" /></PulsanteLivelli></div>
+        <div class="size-11"><PulsanteLivelli v-if="scheda === 'mappa' && !missione" v-model="filtro" v-model:acceso="mostraIncendi" :filtri="FILTRI" :badge="mostraIncendi ? undefined : ''" class="relative"><LivelloRischio v-model="mostraRischio" class="mt-2 border-t border-bordo pt-2" :griglia="griglia" :caricamento="carRischio" :errore="errRischio" /><LivelloInvasi v-model="mostraInvasi" :n="invasi.features.length || 33" /></PulsanteLivelli></div>
         <ControlliMappa :mappa="mappaPronta" />
       </div>
 
       <!-- missione `posizione`: scegli il punto -->
       <Transition name="foglio">
         <section v-if="scheda === 'mappa' && missione" class="sospeso fixed inset-x-2 bottom-[5.25rem] z-20 mx-auto max-w-[440px] space-y-3 p-3">
-          <div>
-            <p class="etichetta">{{ mirata ? 'Missione mirata' : 'Missione' }} · +{{ missione.punti }} punti</p>
-            <p class="mt-0.5 text-base font-semibold">{{ missione.titolo }}</p>
-            <p v-if="mirata" class="mt-1 flex items-start gap-1.5 text-[.8rem] text-testo-2"><Target class="mt-0.5 size-3.5 shrink-0 text-ambra" aria-hidden="true" />Scegli un punto entro 1 km dall'obiettivo (cerchio tratteggiato).</p>
+          <div v-if="mirata">
+            <p class="etichetta">Sopralluogo mirato · +{{ missione.punti }} punti</p>
+            <p class="mt-0.5 text-base font-semibold leading-tight">{{ mirata.titolo }}</p>
+            <p class="mt-1 text-[.8rem] leading-snug text-testo-2">{{ mirata.motivo }}</p>
           </div>
+          <div v-else>
+            <p class="etichetta">Missione · +{{ missione.punti }} punti</p>
+            <p class="mt-0.5 text-base font-semibold">{{ missione.titolo }}</p>
+          </div>
+          <fieldset v-if="mirata" class="space-y-1.5">
+            <legend class="text-[.86rem] font-semibold">Sei sul posto? Cosa hai trovato?</legend>
+            <div class="grid grid-cols-3 gap-1.5 pt-1.5">
+              <label v-for="o in ESITI_SOPRALLUOGO" :key="o.valore" class="vetro flex cursor-pointer flex-col items-center gap-1 p-2 text-center transition-colors has-[:checked]:bg-vetro-forte has-[:checked]:ring-2 has-[:checked]:ring-macchia has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-testo-2">
+                <input v-model="esitoMirata" type="radio" name="esito-sopralluogo" :value="o.valore" class="sr-only" />
+                <component :is="o.icona" class="size-5" :class="o.colore" aria-hidden="true" />
+                <span class="text-[.78rem] font-semibold leading-tight">{{ o.etichetta }}</span>
+                <span class="text-[.68rem] leading-tight text-testo-3">{{ o.nota }}</span>
+              </label>
+            </div>
+            <p class="flex items-start gap-1.5 text-[.75rem] leading-snug text-testo-3"><Target class="mt-0.5 size-3 shrink-0 text-ambra" aria-hidden="true" />Tocca un punto nel cerchio giallo (fuori dal cerchio esci). Il sopralluogo arriva agli operatori della protezione civile.</p>
+          </fieldset>
           <p class="flex items-center gap-2 rounded-m border p-3 text-sm" :class="pos ? 'border-macchia/40 bg-macchia/10 font-semibold text-macchia' : 'border-bordo bg-vetro text-testo-2'">
             <MapPin class="size-4 shrink-0" aria-hidden="true" />
-            <span class="cifre">{{ pos ? `Punto scelto: ${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : 'Tocca la mappa per indicare il punto' }}</span>
+            <span class="cifre">{{ pos ? `Punto scelto: ${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : mirata ? 'Tocca il punto nel cerchio' : 'Tocca la mappa per indicare il punto' }}</span>
           </p>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" class="secondario flex h-10 items-center justify-center gap-1.5 text-sm" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> Usa GPS</button>
             <label class="secondario flex h-10 items-center justify-center gap-1.5 border-dashed px-3 text-sm">
-              <Camera class="size-4 shrink-0 text-testo-2" aria-hidden="true" /><span class="truncate">{{ foto ? foto.name : 'Foto' }}</span>
+              <Camera class="size-4 shrink-0 text-testo-2" aria-hidden="true" /><span class="truncate">{{ foto ? foto.name : mirata ? 'Foto (se vuoi)' : 'Foto' }}</span>
               <input type="file" accept="image/*" capture="environment" class="sr-only" @change="foto = ($event.target as HTMLInputElement).files?.[0] ?? null" />
             </label>
           </div>
           <p v-if="errore" class="text-sm text-brace" role="alert">{{ errore }}</p>
           <div class="grid grid-cols-[auto_1fr] gap-2">
             <button type="button" class="secondario h-11 px-5 text-sm" @click="annullaMissione">Annulla</button>
-            <button type="button" class="primario h-11 text-sm" :disabled="!pos || inCorso" @click="confermaMissione">{{ inCorso ? 'Invio…' : `Conferma · +${missione.punti}` }}</button>
+            <button type="button" class="primario h-11 text-sm" :disabled="!pos || inCorso || (!!mirata && !esitoMirata)" @click="confermaMissione">{{ inCorso ? 'Invio…' : mirata ? `Invia sopralluogo · +${missione.punti}` : `Conferma · +${missione.punti}` }}</button>
           </div>
         </section>
       </Transition>

@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `49e56b2` — 2026-10-16
+> **Riferimento:** commit `fab3ce9` — 2026-10-16
 
 ## Fase
 
@@ -15,6 +15,7 @@ FastAPI + PostGIS; avvio in `README.md`.
 
 **Cosa c'e' (piani chiusi in `docs/piani/`):**
 - Missioni mirate dal rischio: ogni giorno 3 missioni per utente nelle celle piu' a rischio entro 15 km dal comune (`missioni_mirate.py`, tabella `missione_mirata`, `GET /missioni/mirate`, `POST /missioni/mirate/{id}/completa` entro 1 km -> mappatura `sterpaglie` con riga "Da missione mirata" nel cruscotto); card in cima alla scheda Missioni e pin Target sulla mappa
+- Sopralluogo mirato: `completa` richiede `esito` (pulita|sterpaglie|rifiuti), salvato in `missione_mirata.esito` e `missione_completata.esito` (DDL idempotente); mappatura `rifiuti_strada` per rifiuti, `sterpaglie` per sterpaglie e area pulita (esito distingue); `/mappature` espone `esito`. App: tocco fuori dal cerchio chiude, GPS fuori cerchio avvisa, 404/409 chiudono con toast e ricaricano.
 - Acqua per spegnere (ponte challenge 4): 33 invasi CeDoc in `dati/invasi.json` (riempimento 09-2026), tabella `invaso` caricata all'avvio, `GET /invasi`, livello "Risorse idriche" (cruscotto acceso, app spento) e invasi entro 40 km nello scenario
 - Dati: perimetri CFVA 2005-2025 in PostGIS e come PMTiles statico
   (`frontend/public/tiles/storico.pmtiles`); mappa base offline Protomaps
@@ -48,7 +49,7 @@ Ognuno modifica solo la propria riga.
 
 | Persona | Branch | Task corrente | Piano |
 |---|---|---|---|
-| Alessandro | main | aree critiche di oggi fatte (`/aree-critiche`, scheda cruscotto, avviso app, missioni nelle zone): da committare | `docs/piani/2026-10-16-aree-critiche.md` (chiuso) |
+| Alessandro | main | aree critiche di oggi fatte (`/aree-critiche`, scheda cruscotto, avviso app, missioni nelle zone); incendi attivi (`/incendi-attivi`, hotspot raggruppati, area a zoom alto, simulazione da area): da committare | `docs/piani/2026-10-16-aree-critiche.md` (chiuso) |
 | Nicholas | — | — | — |
 | Andrea | — | — | — |
 | Nicola | — | — | — |

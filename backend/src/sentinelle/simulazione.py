@@ -37,9 +37,10 @@ def fattori_ora(o: Ora, cfg: dict = CFG) -> list[float]:
     return out
 
 
-def tempi_arrivo(comb: np.ndarray, origine: tuple[int, int], meteo: list[Ora], minuti: float,
+def tempi_arrivo(comb: np.ndarray, origine, meteo: list[Ora], minuti: float,
                  passo_m: float = PASSO_M, cfg: dict = CFG) -> np.ndarray:
-    """Minuti di arrivo per cella (inf = non raggiunta). comb: 0 = non brucia; riga 0 = sud."""
+    """Minuti di arrivo per cella (inf = non raggiunta). comb: 0 = non brucia; riga 0 = sud.
+    origine: cella (r, c) o lista di celle (Dijkstra multi-sorgente, tutte a t=0)."""
     ny, nx = comb.shape
     fl = comb.ravel().tolist()
     fatt = [fattori_ora(o, cfg) for o in meteo]
@@ -47,9 +48,12 @@ def tempi_arrivo(comb: np.ndarray, origine: tuple[int, int], meteo: list[Ora], m
     offs = [dr * nx + dc for dr, dc in VICINI]
     base = cfg["base_m_min"]
     t = [math.inf] * (ny * nx)
-    s = origine[0] * nx + origine[1]
-    t[s] = 0.0
-    coda = [(0.0, s)]
+    sorgenti = [origine] if isinstance(origine, tuple) else origine
+    coda = []
+    for r0, c0 in sorgenti:
+        s = r0 * nx + c0
+        t[s] = 0.0
+        coda.append((0.0, s))
     while coda:
         tu, u = heapq.heappop(coda)
         if tu > t[u]:
@@ -114,16 +118,27 @@ def _combustibile(lat0: float, lon0: float, lato_km: float):
     return comb, n, mx, geo_comuni
 
 
-def simula(lat: float, lon: float, ore: int) -> dict:
+def simula(lat: float, lon: float, ore: int, area: dict | None = None) -> dict:
     t0 = time.time()
+    geom = shapely.geometry.shape(area) if area else None
+    if geom is not None:
+        lat, lon = geom.centroid.y, geom.centroid.x
     p = previsione()
     serie = serie_vicina(p, lat, lon)
     meteo = serie.ore[:max(ore, 1)] or [Ora(25, 300, 30, 0, 30, 40)]
     for lato in LATO_KM:
         comb, n, mx, geo_comuni = _combustibile(lat, lon, lato)
         c = n // 2
-        comb[c, c] = max(comb[c, c], CFG["combustibile_min"])  # il punto di innesco brucia comunque
-        arrivo = tempi_arrivo(comb, (c, c), meteo, ore * 60)
+        sorgenti = [(c, c)]
+        if geom is not None:  # tutte le celle con centro nell'area (almeno quella centrale)
+            xs = (np.arange(n) - c) * PASSO_M
+            X, Y = np.meshgrid(xs, xs)
+            g = shapely.transform(geom, lambda xy: np.column_stack(((xy[:, 0] - lon) * mx, (xy[:, 1] - lat) * M_LAT)))
+            dentro = shapely.contains_xy(g, X, Y)
+            sorgenti = list(map(tuple, np.argwhere(dentro).tolist())) or sorgenti
+        for r0, c0 in sorgenti:
+            comb[r0, c0] = max(comb[r0, c0], CFG["combustibile_min"])  # l'innesco brucia comunque
+        arrivo = tempi_arrivo(comb, sorgenti, meteo, ore * 60)
         bruciato = np.isfinite(arrivo)
         if not (bruciato[0].any() or bruciato[-1].any() or bruciato[:, 0].any() or bruciato[:, -1].any()):
             break

@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS missione_mirata (id serial PRIMARY KEY, utente_id int
   punti int NOT NULL, valore_rischio double precision NOT NULL, creata_il timestamptz NOT NULL DEFAULT now(),
   scade_il timestamptz NOT NULL, completata_il timestamptz,
   completamento_id int REFERENCES missione_completata ON DELETE SET NULL);
+-- esito del sopralluogo mirato: pulita | sterpaglie | rifiuti (null per le mappature normali)
+ALTER TABLE missione_mirata ADD COLUMN IF NOT EXISTS esito text;
+ALTER TABLE missione_completata ADD COLUMN IF NOT EXISTS esito text;
 -- scomposizione della priorita' per fattore (vuota per le segnalazioni precedenti)
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT '[]'::jsonb;
 -- storico: data di valutazione e punti guadagnati con la segnalazione
