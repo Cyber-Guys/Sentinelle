@@ -1,6 +1,6 @@
 // Una sola EventSource condivisa (singleton di modulo): si apre al primo iscritto e si chiude quando non ce ne sono piu'.
 type Fn = (dati: any) => void
-const TIPI = ['segnalazione_nuova', 'segnalazione_valutata', 'mappatura_nuova', 'hotspot_aggiornati']
+const TIPI = ['segnalazione_nuova', 'segnalazione_aggiornata', 'segnalazione_valutata', 'mappatura_nuova', 'hotspot_aggiornati']
 const iscritti = new Map<string, Set<Fn>>()
 const stato = ref<'connesso' | 'riconnessione'>('riconnessione')
 let es: EventSource | null = null

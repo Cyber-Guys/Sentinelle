@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..config import DIR_FOTO
 from ..db import engine
 from .. import missioni_mirate
+from .segnalazioni import affidabilita_utenti
 from ..gioco import PUNTI_PER_RISPOSTA, carica_domande, correggi_quiz, livello, oggi, quiz_del_giorno
 
 router = APIRouter()
@@ -49,7 +50,10 @@ def _limite(tipo: str, oggi_n: int, totale: int) -> str | None:
 def utente(id: int):
     with Session(engine) as s:
         u = _utente(s, id)
-    return {"id": u.id, "nome": u.nome, "comune": u.comune, "punti": u.punti, "livello": livello(u.punti)}
+        r = affidabilita_utenti(s, [id])[id]
+    return {"id": u.id, "nome": u.nome, "comune": u.comune, "punti": u.punti, "livello": livello(u.punti),
+            "affidabilita": {"valore": round(r, 3), "etichetta": "Sentinella affidabile" if r >= 0.7
+                             else "Sentinella in prova" if r < 0.4 else "Sentinella"}}
 
 
 @router.get("/missioni")

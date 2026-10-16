@@ -20,3 +20,19 @@ k_vento = 0.06          # fattore exp(k * v_kmh * cos)
 umidita_rif = 30        # sotto questa umidita' nessun rallentamento
 k_umidita = 0.02        # rallentamento per punto di umidita' oltre il riferimento
 pioggia_fattore = 0.3   # ora con pioggia > 0,5 mm
+
+# affidabilita' delle segnalazioni condivise (waze per gli incendi, vedi specifica 2026-10-16)
+[affidabilita]
+emivita_min_fuoco = 120     # fuoco e fumo
+emivita_min_altri = 360
+soglia_probabile = 1.0
+soglia_comunita = 2.5
+bonus_hotspot = 1.5         # hotspot satellitare entro 2 km
+bonus_foto = 0.3
+bonus_rischio_alto = 0.3    # pericolo AIB medio-alto o alto nel punto
+raggio_conferma_m = 2000
+raggio_doppione_fuoco_m = 500
+raggio_doppione_altri_m = 200
+finestra_doppione_min = 180
+finestra_spento_min = 30    # "probabilmente spento": peso dei "finito" recenti > peso degli "ancora" recenti
+peso_priorita = 0.15        # fattore additivo nella priorita': fino a +15 punti

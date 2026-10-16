@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from .. import aree_critiche, incendi_attivi, invasi, rischio_oggi, simulazione
+import time
+
+from .. import aree_critiche, basi, flotta, incendi_attivi, invasi, rischio_oggi, simulazione
 from ..db import engine
 
 router = APIRouter()
@@ -38,3 +40,16 @@ def lista_aree_critiche():
 @router.get("/incendi-attivi")
 def lista_incendi_attivi():
     return incendi_attivi.incendi_attivi()
+
+
+@router.get("/basi")
+def lista_basi():
+    with engine.connect() as c:
+        return basi.geojson(c)
+
+
+@router.get("/flotta")
+def stato_flotta(t: float | None = None):
+    """Flotta simulata (dimostrativa): posizioni a t e a t+10 s per l'interpolazione lato client."""
+    with engine.connect() as c:
+        return flotta.stato(c, t if t is not None else time.time())

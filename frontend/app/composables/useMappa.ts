@@ -8,7 +8,8 @@ import PopupIncendio from '~/components/PopupIncendio.vue'
 import PopupHotspot from '~/components/PopupHotspot.vue'
 import PopupMappa from '~/components/PopupMappa.vue'
 import DettaglioInvaso from '~/components/DettaglioInvaso.vue'
-import { Waves } from '@lucide/vue'
+import { Waves, Flame, TreePine } from '@lucide/vue'
+import { TIPI, ORDINE_TIPI, coloriTipi, type Condivisa } from './useWaze'
 
 // Protocollo pmtiles:// (storico incendi statico), registrato una sola volta
 let pmtilesOk = false
@@ -337,7 +338,7 @@ export function clicHotspot(m: MappaLibre, pin: string[], bloccato: () => boolea
   cosi' l'immagine esiste prima del layer e `styleimagemissing` puo' rigenerarla al volo.
   Registrare con registraSegnaposti() a ogni style.load (setStyle cancella le immagini).
 */
-export type Segnaposto = { id: string; icona: Component; colore: string }
+export type Segnaposto = { id: string; icona: Component; colore: string; pieno?: boolean } // pieno: badge nel colore, icona scura
 const LATO = 32, ALTO = 34, R = 12, CY = 15 // px logici: badge 24 + anello, punta di 4 px fino in fondo
 
 // colori dei tipi un tono sotto i token (meno saturi), per pin e legenda delle mappature
@@ -354,12 +355,12 @@ export function toniMappature(t: Tema) {
   }
 }
 
-function disegnaIcona(ctx: CanvasRenderingContext2D, icona: Component) {
+function disegnaIcona(ctx: CanvasRenderingContext2D, icona: Component, riempi = false) {
   const el = document.createElement('div')
   render(h(icona as any), el)
   for (const n of Array.from(el.querySelectorAll('svg > *'))) {
     const a = (k: string) => Number(n.getAttribute(k) ?? 0)
-    if (n.tagName === 'path') { ctx.stroke(new Path2D(n.getAttribute('d') ?? '')); continue }
+    if (n.tagName === 'path') { const p = new Path2D(n.getAttribute('d') ?? ''); if (riempi) ctx.fill(p); ctx.stroke(p); continue }
     ctx.beginPath()
     if (n.tagName === 'circle') ctx.arc(a('cx'), a('cy'), a('r'), 0, Math.PI * 2)
     else if (n.tagName === 'line') { ctx.moveTo(a('x1'), a('y1')); ctx.lineTo(a('x2'), a('y2')) }
@@ -389,16 +390,16 @@ function immagineSegnaposto(s: Segnaposto, tema: Tema, pr: number) {
   ctx.save()
   ctx.shadowColor = tema === 'scuro' ? 'rgba(0,0,0,.45)' : 'rgba(20,20,15,.16)'
   ctx.shadowBlur = 3; ctx.shadowOffsetY = 1
-  ctx.fillStyle = toniMappature(tema).vetro
+  ctx.fillStyle = s.pieno ? s.colore : toniMappature(tema).vetro
   ctx.fill()
   ctx.restore()
   ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
-  ctx.strokeStyle = s.colore
+  ctx.strokeStyle = s.pieno ? (tema === 'scuro' ? 'rgba(7,9,13,.55)' : 'rgba(255,255,255,.9)') : s.colore
   ctx.stroke()
   // icona 24x24 Lucide ridotta a 13 px, tratto nel colore del tipo
   ctx.save()
   ctx.translate(cx - 6.5, CY - 6.5); ctx.scale(13 / 24, 13 / 24)
-  ctx.strokeStyle = s.colore; ctx.lineWidth = 2.3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+  ctx.strokeStyle = s.pieno ? '#10141c' : s.colore; ctx.lineWidth = 2.3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
   disegnaIcona(ctx, s.icona)
   ctx.restore()
   return ctx.getImageData(0, 0, cv.width, cv.height)
@@ -539,4 +540,267 @@ export function clicInvasi(m: MappaLibre, bloccato: () => boolean = () => false)
   })
   m.on('mouseenter', 'invasi', () => (m.getCanvas().style.cursor = 'pointer'))
   m.on('mouseleave', 'invasi', () => (m.getCanvas().style.cursor = ''))
+}
+
+/*
+  Mappa condivisa (Waze per gli incendi): segnaposto a icona per tipo. Tre varianti per tipo:
+  `tenue` (Da verificare: vetro con anello, semitrasparente, niente alone), `pieno` (Probabile, Comunita',
+  Operatori: badge nel colore del tipo con alone pulsante) e `spento` (Probabilmente spento / Spento: grigio).
+  Le proprie hanno un anello in piu' (layer `condivise-mia`). Aloni e anello sono centrati sul badge (19 px sopra il punto).
+*/
+export function segnapostiCondivise(t: Tema): Segnaposto[] {
+  const c = coloriTipi(t), g = toniMappature(t).grigio
+  return ORDINE_TIPI.flatMap((k) => [
+    { id: `seg-${k}`, icona: TIPI[k].icona, colore: c[k] },
+    { id: `seg-${k}-pieno`, icona: TIPI[k].icona, colore: c[k], pieno: true },
+    { id: `seg-${k}-spento`, icona: TIPI[k].icona, colore: g },
+  ])
+}
+export function variante(s: Condivisa) {
+  if (s.probabilmente_spento || s.stato_ufficiale === 'spento') return 'spento'
+  return s.affidabilita.livello === 'da_verificare' ? 'tenue' : 'pieno'
+}
+export function geojsonCondivise(l: Condivisa[], selezionata: number | null = null) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: l.map((s) => {
+      const v = variante(s)
+      return {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, tipo: s.tipo, variante: v, img: v === 'tenue' ? `seg-${s.tipo}` : `seg-${s.tipo}-${v}`, mia: s.mia ? 1 : 0, sel: s.id === selezionata ? 1 : 0 },
+      }
+    }),
+  }
+}
+const SU_BADGE: [number, number] = [0, -19]
+export function aggiungiCondivise(m: MappaLibre, t: Tema, dati: any) {
+  registraSegnaposti(m, segnapostiCondivise(t), t)
+  const c = coloriTipi(t)
+  m.addSource('condivise', { type: 'geojson', data: dati })
+  const colore = ['match', ['get', 'tipo'], ...ORDINE_TIPI.flatMap((k) => [k, c[k]]), c.fuoco] as any
+  m.addLayer({ id: 'condivise-alone', type: 'circle', source: 'condivise', filter: ['==', ['get', 'variante'], 'pieno'],
+    paint: { 'circle-radius': 18, 'circle-color': colore, 'circle-opacity': 0.25, 'circle-blur': 0.3, 'circle-translate': SU_BADGE } })
+  m.addLayer({ id: 'condivise-mia', type: 'circle', source: 'condivise', filter: ['any', ['==', ['get', 'mia'], 1], ['==', ['get', 'sel'], 1]],
+    paint: { 'circle-radius': ['case', ['==', ['get', 'sel'], 1], 18, 16] as any, 'circle-color': 'rgba(0,0,0,0)', 'circle-translate': SU_BADGE,
+      'circle-stroke-width': ['case', ['==', ['get', 'sel'], 1], 2.5, 1.5] as any, 'circle-stroke-color': t === 'scuro' ? '#f3f1ec' : '#1a1a17',
+      'circle-stroke-opacity': ['case', ['==', ['get', 'sel'], 1], 1, 0.75] as any } })
+  m.addLayer({ id: 'condivise', type: 'symbol', source: 'condivise', layout: {
+    'icon-image': ['get', 'img'] as any, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    'symbol-sort-key': ['match', ['get', 'variante'], 'pieno', 2, 'tenue', 1, 0] as any,
+  }, paint: { 'icon-opacity': ['match', ['get', 'variante'], 'tenue', 0.7, 'spento', 0.8, 1] as any } })
+}
+export const ALONE_CONDIVISE: Alone = { layer: 'condivise-alone', periodo: 2600, da: 12, a: 28, opacita: 0.45 }
+
+/*
+  Operativo (solo cruscotto): basi reali (GET /basi, dati/basi.json da fonti aperte) e flotta SIMULATA (GET /flotta).
+  Forme proprie, mai tonde (i cerchi sono di segnalazioni e mappature):
+  - mezzi = sagome viste dall'alto (autobotte, elicottero col rotore, Canadair) a gradiente vivo per stato, bordo
+    bianco semitrasparente, glow colorato in intervento, ruotate sulla rotta. Aerei: ombra spostata e sfocata (quota).
+  - basi = badge squircle con punta (pin stile iOS), gradiente vivo, glifo bianco Lucide (Flame, TreePine) o H,
+    bordo interno chiaro, glow colorato e ombra a terra.
+  Tutto disegnato su canvas (pixelRatio >= 2) e ri-registrato a ogni style.load col tema corrente.
+*/
+type Ente = 'VVF' | 'CFVA' | 'AIB'
+// palette viva stile iOS, uguale nei due temi: [alto, basso] del gradiente
+export const ENTI_BASI = {
+  VVF: { etichetta: 'Vigili del Fuoco', grad: ['#FF6A3D', '#FF2D55'], colore: (_t: Tema) => '#FF2D55' },
+  CFVA: { etichetta: 'Corpo Forestale (CFVA)', grad: ['#34E089', '#0FB872'], colore: (_t: Tema) => '#0FB872' },
+  AIB: { etichetta: 'Basi aeree AIB', grad: ['#7C6CFF', '#5E3BEE'], colore: (_t: Tema) => '#5E3BEE' },
+} as const
+
+// stato del mezzo -> colore vivo (legenda nel pannello Livelli)
+export const STATI_MEZZO = [
+  { id: 'mov', etichetta: 'In movimento / in volo', stati: ['In movimento', 'In volo'], colore: (_t: Tema) => '#3BA7FF' },
+  { id: 'posto', etichetta: 'Sul posto / lancio', stati: ['Sul posto', 'Lancio'], colore: (_t: Tema) => '#FF6A3D' },
+  { id: 'acqua', etichetta: 'Carico acqua', stati: ['Carico acqua'], colore: (_t: Tema) => '#2DD4F0' },
+  { id: 'pattuglia', etichetta: 'Pattuglia / ricognizione', stati: ['Pattuglia', 'Ricognizione'], colore: (_t: Tema) => '#34E089' },
+  { id: 'base', etichetta: 'In base', stati: ['In base'], colore: (t: Tema) => (t === 'scuro' ? '#C9D1DC' : '#9AA5B4') },
+] as const
+export const statoMezzo = (s: string) => STATI_MEZZO.find((x) => (x.stati as readonly string[]).includes(s)) ?? STATI_MEZZO[4]
+export type Famiglia = 'terra' | 'eli' | 'can'
+export const FAMIGLIE: Record<Famiglia, string> = { terra: 'Mezzo di terra', eli: 'Elicottero', can: 'Canadair' }
+export const famigliaMezzo = (m: { categoria: string; tipo: string }): Famiglia => (m.categoria === 'terra' ? 'terra' : m.tipo.startsWith('Canadair') ? 'can' : 'eli')
+
+const L_MEZZO = 44 // lato del canvas dei mezzi, in px css; centro = posizione del mezzo, muso verso nord (margine per il glow)
+const DETTAGLIO = 'rgba(10,13,19,.55)' // vetri e motori sopra il colore pieno
+
+// #rrggbb verso il bianco; altri formati invariati
+function schiarisci(col: string, k: number) {
+  const m = /^#([0-9a-f]{6})$/i.exec(col); if (!m) return col
+  const n = parseInt(m[1]!, 16), x = (v: number) => Math.round(v + (255 - v) * k)
+  return `rgb(${x(n >> 16)},${x((n >> 8) & 255)},${x(n & 255)})`
+}
+const alfa = (col: string, a: number) => col + Math.round(a * 255).toString(16).padStart(2, '0')
+function tela(w: number, h: number, pr: number) {
+  const cv = document.createElement('canvas')
+  cv.width = w * pr; cv.height = h * pr
+  const ctx = cv.getContext('2d')!
+  ctx.scale(pr, pr); ctx.lineJoin = 'round'; ctx.lineCap = 'round'
+  return { cv, ctx }
+}
+function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r) }
+
+// sagoma piena, senza dettagli: serve anche per l'ombra
+function sagoma(ctx: CanvasRenderingContext2D, f: Famiglia) {
+  const c = L_MEZZO / 2
+  ctx.beginPath()
+  if (f === 'terra') { // autobotte: cabina + cisterna, 12 x 26
+    ctx.roundRect(c - 6, c - 13, 12, 26, [4.5, 4.5, 2.5, 2.5])
+  } else if (f === 'eli') { // fusoliera a goccia + trave di coda + piano di coda
+    ctx.ellipse(c, c - 3, 5.2, 8.5, 0, 0, Math.PI * 2)
+    ctx.roundRect(c - 1.5, c + 3, 3, 14, 1.5)
+    ctx.roundRect(c - 4.8, c + 14, 9.6, 2.8, 1.4)
+  } else { // Canadair: fusoliera lunga, ala alta dritta, piano di coda
+    ctx.roundRect(c - 2.8, c - 16, 5.6, 31, [2.8, 2.8, 1.6, 1.6])
+    ctx.roundRect(c - 17, c - 5, 34, 5.2, 2.4)
+    ctx.roundRect(c - 7, c + 11, 14, 3.6, 1.6)
+  }
+}
+function dettagli(ctx: CanvasRenderingContext2D, f: Famiglia) {
+  const c = L_MEZZO / 2
+  ctx.fillStyle = DETTAGLIO
+  if (f === 'terra') {
+    rr(ctx, c - 4.4, c - 10.5, 8.8, 3, 1.3); ctx.fill() // parabrezza
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; rr(ctx, c - 3.4, c - 4, 6.8, 14, 2.6); ctx.fill() // cisterna lucida
+  } else if (f === 'eli') {
+    ctx.beginPath(); ctx.ellipse(c, c - 7, 3, 3, 0, Math.PI, Math.PI * 2); ctx.fill() // cupola
+  } else {
+    rr(ctx, c - 1.8, c - 14.5, 3.6, 3, 1.2); ctx.fill() // cabina
+    for (const x of [-8.5, 8.5]) { rr(ctx, c + x - 1.6, c - 8, 3.2, 6, 1.4); ctx.fill() } // motori
+  }
+}
+function immagineMezzo(f: Famiglia, colore: string, t: Tema, pr: number, glow = false) {
+  const { ctx } = tela(L_MEZZO, L_MEZZO, pr)
+  const c = L_MEZZO / 2
+  if (f === 'eli') { // disco del rotore: vetro colorato con anello
+    ctx.beginPath(); ctx.arc(c, c - 3, 16, 0, Math.PI * 2)
+    ctx.fillStyle = alfa(colore, 0.14); ctx.fill()
+    ctx.strokeStyle = alfa(colore, 0.75); ctx.lineWidth = 1; ctx.stroke()
+  }
+  sagoma(ctx, f)
+  ctx.save(); ctx.shadowColor = alfa(colore, glow ? 0.95 : t === 'scuro' ? 0.5 : 0.3); ctx.shadowBlur = glow ? 10 : 4
+  ctx.fillStyle = colore; ctx.fill(); if (glow) ctx.fill(); ctx.restore()
+  const g = ctx.createLinearGradient(0, c - 16, 0, c + 16)
+  g.addColorStop(0, schiarisci(colore, 0.4)); g.addColorStop(1, colore)
+  ctx.fillStyle = g; ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.stroke()
+  dettagli(ctx, f)
+  return ctx.getImageData(0, 0, L_MEZZO * pr, L_MEZZO * pr)
+}
+function immagineOmbra(f: Famiglia, t: Tema, pr: number) {
+  const { ctx } = tela(L_MEZZO, L_MEZZO, pr)
+  ctx.filter = f === 'terra' ? 'blur(1px)' : 'blur(2.6px)'
+  sagoma(ctx, f)
+  ctx.fillStyle = t === 'scuro' ? 'rgba(0,0,0,.5)' : 'rgba(20,25,40,.18)'; ctx.fill()
+  return ctx.getImageData(0, 0, L_MEZZO * pr, L_MEZZO * pr)
+}
+
+// basi: badge squircle (superellisse n=4) con punta in basso, 40 x 46, ancorato alla punta
+const W_BASE = 40, H_BASE = 46, LATO_B = 26, Y0 = 5, PUNTA = 37
+function squircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const n = 4.5, N = 72
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2, co = Math.cos(a), si = Math.sin(a)
+    const x = cx + r * Math.sign(co) * Math.abs(co) ** (2 / n), y = cy + r * Math.sign(si) * Math.abs(si) ** (2 / n)
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)
+  }
+  ctx.closePath()
+}
+function formaBase(ctx: CanvasRenderingContext2D) {
+  const c = W_BASE / 2, cy = Y0 + LATO_B / 2
+  ctx.beginPath(); squircle(ctx, c, cy, LATO_B / 2)
+  ctx.moveTo(c - 5, Y0 + LATO_B - 1.2); ctx.quadraticCurveTo(c - 1.2, Y0 + LATO_B + 2, c, PUNTA)
+  ctx.quadraticCurveTo(c + 1.2, Y0 + LATO_B + 2, c + 5, Y0 + LATO_B - 1.2); ctx.closePath()
+}
+function immagineBase(e: Ente, t: Tema, pr: number) {
+  const { ctx } = tela(W_BASE, H_BASE, pr)
+  const c = W_BASE / 2, cy = Y0 + LATO_B / 2, [alto, basso] = ENTI_BASI[e].grad
+  ctx.beginPath(); ctx.ellipse(c, PUNTA + 1, 5.5, 1.8, 0, 0, Math.PI * 2) // ombra a terra
+  ctx.fillStyle = t === 'scuro' ? 'rgba(0,0,0,.55)' : 'rgba(20,25,40,.22)'; ctx.filter = 'blur(.8px)'; ctx.fill(); ctx.filter = 'none'
+  formaBase(ctx)
+  ctx.save(); ctx.shadowColor = alfa(basso, t === 'scuro' ? 0.75 : 0.45); ctx.shadowBlur = 8; ctx.shadowOffsetY = 2.5
+  ctx.fillStyle = basso; ctx.fill(); ctx.restore()
+  const g = ctx.createLinearGradient(0, Y0, 0, PUNTA); g.addColorStop(0, alto); g.addColorStop(1, basso)
+  ctx.fillStyle = g; ctx.fill()
+  // vetro: riflesso in alto e bordo interno chiaro che sfuma verso il basso
+  ctx.save(); ctx.clip()
+  const lu = ctx.createLinearGradient(0, Y0, 0, cy); lu.addColorStop(0, 'rgba(255,255,255,.28)'); lu.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = lu; ctx.fillRect(0, Y0, W_BASE, LATO_B / 2)
+  const bo = ctx.createLinearGradient(0, Y0, 0, PUNTA); bo.addColorStop(0, 'rgba(255,255,255,.75)'); bo.addColorStop(0.6, 'rgba(255,255,255,.15)'); bo.addColorStop(1, 'rgba(255,255,255,.05)')
+  formaBase(ctx); ctx.strokeStyle = bo; ctx.lineWidth = 2; ctx.stroke()
+  ctx.restore()
+  // glifo bianco pieno al centro
+  ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,.18)'; ctx.shadowBlur = 1.5; ctx.shadowOffsetY = 0.6
+  if (e === 'AIB') {
+    ctx.font = '800 17px "Inter", "SF Pro Display", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('H', c, cy + 1)
+  } else {
+    const s = 15 / 24; ctx.translate(c - 12 * s, cy - 12 * s); ctx.scale(s, s); ctx.lineWidth = 2.2
+    disegnaIcona(ctx, e === 'VVF' ? Flame : TreePine, true)
+  }
+  ctx.restore()
+  return ctx.getImageData(0, 0, W_BASE * pr, H_BASE * pr)
+}
+
+// stesse figure come data URL, per legenda e popup (componente funzionale <img>)
+const urlCache = new Map<string, string>()
+function dataUrl(chiave: string, img: () => ImageData) {
+  if (!urlCache.has(chiave)) {
+    const d = img(), cv = document.createElement('canvas'); cv.width = d.width; cv.height = d.height
+    cv.getContext('2d')!.putImageData(d, 0, 0); urlCache.set(chiave, cv.toDataURL())
+  }
+  return urlCache.get(chiave)!
+}
+export const urlBase = (e: string, t: Tema) => dataUrl(`b${e}${t}`, () => immagineBase(e as Ente, t, 2))
+export const urlMezzo = (f: Famiglia, colore: string, t: Tema) => dataUrl(`m${f}${colore}${t}`, () => immagineMezzo(f, colore, t, 2))
+export const iconaImg = (src: string): Component => () => h('img', { src, alt: '', class: 'size-full object-contain' })
+
+export function registraMezzi(m: MappaLibre, t: Tema) {
+  const pr = Math.max(2, Math.ceil(window.devicePixelRatio || 1))
+  const metti = (id: string, img: ImageData) => { if (m.hasImage(id)) m.removeImage(id); m.addImage(id, img, { pixelRatio: pr }) }
+  for (const f of Object.keys(FAMIGLIE) as Famiglia[]) {
+    for (const s of STATI_MEZZO) metti(`mezzo-${f}-${s.id}`, immagineMezzo(f, s.colore(t), t, pr, s.id === 'posto'))
+    metti(`ombra-${f}`, immagineOmbra(f, t, pr))
+  }
+  for (const e of Object.keys(ENTI_BASI) as Ente[]) metti(`base-${e}`, immagineBase(e, t, pr))
+}
+
+export function aggiungiOperativo(m: MappaLibre, t: Tema, basi: any, flotta: any, scie: any, vis: { basi: boolean; terra: boolean; aerei: boolean }) {
+  if (m.getSource('basi')) return
+  const v = (b: boolean) => (b ? 'visible' : 'none')
+  registraMezzi(m, t)
+  m.addSource('basi', { type: 'geojson', data: basi })
+  m.addLayer({ id: 'basi', type: 'symbol', source: 'basi', layout: {
+    visibility: v(vis.basi), 'icon-image': ['concat', 'base-', ['get', 'ente']] as any, 'icon-anchor': 'bottom',
+    'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.6, 10, 0.8, 14, 1] as any, 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    'icon-offset': [0, -4], 'symbol-sort-key': ['match', ['get', 'ente'], 'AIB', 3, 'VVF', 2, 1] as any, // un filo sopra i mezzi in base
+  } })
+  m.addSource('flotta-scie', { type: 'geojson', data: scie })
+  m.addLayer({ id: 'flotta-scia', type: 'line', source: 'flotta-scie', layout: { visibility: v(vis.aerei), 'line-cap': 'round' }, paint: {
+    'line-color': coloriMappa(t).testo, 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.6, 12, 2.6] as any, 'line-opacity': 0.7, 'line-dasharray': [1, 1.6] } })
+  m.addSource('flotta', { type: 'geojson', data: flotta })
+  // aerei piu' grandi dei mezzi di terra: si leggono come "sopra" la mappa
+  const dim = ['interpolate', ['linear'], ['zoom'], 7, ['case', ['==', ['get', 'categoria'], 'aereo'], 0.68, 0.52], 11, ['case', ['==', ['get', 'categoria'], 'aereo'], 0.88, 0.74], 14, ['case', ['==', ['get', 'categoria'], 'aereo'], 1.05, 0.92]]
+  const ordine = ['match', ['get', 'colore'], 'posto', 4, 'mov', 3, 'acqua', 2, 'pattuglia', 1, 0] as any
+  const comuni = { 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' as const,
+    'icon-size': dim as any, 'icon-rotate': ['get', 'rotta'] as any, 'symbol-sort-key': ordine }
+  m.addLayer({ id: 'flotta-ombra', type: 'symbol', source: 'flotta', filter: ['==', ['get', 'categoria'], 'aereo'], layout: {
+    ...comuni, visibility: v(vis.aerei), 'icon-image': ['concat', 'ombra-', ['get', 'famiglia']] as any,
+  }, paint: { 'icon-translate': [6, 9], 'icon-translate-anchor': 'viewport' } })
+  m.addLayer({ id: 'flotta-ombra-terra', type: 'symbol', source: 'flotta', filter: ['==', ['get', 'categoria'], 'terra'], layout: {
+    ...comuni, visibility: v(vis.terra), 'icon-image': 'ombra-terra',
+  }, paint: { 'icon-translate': [1, 1.5], 'icon-translate-anchor': 'viewport', 'icon-opacity': 0.8 } })
+  m.addLayer({ id: 'flotta-terra', type: 'symbol', source: 'flotta', filter: ['==', ['get', 'categoria'], 'terra'], layout: {
+    ...comuni, visibility: v(vis.terra), 'icon-image': ['get', 'img'] as any } })
+  m.addLayer({ id: 'flotta-aerei', type: 'symbol', source: 'flotta', filter: ['==', ['get', 'categoria'], 'aereo'], layout: {
+    ...comuni, visibility: v(vis.aerei), 'icon-image': ['get', 'img'] as any } })
+  impostaVisOperativo(m, vis)
+}
+export function impostaVisOperativo(m: MappaLibre | null, vis: { basi: boolean; terra: boolean; aerei: boolean }) {
+  if (!m?.getLayer('basi')) return
+  const v = (b: boolean) => (b ? 'visible' : 'none')
+  m.setLayoutProperty('basi', 'visibility', v(vis.basi))
+  for (const l of ['flotta-terra', 'flotta-ombra-terra']) m.setLayoutProperty(l, 'visibility', v(vis.terra))
+  for (const l of ['flotta-aerei', 'flotta-ombra', 'flotta-scia']) m.setLayoutProperty(l, 'visibility', v(vis.aerei))
 }

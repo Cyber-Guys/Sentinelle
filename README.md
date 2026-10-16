@@ -48,6 +48,7 @@ Stampa l'URL pubblico di `/app` e un QR code da inquadrare. Ctrl+C chiude il tun
 | Rigenerare i tile dello storico (richiede tippecanoe) | `./scripts/python.sh scripts/genera_tiles.py` |
 | Ricaricare i dati dalla Regione (lento, ~280 MB) | `./scripts/python.sh scripts/scarica_dati.py && ./scripts/python.sh scripts/carica_dati.py` |
 | Aggiornare i volumi degli invasi (CeDoc, mensile) | `./scripts/python.sh scripts/aggiorna_invasi.py` (riscrive `dati/invasi.json`, il backend lo ricarica all'avvio) |
+| Aggiornare le basi operative (VVF, CFVA, basi elicotteri AIB) | `./scripts/python.sh scripts/aggiorna_basi.py` (Overpass + Nominatim, riscrive `dati/basi.json`, il backend lo ricarica all'avvio) |
 | Precalcolare le celle del Rischio di oggi (tabella `cella`; una tantum, ~11 min la prima volta, lo fa `setup.sh` se la tabella e' vuota) | `./scripts/python.sh scripts/prepara_celle.py` |
 | Pubblicare un nuovo dump dei dati per il team | `./scripts/pubblica_dati.sh` |
 | Ricreare il database da zero | `docker compose -f infra/compose.yaml down -v && ./scripts/setup.sh` |

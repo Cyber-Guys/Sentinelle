@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Priorita' come cifra + scala 0-100 con soglie, poi la scomposizione per fattore:
 // una riga per termine con il contributo in punti (barre su scala comune, quindi confrontabili).
-import { Satellite, Wind, Trees, TriangleAlert, Users, History, Info } from '@lucide/vue'
+import { Satellite, Wind, Trees, TriangleAlert, Users, History, Info, ShieldCheck } from '@lucide/vue'
 import type { Fattore } from '~/composables/useApi'
 
 const props = defineProps<{ priorita: number; fattori?: Fattore[]; motivazioni?: string[] }>()
 
-const ICONE: Record<string, any> = { hotspot: Satellite, meteo: Wind, suolo: Trees, pericolo: TriangleAlert, vicine: Users, storico: History }
+const ICONE: Record<string, any> = { hotspot: Satellite, meteo: Wind, suolo: Trees, pericolo: TriangleAlert, vicine: Users, storico: History, affidabilita: ShieldCheck }
 const SOGLIE = [30, 60]
 
 const colore = computed(() => varPriorita(props.priorita))

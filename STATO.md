@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `5ae9bc7` — 2026-10-16
+> **Riferimento:** commit `0139007` — 2026-10-16
 
 ## Fase
 
@@ -40,12 +40,11 @@ FastAPI + PostGIS; avvio in `README.md`.
 dal dump della release GitHub `dati-v1`) e `./scripts/avvia.sh`; guida in
 `ONBOARDING.md`. Provato su clone pulito (conteggi corretti, backend attivo).
 
-**Prossimo passo:** "Waze per gli incendi" nell'app cittadino (idea nata coi
-mentor all'hackathon): mappa condivisa delle segnalazioni, segnala in due tocchi,
-conferme/"non c'e' piu'", affidabilita' e alert di prossimita'. Bozza in
-discussione, **non implementata**: `docs/specifiche/2026-10-16-waze-per-gli-incendi.md`
-(decisioni prese, proposte da validare, domande aperte). Piano pronto, non
-iniziato: `docs/piani/2026-10-16-waze-per-gli-incendi.md` (5 task).
+**Fatto:** "Waze per gli incendi" (piano `2026-10-16-waze-per-gli-incendi`, chiuso): app = mappa condivisa (3 tipi: fuoco, fumo, area a rischio; conferma / "non c'e' piu'" entro 2 km, anti-doppione, alert di prossimita' con app aperta), affidabilita' calcolata (`affidabilita.py`, pesi in `pesi.toml`), cruscotto con tipi, livello, conteggi, filtro per tipo, stato ufficiale (`POST /segnalazioni/{id}/stato`, visto nell'app in < 1 s) e "Probabilmente spento". Provato in browser desktop e 375 px; telefono vero via tunnel non provato.
+
+**Operativo nel cruscotto (fatto):** basi reali VVF/CFVA/AIB (`dati/basi.json`, `scripts/aggiorna_basi.py`, `GET /basi`; 19 con `coord_incerta` da verificare), flotta SIMULATA deterministica (`flotta.py`, `GET /flotta?t=`): mezzi di terra mai in mare (percorsi riportati sulla terraferma con l'unione dei comuni, cache calcolata all'avvio), aerei base -> invaso -> obiettivo. Icone canvas squircle/sagome in `useMappa.ts` (`registraMezzi`). Default del cruscotto: accesi solo aree critiche, incendi attivi e storico segnalazioni; storico con i segnaposti per tipo (colore = confermata, grigio = spenta/falso allarme) e popup con stato ufficiale, conferme, affidabilita'.
+
+**Prossimo passo:** pitch e prove su telefono vero; il dump `dati-v1` va ripubblicato (schema cambiato, `scripts/pubblica_dati.sh`).
 
 ## Chi fa cosa
 
@@ -53,7 +52,7 @@ Ognuno modifica solo la propria riga.
 
 | Persona | Branch | Task corrente | Piano |
 |---|---|---|---|
-| Alessandro | main | aree critiche di oggi fatte (`/aree-critiche`, scheda cruscotto, avviso app, missioni nelle zone); incendi attivi (`/incendi-attivi`, hotspot raggruppati, area a zoom alto, simulazione da area): da committare | `docs/piani/2026-10-16-aree-critiche.md` (chiuso) |
+| Alessandro | main | Tutto committato (Waze, aree critiche, incendi attivi, operativo, storico ridisegnato). Prossimo: ripubblicare dump `dati-v1`, verificare coordinate basi incerte, provare su telefono vero, pitch | `docs/piani/2026-10-16-waze-per-gli-incendi.md` (chiuso) |
 | Nicholas | — | — | — |
 | Andrea | — | — | — |
 | Nicola | — | — | — |
@@ -90,6 +89,9 @@ Ognuno modifica solo la propria riga.
 - [ ] Preparare il pitch (`docs/pitch/`).
 
 ## Aperto
+
+- Trappola nota: un handler `styleimagemissing` che ridisegna tutte le immagini (remove+add) va in loop e blocca la mappa; ridisegnare solo se l'immagine manca davvero (`cruscotto.vue`).
+- Simulazione area da hotspot lenta (~6 s): da ottimizzare se serve in demo.
 
 - Cruscotto su telefono: provare su telefono vero il trascinamento del foglio
   Segnalazioni (testato solo con gesti simulati).

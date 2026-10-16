@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, impostaHotspot, LIVELLI_HOTSPOT, aggiungiPinSegnalazioni, geojsonSegnalazioni, aloneSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiInvasi, impostaInvasi, clicInvasi, segnapostiMancanti, SEGNAPOSTO_INVASO, type Alone, type GrigliaRischio } from '~/composables/useMappa'
+import { aggiungiHotspot, impostaHotspot, LIVELLI_HOTSPOT, aggiungiCondivise, geojsonCondivise, segnapostiCondivise, ALONE_CONDIVISE, variante, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI as FILTRI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiInvasi, impostaInvasi, clicInvasi, segnapostiMancanti, SEGNAPOSTO_INVASO, type Alone, type GrigliaRischio } from '~/composables/useMappa'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
-import { Target, Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck, Leaf, Trash2 } from '@lucide/vue'
+import PopupCondivisa, { type VistaCondivisa } from '~/components/PopupCondivisa.vue'
+import { Target, Flame, X, MapPin, LocateFixed, Camera, TriangleAlert, ChevronRight, Star, Loader2, ArrowLeft, CircleCheck, Leaf, Trash2, Phone, Users, ShieldCheck, Copy, Check } from '@lucide/vue'
 import type { Scheda } from '~/components/BarraNavigazione.vue'
 
 const { chiama, urlFoto } = useApi()
@@ -18,11 +19,27 @@ const caricamentoUtenti = ref(true)
 const erroreUtenti = ref('')
 
 const pannello = ref(false)
-const tipo = ref<'fuoco' | 'area_a_rischio'>('fuoco')
+const tipo = ref<TipoSegnalazione | null>(null)
 const foto = ref<File | null>(null)
 const pos = ref<{ lat: number; lon: number } | null>(null)
 const inCorso = ref(false)
 const esito = ref<Segnalazione | null>(null)
+const esitoC = ref<Condivisa | null>(null) // la stessa segnalazione vista dalla mappa condivisa: affidabilita' e stato ufficiale
+const doppione = ref<Condivisa | null>(null) // possibile doppione trovato prima dell'invio
+
+// mappa condivisa: tutte le segnalazioni attive nel riquadro visibile (GET /attive), aggiornate da SSE
+const condivise = shallowRef<Condivisa[]>([])
+const intorno = shallowRef<Condivisa[]>([]) // attive attorno alla posizione (per l'alert), anche fuori dal riquadro
+const mieAttive = shallowRef<Record<number, Condivisa>>({})
+let tCondivise: ReturnType<typeof setTimeout> | undefined
+let popupC: maplibregl.Popup | null = null
+const vista = reactive<VistaCondivisa>({ s: null, foto: null, pos: null, gps: '', inCorso: false, errore: '' })
+
+// posizione continua (watchPosition): raggio di voto, alert di prossimita', GPS automatico nella segnalazione
+const posUtente = ref<{ lat: number; lon: number } | null>(null)
+const gpsMsg = ref('Sto cercando la tua posizione: senza GPS non puoi confermare.')
+let idWatch: number | null = null
+let ultimaIntorno: { lat: number; lon: number } | null = null
 
 const scheda = ref<Scheda>('mappa')
 const missione = ref<Missione | null>(null) // missione `posizione` in attesa del punto sulla mappa
@@ -72,11 +89,13 @@ async function caricaUtenti() {
 onMounted(caricaUtenti)
 const eventi = useEventi()
 const fermaEventi = [
-  eventi.on('segnalazione_valutata', (d) => { if (d.utente_id === utente.value?.id) caricaMie() }),
+  eventi.on('segnalazione_valutata', (d) => { if (d.utente_id === utente.value?.id) caricaMie(); aggiornaCondiviseDopo() }),
+  eventi.on('segnalazione_nuova', () => aggiornaCondiviseDopo()),
+  eventi.on('segnalazione_aggiornata', () => { aggiornaCondiviseDopo(); caricaMie() }),
   eventi.on('hotspot_aggiornati', () => { if (mappa) caricaHotspot() }),
 ]
 
-onBeforeUnmount(() => { fermaEventi.forEach((f) => f()); clearTimeout(tToast); clearTimeout(tLivello); clearInterval(tMie); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { fermaEventi.forEach((f) => f()); fermaGps(); clearTimeout(tCondivise); clearTimeout(tToast); clearTimeout(tLivello); clearInterval(tMie); fermaAloni(); mappa?.remove() })
 
 async function scegli(u: Utente) {
   utente.value = u
@@ -86,6 +105,7 @@ async function scegli(u: Utente) {
   caricaMie()
   caricaMirate()
   caricaAree()
+  avviaGps()
   clearInterval(tMie); tMie = setInterval(caricaMie, 30000) // rete di sicurezza: gli eventi SSE aggiornano subito
   await nextTick()
   avviaMappa()
@@ -101,7 +121,7 @@ async function caricaMie() {
     const valutate = prima ? l.filter((s) => prima.get(s.id)?.stato === 'nuova' && s.stato !== 'nuova') : []
     note = new Map(l.map((s) => [s.id, s]))
     mie.value = l; mieErrore.value = ''
-    aggiornaPinMie()
+    chiama<Condivisa[]>(`/segnalazioni/attive?utente_id=${u.id}`).then((a) => (mieAttive.value = Object.fromEntries(a.filter((x) => x.mia).map((x) => [x.id, x])))).catch(() => {})
     if (prima && valutate.length) {
       // popup aperto su una segnalazione appena valutata: si riapre col nuovo stato
       const aperta = popupMia?.isOpen() && valutate.find((x) => x.id === popupMiaId)
@@ -142,21 +162,137 @@ function aggiornaAloni() {
   if (!m) return
   const lista: Alone[] = []
   if (datiHotspot.features?.length) lista.push(ALONE_HOTSPOT)
-  if (mie.value.some((s) => s.stato === 'nuova')) lista.push(aloneSegnalazioni('mie'))
+  if (condivise.value.some((s) => variante(s) === 'pieno')) lista.push(ALONE_CONDIVISE)
   const k = lista.map((a) => a.layer).join()
   if (k === chiaveAloni) return
   chiaveAloni = k; fermaAloni()
   fermaAloni = lista.length ? animaAloni(m, lista) : () => {}
 }
 
-function aggiornaPinMie() {
-  (mappa?.getSource('mie') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonSegnalazioni(mie.value))
+function aggiornaPinCondivise() {
+  (mappa?.getSource('condivise') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonCondivise(condivise.value, vista.s && popupC?.isOpen() ? vista.s.id : null))
   aggiornaAloni()
+}
+
+async function caricaCondivise() {
+  const m = mappa, u = utente.value
+  if (!m || !u) return
+  const b = m.getBounds()
+  const dx = (b.getEast() - b.getWest()) * 0.2, dy = (b.getNorth() - b.getSouth()) * 0.2
+  try {
+    condivise.value = await chiama<Condivisa[]>(`/segnalazioni/attive?bbox=${[b.getWest() - dx, b.getSouth() - dy, b.getEast() + dx, b.getNorth() + dy].map((x) => x.toFixed(4))}&utente_id=${u.id}`)
+  } catch { return }
+  // popup aperto: segue i dati nuovi (voti degli altri, stato ufficiale)
+  if (vista.s) { const n = condivise.value.find((x) => x.id === vista.s!.id); if (n) vista.s = n }
+  aggiornaPinCondivise()
+  controllaProssimita()
+}
+// eventi SSE e spostamenti della mappa: una sola richiesta per raffica
+function aggiornaCondiviseDopo(ms = 250) {
+  clearTimeout(tCondivise); tCondivise = setTimeout(() => { caricaCondivise(); caricaIntorno() }, ms)
+}
+
+function apriCondivisa(s: Condivisa) {
+  if (!mappa) return
+  popupMia?.remove(); popupC?.remove()
+  Object.assign(vista, { s, foto: urlFoto(s.foto_url), pos: posUtente.value, gps: gpsMsg.value, inCorso: false, errore: '' })
+  popupC = apriPopup(mappa, [s.lon, s.lat], PopupCondivisa, { v: vista, vota: (v: 'ancora' | 'finito') => vota(vista.s!, v) })
+  popupC.on('close', () => { vista.s = null; aggiornaPinCondivise() })
+  aggiornaPinCondivise()
+}
+
+// voto "C'e' ancora" / "Non c'e' piu'" dalla posizione GPS (il server controlla il raggio di 2 km)
+async function vota(s: Condivisa, voto: 'ancora' | 'finito', da = posUtente.value, conToast = true): Promise<boolean> {
+  if (!utente.value || !da) return false
+  vista.inCorso = true; vista.errore = ''
+  const f = new FormData()
+  f.append('utente_id', String(utente.value.id)); f.append('voto', voto)
+  f.append('lat', String(da.lat)); f.append('lon', String(da.lon))
+  try {
+    const n = await chiama<Condivisa>(`/segnalazioni/${s.id}/voto`, { method: 'POST', body: f })
+    condivise.value = condivise.value.some((x) => x.id === n.id) ? condivise.value.map((x) => (x.id === n.id ? n : x)) : [...condivise.value, n]
+    intorno.value = intorno.value.map((x) => (x.id === n.id ? n : x))
+    if (vista.s?.id === n.id) vista.s = n
+    aggiornaPinCondivise()
+    if (conToast) mostraToast({ testo: voto === 'ancora' ? 'Conferma registrata' : 'Segnato come spento', nota: 'Grazie: aiuti gli operatori a capire cosa succede', esito: 'ok' }, 3000)
+    vista.inCorso = false
+    return true
+  } catch (e: any) {
+    const m = String(e.message)
+    const det = (() => { try { return String(JSON.parse(m.slice(4)).detail) } catch { return '' } })()
+    vista.errore = m.startsWith('409') ? 'Hai già dato il tuo voto su questa segnalazione.' : m.startsWith('403') ? 'Non puoi votare una tua segnalazione.' : m.startsWith('422') ? (det || 'Sei troppo lontano per confermare.') : messaggioErrore(e, 'registrare il voto')
+    if (m.startsWith('409')) aggiornaCondiviseDopo(0)
+  }
+  vista.inCorso = false
+  return false
+}
+
+function avviaGps() {
+  fermaGps()
+  if (!('geolocation' in navigator)) { gpsMsg.value = 'Questo dispositivo non fornisce la posizione: non puoi confermare da qui.'; return }
+  idWatch = navigator.geolocation.watchPosition(
+    (p) => {
+      posUtente.value = { lat: p.coords.latitude, lon: p.coords.longitude }
+      vista.pos = posUtente.value
+      if (!ultimaIntorno || distanzaM(ultimaIntorno, posUtente.value) > 150) caricaIntorno()
+      else controllaProssimita()
+    },
+    (e) => {
+      gpsMsg.value = e.code === 1 ? 'Posizione non autorizzata: attiva la localizzazione per confermare (serve essere entro 2 km).' : 'GPS non disponibile ora: per confermare serve la tua posizione.'
+      if (!posUtente.value) vista.gps = gpsMsg.value
+    },
+    { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
+  )
+}
+function fermaGps() { if (idWatch !== null) navigator.geolocation?.clearWatch(idWatch); idWatch = null }
+
+async function caricaIntorno() {
+  const p = posUtente.value, u = utente.value
+  if (!p || !u) return
+  ultimaIntorno = p
+  const d = 0.03 // ~3 km
+  try { intorno.value = await chiama<Condivisa[]>(`/segnalazioni/attive?bbox=${[p.lon - d * 1.3, p.lat - d, p.lon + d * 1.3, p.lat + d].map((x) => x.toFixed(4))}&utente_id=${u.id}`) } catch {}
+  controllaProssimita()
+}
+
+// alert di prossimita': la segnalazione attiva piu' vicina entro 2 km, non propria, non votata, mai mostrata in questa sessione
+const allerta = ref<{ s: Condivisa; dist: number } | null>(null)
+const CHIAVE_ALLERTE = 'allerteViste'
+const allerteViste = (): number[] => { try { return JSON.parse(sessionStorage.getItem(CHIAVE_ALLERTE) ?? '[]') } catch { return [] } }
+function segnaVista(id: number) {
+  try { sessionStorage.setItem(CHIAVE_ALLERTE, JSON.stringify([...new Set([...allerteViste(), id])])) } catch {}
+}
+function controllaProssimita() {
+  const p = posUtente.value
+  if (!p || allerta.value || pannello.value || missione.value) return
+  const viste = allerteViste()
+  const tutte = new Map([...intorno.value, ...condivise.value].map((x) => [x.id, x]))
+  const c = [...tutte.values()]
+    .filter((x) => !x.mia && !x.mio_voto && x.stato_ufficiale !== 'spento' && !viste.includes(x.id))
+    .map((x) => ({ s: x, dist: distanzaM(p, x) }))
+    .filter((x) => x.dist <= RAGGIO_VOTO_M)
+    .sort((a, b) => a.dist - b.dist)[0]
+  if (c) { allerta.value = c; segnaVista(c.s.id) }
+}
+const allertaErrore = ref('')
+async function rispondiAllerta(voto: 'ancora' | 'finito' | null) {
+  const a = allerta.value
+  if (!a) return
+  if (voto) {
+    // la card resta aperta: mostra l'esito (o l'errore in linea) e si chiude da sola dopo il voto
+    allertaErrore.value = ''
+    const ok = await vota(a.s, voto, posUtente.value, false)
+    if (ok) { const n = condivise.value.find((x) => x.id === a.s.id) ?? intorno.value.find((x) => x.id === a.s.id); if (n && allerta.value) allerta.value = { s: n, dist: a.dist } }
+    else { allertaErrore.value = vista.errore || 'Voto non registrato: riprova.'; vista.errore = '' }
+    return
+  }
+  allerta.value = null; allertaErrore.value = ''
+  setTimeout(controllaProssimita, 400)
 }
 
 function apriPopupMia(s: Segnalazione) {
   if (!mappa) return
-  popupMia?.remove(); popupMiaId = s.id
+  popupMia?.remove(); popupC?.remove(); popupMiaId = s.id
   popupMia = apriPopup(mappa, [s.lon, s.lat], PopupSegnalazione, { s })
 }
 
@@ -169,7 +305,11 @@ async function mostraSuMappa(s: Segnalazione) {
   if (!m) return
   m.resize()
   m.flyTo({ center: [s.lon, s.lat], zoom: Math.max(m.getZoom(), 13), duration: 900 })
-  m.once('moveend', () => apriPopupMia(s))
+  m.once('moveend', async () => {
+    await caricaCondivise()
+    const c = condivise.value.find((x) => x.id === s.id)
+    if (c) apriCondivisa(c); else apriPopupMia(s)
+  })
 }
 
 function caricaHotspot() {
@@ -186,7 +326,8 @@ function caricaRischio() {
 }
 
 function cambiaUtente() {
-  fermaAloni(); mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO; chiaveAloni = ''
+  fermaAloni(); fermaGps(); mappa?.remove(); mappa = null; marcatore = null; datiHotspot = VUOTO; chiaveAloni = ''
+  condivise.value = []; intorno.value = []; mieAttive.value = {}; allerta.value = null; posUtente.value = null; ultimaIntorno = null; popupC = null
   clearInterval(tMie); note = null; mie.value = []; mieCaricamento.value = true; mieNovita.value = false; popupMia = null
   utente.value = null; pannello.value = false; esito.value = null; missione.value = null; mirata.value = null; mirate.value = []; scheda.value = 'mappa'
   try { localStorage.removeItem('utenteId') } catch {}
@@ -210,22 +351,23 @@ function avviaMappa() {
   // livello esista, e 'load' puo' non arrivare mai se una risorsa della mappa fallisce.
   {
     const m = mappa
-    clicIncendio(m, ['mie', ...LIVELLI_HOTSPOT, 'invasi'], () => pannello.value || !!missione.value)
-    clicHotspot(m, ['mie', 'invasi'], () => pannello.value || !!missione.value)
+    clicIncendio(m, ['condivise', ...LIVELLI_HOTSPOT, 'invasi'], () => pannello.value || !!missione.value)
+    clicHotspot(m, ['condivise', 'invasi'], () => pannello.value || !!missione.value)
     clicInvasi(m, () => pannello.value || !!missione.value)
-    segnapostiMancanti(m, () => [SEGNAPOSTO_INVASO(tema.value)], () => tema.value)
-    m.on('click', 'mie', (ev) => {
+    segnapostiMancanti(m, () => [SEGNAPOSTO_INVASO(tema.value), ...segnapostiCondivise(tema.value)], () => tema.value)
+    m.on('click', 'condivise', (ev) => {
       if (pannello.value || missione.value) return
-      const s = mie.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
-      if (s) apriPopupMia(s)
+      const s = condivise.value.find((x) => x.id === ev.features?.[0]?.properties?.id)
+      if (s) apriCondivisa(s)
     })
-    m.on('mouseenter', 'mie', () => (m.getCanvas().style.cursor = 'pointer'))
-    m.on('mouseleave', 'mie', () => (m.getCanvas().style.cursor = ''))
+    m.on('mouseenter', 'condivise', () => (m.getCanvas().style.cursor = 'pointer'))
+    m.on('mouseleave', 'condivise', () => (m.getCanvas().style.cursor = ''))
+    m.on('moveend', () => aggiornaCondiviseDopo(350))
     m.on('click', (ev) => {
       if (!pannello.value && !missione.value) return
       // missione mirata: si sceglie solo dentro il cerchio; un tocco fuori esce dalla missione
       if (mirata.value && kmDaObiettivo(ev.lngLat.lat, ev.lngLat.lng) > 1) { annullaMissione(); return }
-      impostaPos(ev.lngLat.lat, ev.lngLat.lng)
+      impostaPos(ev.lngLat.lat, ev.lngLat.lng); posDaGps.value = false
     })
     caricaHotspot()
   }
@@ -244,7 +386,8 @@ function aggiungiLivelli() {
   m.addSource('obiettivo', { type: 'geojson', data: geoObiettivo() })
   m.addLayer({ id: 'obiettivo-area', type: 'fill', source: 'obiettivo', paint: { 'fill-color': c.ambra, 'fill-opacity': 0.08 } })
   m.addLayer({ id: 'obiettivo-bordo', type: 'line', source: 'obiettivo', paint: { 'line-color': c.ambra, 'line-width': 2, 'line-dasharray': [2, 2] } })
-  aggiungiPinSegnalazioni(m, 'mie', c, geojsonSegnalazioni(mie.value), { nuova: c.ambra, confermata: c.macchia })
+  aggiungiCondivise(m, tema.value, geojsonCondivise(condivise.value))
+  caricaCondivise()
 }
 
 watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
@@ -276,8 +419,10 @@ watch([filtro, mostraIncendi], () => impostaStoricoIncendi(mappa, filtro.value, 
 function coloraPin() {
   const c = marcatore?.getElement().classList
   c?.add('pin')
+  const t = missione.value ? null : tipo.value
   c?.toggle('pin-macchia', !!missione.value)
-  c?.toggle('pin-ambra', !missione.value && tipo.value === 'area_a_rischio')
+  c?.toggle('pin-ambra', t === 'area_a_rischio')
+  c?.toggle('pin-fumo', t === 'fumo')
 }
 watch([tipo, missione], coloraPin)
 
@@ -295,22 +440,27 @@ function usaGps() {
     (p) => {
       const d = mirata.value ? kmDaObiettivo(p.coords.latitude, p.coords.longitude) : 0
       if (d > 1) { errore.value = `Sei a ${d.toLocaleString('it-IT', { maximumFractionDigits: 1 })} km dall'area: avvicinati entro 1 km`; return }
-      impostaPos(p.coords.latitude, p.coords.longitude); mappa?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 15 }) },
+      impostaPos(p.coords.latitude, p.coords.longitude); posDaGps.value = true; mappa?.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 15 }) },
     () => (errore.value = 'GPS non disponibile: tocca la mappa per scegliere il punto'),
     { enableHighAccuracy: true, timeout: 8000 },
   )
 }
 
 async function apri() {
-  esito.value = null; pos.value = null; foto.value = null; errore.value = ''
-  marcatore?.remove()
+  esito.value = null; esitoC.value = null; doppione.value = null; tipo.value = null; pos.value = null; foto.value = null; errore.value = ''; posDaGps.value = false
+  marcatore?.remove(); popupC?.remove(); popupMia?.remove()
   pannello.value = true
   await nextTick(); mappa?.resize()
+  // GPS automatico: la posizione gia' nota subito, altrimenti una lettura; si corregge toccando la mappa
+  if (posUtente.value) { impostaPos(posUtente.value.lat, posUtente.value.lon); posDaGps.value = true; mappa?.easeTo({ center: [posUtente.value.lon, posUtente.value.lat], zoom: Math.max(mappa.getZoom(), 14), offset: [0, -Math.min(230, window.innerHeight * 0.27)] }) }
+  else usaGps()
 }
+const posDaGps = ref(false)
 
 async function chiudi() {
-  pannello.value = false; marcatore?.remove(); pos.value = null
+  pannello.value = false; marcatore?.remove(); pos.value = null; doppione.value = null
   await nextTick(); mappa?.resize()
+  setTimeout(controllaProssimita, 600)
 }
 
 // aggiorna header e mostra toast/overlay dopo un'azione che da' punti
@@ -453,9 +603,17 @@ async function confermaMissione() {
   inCorso.value = false
 }
 
-async function invia() {
-  if (!utente.value || !pos.value) return
+async function invia(nuova = false) {
+  if (!utente.value || !pos.value || !tipo.value) return
   inCorso.value = true; errore.value = ''
+  // anti-doppione: stessa tipologia vicina e recente -> si propone di confermarla invece di crearne un'altra
+  if (!nuova) {
+    try {
+      const d = await chiama<Condivisa | null>(`/segnalazioni/vicine?lat=${pos.value.lat}&lon=${pos.value.lon}&tipo=${tipo.value}&utente_id=${utente.value.id}`)
+      if (d) { doppione.value = d; inCorso.value = false; return }
+    } catch {}
+  }
+  doppione.value = null
   const f = new FormData()
   f.append('utente_id', String(utente.value.id))
   f.append('tipo', tipo.value)
@@ -465,12 +623,34 @@ async function invia() {
   try {
     esito.value = await chiama<Segnalazione>('/segnalazioni', { method: 'POST', body: f })
     caricaMie()
+    const e = esito.value, d = 0.002
+    chiama<Condivisa[]>(`/segnalazioni/attive?bbox=${[e.lon - d, e.lat - d, e.lon + d, e.lat + d]}&utente_id=${utente.value.id}`).then((l) => (esitoC.value = l.find((x) => x.id === e.id) ?? null)).catch(() => {})
+    aggiornaCondiviseDopo(0)
     if (esito.value.punti_ottenuti > 0) {
       const d = await chiama<Utente>(`/utenti/${utente.value.id}`)
       applicaEsito({ punti_ottenuti: esito.value.punti_ottenuti, punti: d.punti, livello: d.livello! })
     }
   } catch (e) { errore.value = messaggioErrore(e, 'inviare la segnalazione') }
   inCorso.value = false
+}
+
+// "Si', confermo": il doppione riceve un voto "ancora" invece di una segnalazione nuova
+async function confermaDoppione() {
+  const d = doppione.value
+  if (!d || !pos.value) return
+  if (d.mia || d.mio_voto) {
+    await chiudi(); apriCondivisa(d)
+    mostraToast({ testo: d.mia ? 'L\'hai già segnalata tu' : 'L\'hai già confermata', nota: 'Nessun doppione inviato' }, 3000)
+    return
+  }
+  inCorso.value = true
+  const ok = await vota(d, 'ancora', pos.value)
+  inCorso.value = false
+  if (!ok) { errore.value = vista.errore; vista.errore = ''; return }
+  await chiudi()
+  await caricaCondivise()
+  const n = condivise.value.find((x) => x.id === d.id)
+  if (n) apriCondivisa(n)
 }
 </script>
 
@@ -525,7 +705,7 @@ async function invia() {
         <div class="flex items-start gap-2">
           <!-- larghezza intrinseca: la pillola segue il contenuto, non la finestra -->
           <button type="button" class="pillola pointer-events-auto flex h-11 max-w-[min(18rem,calc(100vw-9.5rem))] min-w-0 items-center pr-3 pl-1 text-left transition-colors hover:bg-vetro-forte" aria-label="Il tuo profilo: tocca per cambiare utente" @click="cambiaUtente">
-            <IndicatoreLivello :nome="utente.nome" :punti="utente.punti" :livello="utente.livello" />
+            <IndicatoreLivello :nome="utente.nome" :punti="utente.punti" :livello="utente.livello" :affidabilita="utente.affidabilita" />
           </button>
           <span class="flex-1" />
           <IndicatoreRischio class="pointer-events-auto" :rischio="rischio" :errore="rischioErrore" @riprova="caricaRischio" />
@@ -593,9 +773,14 @@ async function invia() {
         </section>
       </Transition>
 
+      <!-- alert di prossimita' alla Waze: card dal basso, una per volta (una volta per segnalazione) -->
+      <Transition name="avviso-entra">
+        <AvvisoProssimita v-if="allerta && scheda === 'mappa' && !pannello && !missione" :key="allerta.s.id" class="fixed inset-x-2 bottom-[5.25rem] z-30 mx-auto max-w-[440px]" :s="allerta.s" :pos="posUtente" :in-corso="vista.inCorso" :errore="allertaErrore" @vota="rispondiAllerta" @chiudi="rispondiAllerta(null)" />
+      </Transition>
+
       <!-- l'unico accento pieno -->
       <Transition name="foglio">
-        <button v-if="scheda === 'mappa' && !pannello && !missione" type="button" class="primario fixed bottom-[5.5rem] left-1/2 z-20 flex h-12 w-[min(16rem,calc(100%-2.5rem))] -translate-x-1/2 items-center justify-center gap-2 text-[.98rem]" @click="apri">
+        <button v-if="scheda === 'mappa' && !pannello && !missione && !allerta" type="button" class="primario fixed bottom-[5.5rem] left-1/2 z-20 flex h-12 w-[min(16rem,calc(100%-2.5rem))] -translate-x-1/2 items-center justify-center gap-2 text-[.98rem]" @click="apri">
           <Flame class="size-5" aria-hidden="true" /> Segnala
         </button>
       </Transition>
@@ -609,7 +794,7 @@ async function invia() {
               <p class="flex items-center gap-1.5 text-[.74rem] font-medium text-macchia">
                 <CircleCheck class="size-3.5" aria-hidden="true" /> Inviata · in coda agli operatori
               </p>
-              <h2 id="titolo-pannello" class="mt-1 text-base font-semibold">{{ esito.tipo === 'fuoco' ? 'Fuoco o fumo' : 'Area a rischio' }}</h2>
+              <h2 id="titolo-pannello" class="mt-1 text-base font-semibold">{{ TIPI[esito.tipo]?.etichetta ?? esito.tipo }}</h2>
               <p class="cifre mt-0.5 truncate text-[.76rem] text-testo-2">
                 #{{ esito.id }} · {{ oraBreve(esito.creata_il) }}<template v-if="esito.comune"> · {{ nomeComune(esito.comune) }}</template> · {{ esito.lat.toFixed(4) }}, {{ esito.lon.toFixed(4) }}
               </p>
@@ -619,13 +804,25 @@ async function invia() {
           <div v-else class="mb-3 flex items-start justify-between gap-3">
             <div>
               <p class="etichetta">Nuova segnalazione</p>
-              <h2 id="titolo-pannello" class="mt-0.5 text-base font-semibold">Cosa vedi?</h2>
+              <h2 id="titolo-pannello" class="mt-0.5 text-base font-semibold">{{ doppione ? 'È la stessa?' : 'Cosa vedi?' }}</h2>
             </div>
             <button type="button" aria-label="Chiudi" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="chiudi"><X class="size-4" /></button>
           </div>
 
           <!-- esito -->
           <div v-if="esito" class="space-y-4">
+            <div class="grid grid-cols-2 gap-1.5 text-[.78rem]">
+              <div class="vetro px-2.5 py-2">
+                <p class="text-[.7rem] text-testo-3">Affidabilità</p>
+                <p v-if="esitoC" class="mt-0.5 flex items-center gap-1.5 font-semibold leading-tight" :style="{ color: LIVELLI_AFF[esitoC.affidabilita.livello].colore }"><span class="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />{{ LIVELLI_AFF[esitoC.affidabilita.livello].etichetta }}</p>
+                <span v-else class="scheletro mt-1 block h-3 w-20" />
+              </div>
+              <div class="vetro px-2.5 py-2">
+                <p class="text-[.7rem] text-testo-3">Stato ufficiale</p>
+                <p class="mt-0.5 flex items-center gap-1 font-semibold leading-tight" :style="{ color: STATI_UFF[esitoC?.stato_ufficiale ?? 'in_verifica'].colore }"><ShieldCheck class="size-3 shrink-0" aria-hidden="true" />{{ STATI_UFF[esitoC?.stato_ufficiale ?? 'in_verifica'].etichetta }}</p>
+              </div>
+            </div>
+            <p class="text-[.76rem] leading-snug text-testo-2">Ora è sulla mappa di tutti: chi passa vicino può confermarla e l'affidabilità sale.</p>
             <ScomposizionePriorita :priorita="esito.priorita" :fattori="esito.fattori" :motivazioni="esito.motivazioni" />
             <div class="flex items-center gap-3">
               <p v-if="(esito.punti_ottenuti ?? 0) > 0" class="cifre flex items-center gap-1 text-[.8rem] font-semibold text-ambra"><Star class="size-3.5 fill-current" aria-hidden="true" /> +{{ esito.punti_ottenuti }} punti</p>
@@ -633,41 +830,72 @@ async function invia() {
             </div>
           </div>
 
-          <!-- modulo -->
-          <form v-else class="space-y-3" @submit.prevent="invia">
-            <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo di segnalazione">
-              <button type="button" role="radio" :aria-checked="tipo === 'fuoco'" class="flex flex-col items-start gap-1.5 rounded-m border p-3 text-left transition-colors" :class="tipo === 'fuoco' ? 'border-brace/60 bg-brace/12 ' : 'border-bordo bg-vetro hover:bg-vetro-forte'" @click="tipo = 'fuoco'">
-                <Flame class="size-5" :class="tipo === 'fuoco' ? 'text-brace' : 'text-testo-3'" aria-hidden="true" />
-                <span class="text-[.88rem] font-semibold leading-tight">Fuoco o fumo</span>
-                <span class="text-[.72rem] text-testo-2">Lo vedi adesso</span>
+          <!-- emergenza: sempre visibile nel flusso di segnalazione -->
+          <a v-if="!esito" href="tel:112" class="mb-3 flex items-center gap-2.5 rounded-m border border-brace/30 bg-brace/8 px-3 py-2 text-[.78rem] leading-snug transition-colors hover:bg-brace/12">
+            <Phone class="size-4 shrink-0 text-brace" aria-hidden="true" />
+            <span class="flex-1">Se sei in pericolo o vedi fiamme vicino a persone o case, <span class="font-semibold">chiama sempre il 112</span>.</span>
+            <span class="cifre shrink-0 rounded-full bg-brace/15 px-2 py-0.5 font-semibold text-brace">112</span>
+          </a>
+
+          <!-- anti-doppione -->
+          <div v-if="!esito && doppione" class="space-y-3">
+            <div class="vetro flex items-start gap-3 p-3">
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-s" :style="{ color: TIPI[doppione.tipo].colore, background: `color-mix(in srgb, ${TIPI[doppione.tipo].colore} 14%, transparent)` }">
+                <Copy class="size-4" aria-hidden="true" />
+              </span>
+              <div class="min-w-0 text-[.86rem] leading-snug">
+                <p>C'è già una segnalazione di <span class="font-semibold">{{ TIPI[doppione.tipo].breve }}</span> a <span class="cifre font-semibold">{{ distanzaTesto(doppione.distanza_m ?? 0) }}</span>: è la stessa?</p>
+                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[.74rem] text-testo-2">
+                  <span>{{ daQuanto(doppione.creata_il) }}</span>
+                  <span class="flex items-center gap-1"><Users class="size-3" aria-hidden="true" />{{ doppione.conferme }} {{ doppione.conferme === 1 ? 'conferma' : 'conferme' }}</span>
+                  <span class="font-semibold" :style="{ color: LIVELLI_AFF[doppione.affidabilita.livello].colore }">{{ LIVELLI_AFF[doppione.affidabilita.livello].etichetta }}</span>
+                </p>
+              </div>
+            </div>
+            <p class="text-[.74rem] leading-snug text-testo-3">Confermare quella esistente vale quanto una nuova e non intasa gli operatori.</p>
+            <p v-if="errore" class="text-sm text-brace" role="alert">{{ errore }}</p>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" class="secondario h-11 text-[.86rem]" :disabled="inCorso" @click="invia(true)">No, è un altro punto</button>
+              <button type="button" class="primario flex h-11 items-center justify-center gap-1.5 text-[.86rem]" :disabled="inCorso" @click="confermaDoppione">
+                <Loader2 v-if="inCorso" class="size-4 animate-spin" aria-hidden="true" /><Check v-else class="size-4" aria-hidden="true" />Sì, confermo
               </button>
-              <button type="button" role="radio" :aria-checked="tipo === 'area_a_rischio'" class="flex flex-col items-start gap-1.5 rounded-m border p-3 text-left transition-colors" :class="tipo === 'area_a_rischio' ? 'border-ambra/60 bg-ambra/12 ' : 'border-bordo bg-vetro hover:bg-vetro-forte'" @click="tipo = 'area_a_rischio'">
-                <TriangleAlert class="size-5" :class="tipo === 'area_a_rischio' ? 'text-ambra' : 'text-testo-3'" aria-hidden="true" />
-                <span class="text-[.88rem] font-semibold leading-tight">Area a rischio</span>
-                <span class="text-[.72rem] text-testo-2">Sterpaglie, rifiuti…</span>
+            </div>
+          </div>
+
+          <!-- modulo: tipo (1 tocco) + invio (2 tocchi); posizione dal GPS, correggibile toccando la mappa -->
+          <form v-else-if="!esito" class="space-y-3" @submit.prevent="invia()">
+            <div class="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Tipo di segnalazione">
+              <button v-for="(k, i) in ORDINE_TIPI" :key="k" type="button" role="radio" :aria-checked="tipo === k"
+                class="flex items-center gap-2.5 rounded-m border p-2.5 text-left transition-colors" :class="[tipo === k ? 'bg-vetro-forte' : 'border-bordo bg-vetro hover:bg-vetro-forte', i === ORDINE_TIPI.length - 1 && 'col-span-2']"
+                :style="tipo === k ? { borderColor: `color-mix(in srgb, ${TIPI[k].colore} 60%, transparent)`, background: `color-mix(in srgb, ${TIPI[k].colore} 12%, transparent)` } : undefined" @click="tipo = k">
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-s" :style="{ color: TIPI[k].colore, background: `color-mix(in srgb, ${TIPI[k].colore} 14%, transparent)` }">
+                  <component :is="TIPI[k].icona" class="size-5" aria-hidden="true" />
+                </span>
+                <span class="min-w-0 leading-tight">
+                  <span class="block text-[.86rem] font-semibold">{{ TIPI[k].etichetta }}</span>
+                  <span class="block text-[.7rem] text-testo-2">{{ TIPI[k].nota }}</span>
+                </span>
               </button>
             </div>
 
             <div class="flex items-center gap-2 rounded-full border p-1.5 pl-4" :class="pos ? 'border-macchia/40 bg-macchia/10' : 'border-bordo bg-vetro'">
               <MapPin class="size-4 shrink-0" :class="pos ? 'text-macchia' : 'text-testo-3'" aria-hidden="true" />
-              <span class="cifre min-w-0 flex-1 text-[.82rem] leading-tight" :class="pos ? 'font-semibold text-macchia' : 'text-testo-2'">
-                {{ pos ? `${pos.lat.toFixed(4)}, ${pos.lon.toFixed(4)}` : 'Tocca la mappa per indicare il punto' }}
+              <span class="min-w-0 flex-1 text-[.8rem] leading-tight" :class="pos ? 'text-macchia' : 'text-testo-2'">
+                <template v-if="pos"><span class="font-semibold">{{ posDaGps ? 'La tua posizione' : 'Punto scelto' }}</span><span class="block text-[.7rem] opacity-80">Tocca la mappa per correggerla</span></template>
+                <template v-else>Tocca la mappa per indicare il punto</template>
               </span>
               <button type="button" class="secondario tocco flex h-9 shrink-0 items-center gap-1.5 px-3 text-[.8rem]" @click="usaGps"><LocateFixed class="size-4" aria-hidden="true" /> GPS</button>
             </div>
 
-            <label class="flex items-center gap-3 rounded-m border border-dashed border-bordo-luce bg-vetro p-3 text-sm">
-              <span class="flex size-8 shrink-0 items-center justify-center rounded-s bg-vetro-forte"><Camera class="size-4 text-testo-2" aria-hidden="true" /></span>
-              <span class="min-w-0 leading-tight">
-                <span class="block truncate font-semibold">{{ foto ? foto.name : 'Aggiungi una foto' }}</span>
-                <span class="block text-[.72rem] text-testo-2">{{ foto ? 'Tocca per cambiarla' : 'Facoltativa, aiuta gli operatori' }}</span>
-              </span>
+            <label class="flex items-center gap-3 rounded-m border border-dashed border-bordo-luce bg-vetro px-3 py-2 text-sm">
+              <Camera class="size-4 shrink-0 text-testo-2" aria-hidden="true" />
+              <span class="min-w-0 flex-1 truncate leading-tight"><span class="font-semibold">{{ foto ? foto.name : 'Foto' }}</span> <span class="text-[.72rem] text-testo-2">{{ foto ? '· tocca per cambiarla' : '· facoltativa' }}</span></span>
               <input type="file" accept="image/*" capture="environment" class="sr-only" @change="foto = ($event.target as HTMLInputElement).files?.[0] ?? null" />
             </label>
 
             <p v-if="errore" class="text-sm text-brace" role="alert">{{ errore }}</p>
-            <button class="primario flex h-12 w-full items-center justify-center gap-2 text-[.95rem]" :disabled="!pos || inCorso">
-              <Loader2 v-if="inCorso" class="size-4 animate-spin" aria-hidden="true" />{{ inCorso ? 'Invio…' : 'Invia segnalazione' }}
+            <button class="primario flex h-12 w-full items-center justify-center gap-2 text-[.95rem]" :disabled="!pos || !tipo || inCorso">
+              <Loader2 v-if="inCorso" class="size-4 animate-spin" aria-hidden="true" />{{ inCorso ? 'Invio…' : !tipo ? 'Scegli cosa vedi' : `Invia: ${TIPI[tipo].etichetta.toLowerCase()}` }}
             </button>
           </form>
         </section>
@@ -687,7 +915,7 @@ async function invia() {
 
       <Transition name="foglio">
         <section v-if="scheda === 'segnalazioni'" class="sospeso fixed inset-x-2 top-[calc(max(.75rem,env(safe-area-inset-top))+3.5rem)] bottom-[5.25rem] z-20 mx-auto max-w-[480px] overflow-y-auto sm:bottom-auto sm:max-h-[calc(100dvh-9.75rem)]">
-          <SchedaSegnalazioni :elenco="mie" :caricamento="mieCaricamento" :errore="mieErrore" @apri="mostraSuMappa" @riprova="caricaMie" />
+          <SchedaSegnalazioni :attive="mieAttive" :elenco="mie" :caricamento="mieCaricamento" :errore="mieErrore" @apri="mostraSuMappa" @riprova="caricaMie" />
         </section>
       </Transition>
 

@@ -32,3 +32,19 @@ Classificatore immagini e sfocatura volti/targhe.
 **Cos'e'.** Inoltro delle segnalazioni confermate al canale ufficiale.
 **Perche' tagliata.** Richiede un accordo istituzionale. **Cosa servirebbe.**
 API o protocollo concordato con CFVA/Protezione Civile.
+
+## 5. Geofencing in background
+
+**Cos'e'.** Alert di prossimita' anche ad app chiusa. **Perche' tagliata.** Il browser non lo permette: l'alert funziona solo con l'app aperta (`watchPosition`). **Cosa servirebbe.** App nativa o PWA con permesso di posizione in background e Web Push.
+
+## 6. Identita' forte (SPID)
+
+**Cos'e'.** Utenti verificati contro gli abusi. **Perche' tagliata.** Nessun utente reale in gara; l'affidabilita' calcolata dagli esiti la attenua. **Cosa servirebbe.** Accesso SPID/CIE.
+
+## 7. Integrazione con il NUE 112
+
+**Cos'e'.** Passare le segnalazioni confermate e i casi "persone in pericolo" al 112. **Perche' tagliata.** Accordo istituzionale; l'app dice solo "chiama il 112". **Cosa servirebbe.** Protocollo concordato con la centrale unica.
+
+## 8. Limite di segnalazioni per ora
+
+**Cos'e'.** Tetto per utente contro spam e voti ripetuti. **Perche' tagliata.** Non si vede in demo. **Cosa servirebbe.** Rate limit per utente/IP nel backend.

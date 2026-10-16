@@ -155,3 +155,12 @@ def _contesto_db(sessione, lat, lon, f_hs, f_meteo, f_suolo) -> Contesto:
     hs = f_hs.result()
     hotspot_km = None if hs is None else min((_distanza_km(lat, lon, h.lat, h.lon) for h in hs), default=999.0)
     return Contesto(hotspot_km, f_meteo.result(), f_suolo.result(), classe, vicine, storici)
+
+
+def con_affidabilita(fattori: list[dict], valore: float, testo: str, peso: float, soglia: float) -> tuple[int, list[dict]]:
+    """Fattore additivo 'affidabilita' (fino a +100*peso punti) sopra la priorita' base, che resta invariata."""
+    base = [f for f in fattori if f.get("chiave") != "affidabilita"]
+    v = min(max(valore / soglia, 0.0), 1.0)
+    f = {"chiave": "affidabilita", "etichetta": "Affidabilità della comunità", "valore": round(v, 3),
+         "peso": peso, "contributo": round(100 * peso * v, 1), "testo": testo, "disponibile": True}
+    return min(100, round(sum(x.get("contributo", 0) for x in base) + f["contributo"])), base + [f]

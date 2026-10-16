@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import maplibregl from 'maplibre-gl'
-import { aggiungiHotspot, impostaHotspot, LIVELLI_HOTSPOT, TUTTI_LIVELLI_HOTSPOT, aggiungiPinSegnalazioni, geojsonSegnalazioni, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, aggiungiInvasi, impostaInvasi, clicInvasi, SEGNAPOSTO_INVASO, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
+import { aggiungiHotspot, impostaHotspot, LIVELLI_HOTSPOT, TUTTI_LIVELLI_HOTSPOT, segnapostiCondivise, animaAloni, apriPopup, ALONE_HOTSPOT, FILTRI_STORICO_INCENDI, aggiungiStoricoIncendi, impostaStoricoIncendi, clicIncendio, registraSegnaposti, segnapostiMancanti, toniMappature, impostaFasceLibere, chiudiPopup, clicHotspot, aggiungiRischio, impostaRischio, geojsonRischio, aggiungiScenario, impostaOraScenario, rimuoviScenario, limitiScenario, ALONE_SCENARIO, aggiungiInvasi, impostaInvasi, clicInvasi, SEGNAPOSTO_INVASO, aggiungiOperativo, impostaVisOperativo, registraMezzi, ENTI_BASI, STATI_MEZZO, FAMIGLIE, statoMezzo, famigliaMezzo, urlBase, urlMezzo, iconaImg, coloriMappa as coloriOp, type GrigliaRischio, type Simulazione } from '~/composables/useMappa'
 import PopupMappa from '~/components/PopupMappa.vue'
 import PopupSegnalazione from '~/components/PopupSegnalazione.vue'
 import { h } from 'vue'
-import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, MapPin, History, Inbox, ArrowLeft, ChevronUp, Target } from '@lucide/vue'
+import { Flame, Check, Ban, Droplet, Leaf, Trash2, TriangleAlert, X, ShieldCheck, Loader2, RotateCw, CircleCheck, MapPin, History, Inbox, ArrowLeft, ChevronUp, Target, Building2, Truck, Plane } from '@lucide/vue'
 
 const { chiama } = useApi()
 const { tema } = useTema()
 
 const coda = ref<Segnalazione[]>([])
+const filtroTipo = ref<TipoSegnalazione | null>(null) // filtro della coda per tipo (elenco e pin)
+const codaVisibile = computed(() => (filtroTipo.value ? coda.value.filter((s) => s.tipo === filtroTipo.value) : coda.value))
+let attive = new Map<number, Condivisa>() // livello di affidabilita' e 'probabilmente spento' dalle segnalazioni condivise
+const arricchisci = (l: Segnalazione[]) => l.map((s) => { const a = attive.get(s.id); return a ? { ...s, affidabilita: a.affidabilita, probabilmente_spento: a.probabilmente_spento } : s })
 const confermateOggi = ref(0)
 const selezionata = ref<number | null>(null)
 const errore = ref('')
@@ -30,13 +34,67 @@ let fermaAloni = () => {}
 
 const mostraMappature = ref(false)
 // risorse idriche (invasi regionali): accese, sono la risorsa dei mezzi aerei
-const mostraInvasi = ref(true)
+const mostraInvasi = ref(false)
 const invasi = shallowRef<any>({ type: 'FeatureCollection', features: [] })
 const dataInvasi = computed(() => { const d = invasi.value.features[0]?.properties?.data_dato; if (!d) return ''; const [a, m] = d.split('-'); return new Date(+a, +m - 1).toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }) })
 watch([invasi, mostraInvasi], () => impostaInvasi(mappa, invasi.value, mostraInvasi.value))
 const mostraHotspot = ref(true)
+/*
+  Operativo: aree critiche (interruttore), basi reali e flotta SIMULATA (GET /flotta: posizioni a t e t+10 s,
+  interpolate qui ogni secondo; scia corta per gli aerei).
+*/
+const mostraAree = ref(true)
+const mostraBasi = ref(false)
+const mostraTerra = ref(false)
+const mostraAerei = ref(false)
+const basiOp = shallowRef<any>({ type: 'FeatureCollection', features: [] })
+let flottaDati: { t0: number; mezzi: any[] } = { t0: 0, mezzi: [] }
+const nMezzi = ref({ terra: 0, aerei: 0 })
+const nBasi = computed(() => { const c: Record<string, number> = {}; for (const f of basiOp.value.features) c[f.properties.ente] = (c[f.properties.ente] ?? 0) + 1; return c })
+const scie = new Map<string, [number, number][]>()
+const VUOTO = { type: 'FeatureCollection' as const, features: [] as any[] }
+function posMezzo(x: any, ora: number): [number, number] {
+  const f = Math.min(1.5, Math.max(0, (ora - flottaDati.t0) / 10))
+  return [x.lon + (x.lon_poi - x.lon) * f, x.lat + (x.lat_poi - x.lat) * f]
+}
+function disegnaFlotta() {
+  const ora = Date.now() / 1000
+  const feats = flottaDati.mezzi.map((x) => {
+    const p = posMezzo(x, ora), st = statoMezzo(x.stato), fam = famigliaMezzo(x)
+    if (x.categoria === 'aereo') {
+      const sc = scie.get(x.id) ?? []
+      const u = sc.at(-1)
+      if (!u || u[0] !== p[0] || u[1] !== p[1]) sc.push(p)
+      if (sc.length > 14) sc.shift()
+      scie.set(x.id, x.velocita_kmh > 0 ? sc : [p])
+    }
+    return { type: 'Feature', geometry: { type: 'Point', coordinates: p }, properties: { ...x, famiglia: fam, colore: st.id, img: `mezzo-${fam}-${st.id}` } }
+  })
+  ;(mappa?.getSource('flotta') as maplibregl.GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: feats } as any)
+  ;(mappa?.getSource('flotta-scie') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonScie() as any)
+}
+const geojsonScie = () => ({ type: 'FeatureCollection', features: [...scie.values()].filter((l) => l.length > 1).map((l) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: l }, properties: {} })) })
+async function caricaFlotta() {
+  try {
+    const d = await chiama<any>(`/flotta?t=${Math.floor(Date.now() / 1000)}`)
+    flottaDati = { t0: d.t, mezzi: d.mezzi }
+    nMezzi.value = { terra: d.mezzi.filter((x: any) => x.categoria === 'terra').length, aerei: d.mezzi.filter((x: any) => x.categoria === 'aereo').length }
+    disegnaFlotta()
+  } catch { /* backend giu': i mezzi restano dove sono */ }
+}
+let timerFlotta: ReturnType<typeof setInterval> | undefined
+let timerPassi: ReturnType<typeof setInterval> | undefined
+const livelliOperativi = [
+  { id: 'aree', modello: mostraAree, icona: TriangleAlert, classe: 'text-ambra', titolo: 'Aree critiche', dettaglio: () => `${nAree.value} zone a rischio alto oggi` },
+  { id: 'basi', modello: mostraBasi, icona: Building2, classe: 'text-testo-2', titolo: 'Basi', dettaglio: () => `${nBasi.value.VVF ?? 0} VVF · ${nBasi.value.CFVA ?? 0} CFVA · ${nBasi.value.AIB ?? 0} AIB` },
+  { id: 'terra', modello: mostraTerra, icona: Truck, classe: 'text-testo-2', titolo: 'Mezzi di terra', dettaglio: () => `${nMezzi.value.terra} mezzi · simulazione` },
+  { id: 'aerei', modello: mostraAerei, icona: Plane, classe: 'text-testo-2', titolo: 'Mezzi aerei', dettaglio: () => `${nMezzi.value.aerei} elicotteri e Canadair · simulazione` },
+]
+const visOp = () => ({ basi: mostraBasi.value, terra: mostraTerra.value, aerei: mostraAerei.value })
+watch([mostraBasi, mostraTerra, mostraAerei], () => impostaVisOperativo(mappa, visOp()))
+watch(basiOp, (g) => (mappa?.getSource('basi') as maplibregl.GeoJSONSource | undefined)?.setData(g))
 const livelliAperti = ref(false)
-const mostraStorico = ref(false)
+const mostraStorico = ref(true) // di default: aree critiche, hotspot e storico segnalazioni
 // Rischio di oggi: spento di default, la griglia si scarica alla prima accensione
 const mostraRischio = ref(false)
 const griglia = shallowRef<GrigliaRischio | null>(null)
@@ -130,10 +188,18 @@ const geojsonAree = () => ({ type: 'FeatureCollection' as const, features: (aree
 const impostaAree = () => (mappa?.getSource('aree') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonAree())
 watch(areaSel, impostaAree)
 // durante lo scenario il velo delle aree si spegne: resta solo il contorno
-watch(() => !!scenario.value, (v) => { for (const l of ['aree-velo', 'aree-hover']) if (mappa?.getLayer(l)) mappa.setLayoutProperty(l, 'visibility', v ? 'none' : 'visible') })
+// interruttore "Aree critiche": nasconde tutte le zone (la scheda nella colonna resta)
+function visibilitaAree() {
+  for (const l of ['aree-velo', 'aree-hover', 'aree-bordo', 'aree-selezione', 'aree-hover-bordo']) {
+    if (!mappa?.getLayer(l)) continue
+    const vis = mostraAree.value && !(scenario.value && (l === 'aree-velo' || l === 'aree-hover'))
+    mappa.setLayoutProperty(l, 'visibility', vis ? 'visible' : 'none')
+  }
+}
+watch([() => !!scenario.value, mostraAree], visibilitaAree)
 // hover e clic sulle zone: i pin (segnalazioni, hotspot, invasi, mappature) vincono, la zona vince sugli incendi storici
 let areaHover: number | null = null
-const PIN_AREE = ['coda', 'storico-segn', ...LIVELLI_HOTSPOT, 'invasi', 'mappature', 'mappature-cluster']
+const PIN_AREE = ['coda', 'storico-segn', ...LIVELLI_HOTSPOT, 'invasi', 'mappature', 'mappature-cluster', 'basi', 'flotta-terra', 'flotta-aerei']
 function areaSotto(m: maplibregl.Map, pt: maplibregl.PointLike): number | null {
   if (!m.getLayer('aree-velo') || m.getLayoutProperty('aree-velo', 'visibility') === 'none') return null
   if (m.queryRenderedFeatures(pt, { layers: PIN_AREE.filter((l) => m.getLayer(l)) }).length) return null
@@ -149,7 +215,12 @@ function evidenziaAree(m: maplibregl.Map, id: number | null) {
 async function clicArea(m: maplibregl.Map, pt: maplibregl.PointLike) {
   const id = areaSotto(m, pt)
   const a = id == null ? null : aree.value?.aree.find((x) => x.id === id)
-  if (!a) return
+  if (!a) {
+    // clic sulla mappa fuori da zone e da elementi interattivi: la selezione dell'area si annulla
+    const interattivi = [...PIN_AREE, 'storico-riempimento'].filter((l) => m.getLayer(l) && m.getLayoutProperty(l, 'visibility') !== 'none')
+    if (areaSel.value != null && !m.queryRenderedFeatures(pt, { layers: interattivi }).length) areaSel.value = null
+    return
+  }
   vista.value = 'aree'
   if (areaSel.value !== a.id) await selezionaArea(a)
 }
@@ -182,7 +253,7 @@ const FILTRI_STORICO = [
 ] as const
 // segnalazioni gia' valutate: si ricaricano all'accensione del livello e dopo ogni valutazione (non nel polling)
 const storico = ref<Segnalazione[]>([])
-const nLivelli = computed(() => Number(mostraRischio.value) + Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraInvasi.value) + Number(mostraStorico.value) + Number(mostraIncendi.value))
+const nLivelli = computed(() => Number(mostraRischio.value) + Number(mostraHotspot.value) + Number(mostraMappature.value) + Number(mostraInvasi.value) + Number(mostraStorico.value) + Number(mostraIncendi.value) + Number(mostraAree.value) + Number(mostraBasi.value) + Number(mostraTerra.value) + Number(mostraAerei.value))
 const TIPI_MAPPATURA = [
   { codice: 'punto_acqua', etichetta: 'Punto d\'acqua', breve: 'Acqua', colore: 'cielo', icona: Droplet },
   { codice: 'sterpaglie', etichetta: 'Sterpaglie secche', breve: 'Sterpaglie', colore: 'ambra', icona: Leaf },
@@ -227,21 +298,40 @@ const fa = (iso: string) => {
 function geojsonCoda() {
   return {
     type: 'FeatureCollection' as const,
-    features: coda.value.map((s) => ({
-      type: 'Feature' as const,
-      geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
-      properties: { id: s.id, priorita: s.priorita, selezionata: s.id === selezionata.value ? 1 : 0 },
-    })),
+    features: codaVisibile.value.map((s) => {
+      const v = s.probabilmente_spento || s.stato_ufficiale === 'spento' ? '-spento' : s.affidabilita?.livello === 'da_verificare' ? '' : '-pieno'
+      return {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, priorita: s.priorita, selezionata: s.id === selezionata.value ? 1 : 0, img: `seg-${s.tipo}${v}` },
+      }
+    }),
+  }
+}
+
+// storico: stessi segnaposti per tipo della mappa condivisa, piu' piccoli e fermi (niente alone).
+// Confermata e non spenta = pieno nel colore del tipo; spenta o falso allarme = grigio (falso allarme piu' tenue)
+function geojsonStorico() {
+  return {
+    type: 'FeatureCollection' as const,
+    features: storico.value.map((s) => {
+      const grigio = s.stato === 'archiviata' || s.stato_ufficiale === 'spento'
+      return {
+        type: 'Feature' as const,
+        geometry: { type: 'Point' as const, coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, stato: s.stato, img: `seg-${s.tipo}-${grigio ? 'spento' : 'pieno'}`, ordine: grigio ? 0 : 1 },
+      }
+    }),
   }
 }
 
 function aggiornaMappa() {
   (mappa?.getSource('coda') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonCoda());
-  (mappa?.getSource('storico-segn') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonSegnalazioni(storico.value, selezionata.value))
+  (mappa?.getSource('storico-segn') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonStorico())
 }
 
 async function caricaStorico() {
-  try { storico.value = await chiama<Segnalazione[]>('/segnalazioni?stato=valutate'); aggiornaMappa() } catch {}
+  try { storico.value = arricchisci(await chiama<Segnalazione[]>('/segnalazioni?stato=valutate')); aggiornaMappa() } catch {}
 }
 const filtroStoricoMappa = () => (filtroStorico.value === 'entrambe' ? null : ['==', ['get', 'stato'], filtroStorico.value]) as any
 function livelloStorico() {
@@ -282,7 +372,12 @@ function caricaHotspot() {
 
 async function aggiorna() {
   try {
-    const l = await chiama<Segnalazione[]>('/segnalazioni?stato=nuova')
+    const [l0, att] = await Promise.all([
+      chiama<Segnalazione[]>('/segnalazioni?stato=nuova'),
+      chiama<Condivisa[]>('/segnalazioni/attive?bbox=7,38,11,42').catch(() => [] as Condivisa[]),
+    ])
+    attive = new Map(att.map((a) => [a.id, a]))
+    const l = arricchisci(l0)
     if (!caricamento.value) {
       const nuove = l.filter((s) => !conosciute.has(s.id)).map((s) => s.id)
       if (nuove.length) {
@@ -303,6 +398,7 @@ async function aggiorna() {
   } catch { errore.value = 'Connessione persa' }
 }
 
+watch(filtroTipo, () => { aggiornaMappa(); if (selezionata.value && !scheda.value) selezionata.value = null })
 watch(selezionata, (id) => { aggiornaMappa(); if (id && scenario.value) chiudiScenario() })
 const LIVELLI_MAPPATURE = ['mappature-cluster', 'mappature-conteggio', 'mappature']
 watch(mostraMappature, (v) => { for (const l of LIVELLI_MAPPATURE) mappa?.setLayoutProperty(l, 'visibility', v ? 'visible' : 'none') })
@@ -355,20 +451,29 @@ function aggiungiLivelli() {
     'symbol-sort-key': ['get', 'ordine'],
   } })
   aggiungiInvasi(m, tema.value, invasi.value, mostraInvasi.value)
+  visibilitaAree()
+  aggiungiOperativo(m, tema.value, basiOp.value, VUOTO, geojsonScie(), visOp())
+  disegnaFlotta()
   // storico delle segnalazioni valutate: sotto la coda attiva, pin fermi (confermata piena, falso allarme ad anello)
-  aggiungiPinSegnalazioni(m, 'storico-segn', c, geojsonSegnalazioni(storico.value, selezionata.value), { nuova: prio, confermata: prio })
+  registraSegnaposti(m, segnapostiCondivise(tema.value), tema.value)
+  m.addSource('storico-segn', { type: 'geojson', data: geojsonStorico() })
+  m.addLayer({ id: 'storico-segn', type: 'symbol', source: 'storico-segn', layout: {
+    'icon-image': ['get', 'img'] as any, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    'icon-size': ['interpolate', ['linear'], ['zoom'], 6, 0.7, 11, 0.85] as any, 'symbol-sort-key': ['get', 'ordine'] as any,
+  }, paint: { 'icon-opacity': ['match', ['get', 'stato'], 'archiviata', 0.6, 0.9] as any } })
   livelloStorico()
   m.addSource('coda', { type: 'geojson', data: geojsonCoda() })
   // valori statici = alone fisso con reduced-motion; animaAloni li fa pulsare
-  m.addLayer({ id: 'coda-alone', type: 'circle', source: 'coda', paint: { 'circle-radius': 16, 'circle-color': prio, 'circle-opacity': 0.22, 'circle-blur': 0.3 } })
+  registraSegnaposti(m, segnapostiCondivise(tema.value), tema.value)
+  const SU: [number, number] = [0, -19] // aloni centrati sul badge, 19 px sopra il punto
+  m.addLayer({ id: 'coda-alone', type: 'circle', source: 'coda', paint: { 'circle-radius': 16, 'circle-color': prio, 'circle-opacity': 0.22, 'circle-blur': 0.3, 'circle-translate': SU } })
   // selezionata: anello del colore della priorita' che si allarga, piu' rapido
-  m.addLayer({ id: 'coda-selezione', type: 'circle', source: 'coda', filter: ['==', ['get', 'selezionata'], 1], paint: { 'circle-radius': 22, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': prio, 'circle-stroke-width': 2, 'circle-stroke-opacity': 0.6 } })
-  m.addLayer({ id: 'coda', type: 'circle', source: 'coda', paint: {
-    'circle-radius': ['case', ['==', ['get', 'selezionata'], 1], 12, 8],
-    'circle-color': prio,
-    'circle-stroke-color': ['case', ['==', ['get', 'selezionata'], 1], c.testo, c.bordo],
-    'circle-stroke-width': ['case', ['==', ['get', 'selezionata'], 1], 3, 2],
-  } })
+  m.addLayer({ id: 'coda-selezione', type: 'circle', source: 'coda', filter: ['==', ['get', 'selezionata'], 1], paint: { 'circle-radius': 22, 'circle-translate': SU, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': prio, 'circle-stroke-width': 2, 'circle-stroke-opacity': 0.6 } })
+  // pin per tipo (icona), tenue se da verificare, grigio se spento; la priorita' resta nell'alone
+  m.addLayer({ id: 'coda', type: 'symbol', source: 'coda', layout: {
+    'icon-image': ['get', 'img'] as any, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+    'symbol-sort-key': ['get', 'priorita'] as any,
+  }, paint: { 'icon-opacity': ['case', ['==', ['get', 'selezionata'], 1], 1, 0.95] as any } })
   // scenario attivo: sopra a tutto, ripristinato anche dopo il cambio tema
   if (datiScenario.value) aggiungiScenario(m, c, datiScenario.value, cursore.value)
 }
@@ -380,7 +485,12 @@ onMounted(() => {
   paddingMappa()
   mappaPronta.value = mappa
   mappa.on('style.load', aggiungiLivelli)
-  segnapostiMancanti(mappa, () => [...segnapostiMappature(), SEGNAPOSTO_INVASO(tema.value)], () => tema.value)
+  segnapostiMancanti(mappa, () => [...segnapostiMappature(), ...segnapostiCondivise(tema.value), SEGNAPOSTO_INVASO(tema.value)], () => tema.value)
+  mappa.on('styleimagemissing', (e: any) => { if (/^(mezzo|ombra|base)-/.test(String(e.id)) && !mappa!.hasImage('base-VVF')) registraMezzi(mappa!, tema.value) })
+  chiama<any>('/basi').then((g) => (basiOp.value = g)).catch(() => {})
+  caricaFlotta()
+  timerFlotta = setInterval(caricaFlotta, 10_000)
+  timerPassi = setInterval(disegnaFlotta, 1000)
   chiama<any>('/invasi').then((g) => (invasi.value = g)).catch(() => {})
   // Fuori da 'load': lo strato si crea su style.load e prende datiMappature da qui.
   caricaMappature()
@@ -408,11 +518,44 @@ onMounted(() => {
       // centro reale della mappa: il box segnalazioni in alto a sinistra e' basso, non serve compensarlo
       m.easeTo({ center: (f.geometry as any).coordinates, zoom: Math.min(z + 0.5, m.getMaxZoom()), padding: { left: 0, top: 80, right: 0, bottom: 60 } })
     })
-    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', ...LIVELLI_HOTSPOT, 'invasi'], (pt) => areaSotto(m, pt) != null)
+    clicIncendio(m, ['coda', 'storico-segn', 'mappature', 'mappature-cluster', ...LIVELLI_HOTSPOT, 'invasi', 'basi', 'flotta-terra', 'flotta-aerei'], (pt) => areaSotto(m, pt) != null)
     m.on('mousemove', (ev) => evidenziaAree(m, areaSotto(m, ev.point)))
     m.on('mouseout', () => evidenziaAree(m, null))
     m.on('click', (ev) => clicArea(m, ev.point))
     clicInvasi(m)
+    // basi e mezzi: popup (i mezzi sopra le basi)
+    m.on('click', 'basi', (ev) => {
+      if (m.queryRenderedFeatures(ev.point, { layers: ['flotta-terra', 'flotta-aerei'].filter((l) => m.getLayer(l)) }).length) return
+      const f = ev.features?.[0]; if (!f) return
+      const p = f.properties ?? {}
+      const e = ENTI_BASI[p.ente as keyof typeof ENTI_BASI]
+      const mezzi: string[] = typeof p.mezzi === 'string' ? JSON.parse(p.mezzi) : (p.mezzi ?? [])
+      apriPopup(m, (f.geometry as any).coordinates, PopupMappa, {
+        icona: iconaImg(urlBase(p.ente, tema.value)), tinta: [e.colore('scuro'), e.colore('chiaro')], etichetta: `Base · ${e.etichetta}`, titolo: p.nome,
+        sottotitolo: [p.indirizzo, p.comune].filter(Boolean).join(', '),
+      }, () => [
+        h('p', { class: 'mt-2 text-[.78rem] text-testo-2' }, mezzi.length ? [h('span', { class: 'font-semibold text-testo' }, 'Mezzi assegnati '), h('span', { class: 'text-testo-3' }, '(simulazione)'), h('br'), mezzi.join(' · ')] : 'Nessun mezzo della flotta simulata assegnato'),
+        h('p', { class: 'mt-2.5 border-t border-bordo pt-2 text-[.72rem] text-testo-3' }, `Fonte: ${p.fonte}${String(p.coord_incerta) === 'true' ? ' · posizione stimata sulla località' : ''}`),
+      ])
+    })
+    m.on('click', (ev) => {
+      const f = m.queryRenderedFeatures(ev.point, { layers: ['flotta-aerei', 'flotta-terra'].filter((l) => m.getLayer(l)) })[0]
+      if (!f) return
+      const p = f.properties ?? {}
+      const st = statoMezzo(String(p.stato))
+      apriPopup(m, (f.geometry as any).coordinates, PopupMappa, {
+        icona: iconaImg(urlMezzo(p.famiglia, st.colore(tema.value), tema.value)), tinta: [st.colore('scuro'), st.colore('chiaro')],
+        etichetta: 'Mezzo · simulazione dimostrativa', titolo: `${p.sigla} · ${p.tipo}`, sottotitolo: `${p.ente} · base ${p.base}`,
+      }, () => [
+        h('p', { class: 'mt-2 text-[.82rem]' }, [h('span', { class: 'font-semibold' }, p.stato), ` · ${p.destinazione}`]),
+        h('p', { class: 'cifre text-[.78rem] text-testo-2' }, Number(p.velocita_kmh) ? `${p.velocita_kmh} km/h · rotta ${p.rotta}°` : 'Fermo'),
+        h('p', { class: 'mt-2.5 border-t border-bordo pt-2 text-[.72rem] text-testo-3' }, 'Flotta simulata: traiettorie rettilinee, nessun instradamento stradale'),
+      ])
+    })
+    for (const l of ['basi', 'flotta-terra', 'flotta-aerei']) {
+      m.on('mouseenter', l, () => (m.getCanvas().style.cursor = 'pointer'))
+      m.on('mouseleave', l, () => (m.getCanvas().style.cursor = ''))
+    }
     clicHotspot(m, ['coda', 'storico-segn'], () => false, (lat, lon, t, area) => avviaScenario(lat, lon, t ? `Incendio attivo · ${nomeComune(t)}` : '', true, area))
     // clic destro (desktop) o pressione lunga (touch) su un punto qualunque: scenario da li'
     let ultimaPressione = 0
@@ -468,13 +611,14 @@ onMounted(() => {
   timerMappature = setInterval(caricaMappature, 30000)
   fermaEventi = [
     eventi.on('segnalazione_nuova', aggiorna),
+    eventi.on('segnalazione_aggiornata', aggiorna),
     eventi.on('segnalazione_valutata', () => { aggiorna(); valutate() }),
     eventi.on('mappatura_nuova', caricaMappature),
     eventi.on('hotspot_aggiornati', () => { caricaHotspot(); caricaAree() }),
   ]
 })
 
-onBeforeUnmount(() => { fermaTelefono(); fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearInterval(timerAree); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { fermaTelefono(); fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearInterval(timerAree); clearInterval(timerFlotta); clearInterval(timerPassi); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
@@ -494,6 +638,19 @@ async function azione(tipo: 'conferma' | 'archivia') {
     await aggiorna()
   } catch (e) { mostraAvviso(messaggioErrore(e, tipo === 'conferma' ? 'confermare la segnalazione' : 'archiviare la segnalazione'), 'errore') }
   inAzione.value = null
+}
+
+async function cambiaStato(v: StatoUfficiale) {
+  const s = scheda.value
+  if (!s || s.stato_ufficiale === v) return
+  const prima = s.stato_ufficiale
+  const tocca = (x: StatoUfficiale | undefined) => { for (const l of [coda, storico]) l.value = l.value.map((r) => (r.id === s.id ? { ...r, stato_ufficiale: x } : r)) }
+  tocca(v)
+  try {
+    await chiama(`/segnalazioni/${s.id}/stato`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stato_ufficiale: v }) })
+    mostraAvviso(`Stato ufficiale: ${STATI_UFF[v].etichetta}`)
+    aggiorna()
+  } catch (e) { tocca(prima); mostraAvviso(messaggioErrore(e, 'cambiare lo stato ufficiale'), 'errore') }
 }
 
 const nCoda = useConteggio(() => coda.value.length)
@@ -671,7 +828,7 @@ const contatoriBrevi = computed(() => [
         <SchedeStato v-if="vista === 'segnalazioni'" v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" />
       </div>
       <ElencoAreeCritiche v-if="vista === 'aree'" :dati="aree" :caricamento="carAree" :errore="errAree" :selezionata="areaSel" @seleziona="selezionaArea" @simula="simulaArea" @riprova="caricaAree" />
-      <ElencoSegnalazioni v-else :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
+      <ElencoSegnalazioni v-else :scheda="schedaBox" :coda="codaVisibile" :tutte="coda" v-model:filtro="filtroTipo" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
     </aside>
 
     <!-- scheda della segnalazione selezionata -->
@@ -686,14 +843,14 @@ const contatoriBrevi = computed(() => [
               <span class="cifre">#{{ scheda.id }} · {{ ora(scheda.creata_il) }} · {{ fa(scheda.creata_il) }}</span>
             </p>
             <h2 id="titolo-scheda" class="mt-1 flex items-center gap-1.5 text-base font-semibold">
-              <Flame v-if="scheda.tipo === 'fuoco'" class="size-4 text-brace" aria-hidden="true" /><TriangleAlert v-else class="size-4 text-ambra" aria-hidden="true" />
-              {{ scheda.tipo === 'fuoco' ? 'Fuoco / fumo' : 'Area a rischio' }}<span v-if="scheda.comune" class="font-normal text-testo-2"> · {{ nomeComune(scheda.comune) }}</span>
+              <component :is="TIPI[scheda.tipo].icona" class="size-4" :style="{ color: TIPI[scheda.tipo].colore }" aria-hidden="true" />
+              {{ TIPI[scheda.tipo].etichetta }}<span v-if="scheda.comune" class="font-normal text-testo-2"> · {{ nomeComune(scheda.comune) }}</span>
             </h2>
           </div>
           <button type="button" aria-label="Chiudi la scheda" class="secondario tocco flex size-8 shrink-0 items-center justify-center" @click="selezionata = null"><X class="size-4" /></button>
         </header>
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <CorpoScheda :s="scheda" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" />
+          <CorpoScheda :s="scheda" @stato="cambiaStato" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" />
         </div>
         <!-- valutata: esito al posto delle azioni -->
         <footer v-if="sola" class="flex shrink-0 items-center gap-3 border-t border-bordo px-5 py-3.5">
@@ -769,10 +926,42 @@ const contatoriBrevi = computed(() => [
             </label>
           </div>
           <ul class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[.74rem] text-testo-2">
-            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" aria-hidden="true" />Confermata, fissa</li>
-            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" aria-hidden="true" />Falso allarme</li>
+            <li v-for="k in ORDINE_TIPI" :key="k" class="flex items-center gap-1.5 whitespace-nowrap">
+              <span class="grid size-[18px] place-items-center rounded-full text-white shadow-sm" :style="{ background: coloriTipi(tema)[k] }" aria-hidden="true"><component :is="TIPI[k].icona" class="size-[10px]" :stroke-width="2.6" /></span>{{ TIPI[k].etichetta }}
+            </li>
+          </ul>
+          <ul class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[.74rem] text-testo-2">
+            <li class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-macchia" aria-hidden="true" />Confermata: a colori</li>
+            <li class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-testo-3" aria-hidden="true" />Spenta o falso allarme: grigia</li>
           </ul>
         </div>
+        <!-- Operativo: aree critiche, basi reali, flotta simulata -->
+        <section class="mt-2 border-t border-bordo pt-2" aria-labelledby="titolo-operativo">
+          <h3 id="titolo-operativo" class="etichetta mb-1 pl-1">Operativo</h3>
+          <label v-for="l in livelliOperativi" :key="l.id" class="flex min-h-11 cursor-pointer items-center gap-3 rounded-m border border-transparent px-3 py-2 transition-colors hover:bg-vetro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-cielo">
+            <input v-model="l.modello.value" type="checkbox" role="switch" class="sr-only" />
+            <component :is="l.icona" class="size-4 shrink-0" :class="l.classe" aria-hidden="true" />
+            <span class="min-w-0 flex-1 leading-tight">
+              <span class="block text-[.86rem] font-semibold">{{ l.titolo }}</span>
+              <span class="cifre block text-[.72rem] text-testo-2">{{ l.dettaglio() }}</span>
+            </span>
+            <span class="interruttore" :class="l.modello.value && 'acceso'" aria-hidden="true" />
+          </label>
+          <ul v-if="mostraBasi" class="flex flex-wrap gap-x-3 gap-y-1 px-3 pt-1 text-[.74rem] text-testo-2">
+            <li v-for="(e, k) in ENTI_BASI" :key="k" class="flex items-center gap-1.5 whitespace-nowrap">
+              <img :src="urlBase(k, tema)" alt="" class="h-[24px] w-[21px] -my-0.5" aria-hidden="true" />{{ e.etichetta }}
+            </li>
+          </ul>
+          <div v-if="mostraTerra || mostraAerei" class="px-3 pt-2 pb-1 text-[.74rem] text-testo-2">
+            <ul class="mb-1.5 flex flex-wrap gap-x-3 gap-y-1">
+              <li v-for="(n, f) in FAMIGLIE" :key="f" class="flex items-center gap-1 whitespace-nowrap"><img :src="urlMezzo(f, STATI_MEZZO[0].colore(tema), tema)" alt="" class="size-[22px] -my-0.5" aria-hidden="true" />{{ n }}</li>
+            </ul>
+            <ul class="flex flex-wrap gap-x-3 gap-y-1">
+              <li v-for="st in STATI_MEZZO" :key="st.id" class="flex items-center gap-1.5 whitespace-nowrap"><span class="size-2.5 rounded-full" :style="{ background: st.colore(tema) }" aria-hidden="true" />{{ st.etichetta }}</li>
+            </ul>
+            <p class="mt-1.5 text-[.7rem] text-testo-3">Mezzi: simulazione dimostrativa, traiettorie rettilinee. Basi: OpenStreetMap e siti istituzionali.</p>
+          </div>
+        </section>
         <!-- telefono: la legenda sta qui, non in basso (li' c'e' il foglio); incendi, hotspot, storico e mappature hanno la loro accanto al livello -->
         <section v-if="mobile" class="mt-2 border-t border-bordo px-3 pt-3 pb-1 text-[.76rem] text-testo-2" aria-labelledby="titolo-legenda">
           <h3 id="titolo-legenda" class="etichetta mb-2">Legenda</h3>
@@ -796,7 +985,7 @@ const contatoriBrevi = computed(() => [
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-alta" />Alta <span class="cifre text-testo-3">60+</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media" />Media <span class="cifre text-testo-3">30-59</span></span>
       <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-bassa" />Bassa <span class="cifre text-testo-3">0-29</span></span>
-      <span v-if="mostraStorico" class="flex items-center gap-3 border-l border-bordo pl-3"><span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-media ring-[1.5px] ring-testo" />Confermata</span><span class="flex items-center gap-1.5"><span class="size-2 rounded-full ring-[1.5px] ring-testo-3" />Falso allarme</span></span>
+      <span v-if="mostraStorico" class="flex items-center gap-3 border-l border-bordo pl-3"><span class="etichetta">Storico</span><span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-macchia" />Confermata</span><span class="flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-testo-3" />Spenta o falso allarme</span></span>
       <span v-if="mostraIncendi && !scenario" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-storico h-1.5 w-8 rounded-full" />Incendi storici</span>
       <span v-if="mostraHotspot" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="size-2 rounded-full bg-brace ring-2 ring-fondo" />Incendi attivi</span>
       <span v-if="mostraRischio" class="flex items-center gap-1.5 border-l border-bordo pl-3"><span class="legenda-rischio h-1.5 w-8 rounded-full" />Rischio di oggi</span>
@@ -841,8 +1030,8 @@ const contatoriBrevi = computed(() => [
               <span class="cifre truncate">#{{ scheda.id }} · {{ fa(scheda.creata_il) }}</span>
             </p>
             <h2 class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[.95rem] font-semibold">
-              <Flame v-if="scheda.tipo === 'fuoco'" class="size-4 shrink-0 text-brace" aria-hidden="true" /><TriangleAlert v-else class="size-4 shrink-0 text-ambra" aria-hidden="true" />
-              <span class="truncate">{{ scheda.tipo === 'fuoco' ? 'Fuoco / fumo' : 'Area a rischio' }}<span v-if="scheda.comune" class="font-normal text-testo-2"> · {{ nomeComune(scheda.comune) }}</span></span>
+              <component :is="TIPI[scheda.tipo].icona" class="size-4 shrink-0" :style="{ color: TIPI[scheda.tipo].colore }" aria-hidden="true" />
+              <span class="truncate">{{ TIPI[scheda.tipo].etichetta }}<span v-if="scheda.comune" class="font-normal text-testo-2"> · {{ nomeComune(scheda.comune) }}</span></span>
             </h2>
           </div>
         </div>
@@ -854,8 +1043,8 @@ const contatoriBrevi = computed(() => [
       </div>
       <div v-if="!scenario" class="min-h-0 flex-1 overflow-y-auto overscroll-contain" :class="scheda && 'border-t border-bordo'" :style="{ paddingBottom: `${padScroll}px` }">
         <ElencoAreeCritiche v-if="!scheda && vista === 'aree'" :dati="aree" :caricamento="carAree" :errore="errAree" :selezionata="areaSel" @seleziona="selezionaArea" @simula="simulaArea" @riprova="caricaAree" />
-        <ElencoSegnalazioni v-else-if="!scheda" :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
-        <div v-else class="space-y-4 px-4 pt-4"><CorpoScheda :s="scheda" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" /></div>
+        <ElencoSegnalazioni v-else-if="!scheda" :scheda="schedaBox" :coda="codaVisibile" :tutte="coda" v-model:filtro="filtroTipo" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
+        <div v-else class="space-y-4 px-4 pt-4"><CorpoScheda :s="scheda" @stato="cambiaStato" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" /></div>
       </div>
     </section>
     <!-- piede del dettaglio: azioni (in coda) o esito (valutata), sempre visibile sopra il foglio -->

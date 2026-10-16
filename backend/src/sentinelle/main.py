@@ -12,6 +12,8 @@ from .config import impostazioni
 from .db import engine
 from .gioco import prepara_db
 from .invasi import carica as carica_invasi
+from .basi import carica as carica_basi
+from . import flotta
 
 
 @asynccontextmanager
@@ -22,12 +24,16 @@ async def ciclo_vita(_):
             with engine.begin() as conn:  # tabelle e missioni del gioco (idempotente)
                 prepara_db(conn)
                 carica_invasi(conn)
+                carica_basi(conn)
             break
         except OperationalError:
             if tentativo == 29:
                 raise
             await asyncio.sleep(2)
-    compiti = [asyncio.create_task(eventi.ascolta()), asyncio.create_task(eventi.controlla_hotspot())]
+    def scalda_flotta():  # la sagoma dell'isola per i mezzi di terra costa qualche secondo: si calcola subito
+        with engine.connect() as conn:
+            flotta.stato(conn, 0)
+    compiti = [asyncio.create_task(asyncio.to_thread(scalda_flotta)), asyncio.create_task(eventi.ascolta()), asyncio.create_task(eventi.controlla_hotspot())]
     yield
     for c in compiti:
         c.cancel()

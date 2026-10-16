@@ -43,12 +43,28 @@ ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS fattori jsonb NOT NULL DEFAULT
 -- storico: data di valutazione e punti guadagnati con la segnalazione
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS valutata_il timestamptz;
 ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS punti_ottenuti int NOT NULL DEFAULT 0;
+-- waze per gli incendi: tre tipi (focus sul fuoco, 2026-10-16), stato ufficiale per i cittadini, voti (vedi piano 2026-10-16)
+ALTER TABLE segnalazione DROP CONSTRAINT IF EXISTS segnalazione_tipo_check;
+DELETE FROM segnalazione WHERE tipo NOT IN ('fuoco','fumo','area_a_rischio');
+ALTER TABLE segnalazione ADD CONSTRAINT segnalazione_tipo_check
+  CHECK (tipo IN ('fuoco','fumo','area_a_rischio'));
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS stato_ufficiale text NOT NULL DEFAULT 'in_verifica'
+  CHECK (stato_ufficiale IN ('in_verifica','allertati','mezzi_sul_posto','spento'));
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS aggiornata_il timestamptz NOT NULL DEFAULT now();
+CREATE TABLE IF NOT EXISTS voto_segnalazione (
+  id serial PRIMARY KEY, segnalazione_id int NOT NULL REFERENCES segnalazione ON DELETE CASCADE,
+  utente_id int NOT NULL REFERENCES utente, voto text NOT NULL CHECK (voto IN ('ancora','finito')),
+  geom geometry(Point,4326) NOT NULL, creato_il timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (segnalazione_id, utente_id));
 -- eventi live: notifica sul canale 'sentinelle' (idempotente)
 CREATE OR REPLACE FUNCTION notifica_sentinelle() RETURNS trigger AS $$
 BEGIN
   IF TG_TABLE_NAME = 'segnalazione' AND TG_OP = 'INSERT' THEN
     PERFORM pg_notify('sentinelle', json_build_object('tipo', 'segnalazione_nuova', 'id', NEW.id,
       'utente_id', NEW.utente_id, 'priorita', NEW.priorita)::text);
+  ELSIF TG_TABLE_NAME = 'segnalazione' AND TG_NAME = 'segnalazione_aggiornata_notifica' THEN
+    PERFORM pg_notify('sentinelle', json_build_object('tipo', 'segnalazione_aggiornata', 'id', NEW.id,
+      'utente_id', NEW.utente_id, 'stato_ufficiale', NEW.stato_ufficiale)::text);
   ELSIF TG_TABLE_NAME = 'segnalazione' THEN
     PERFORM pg_notify('sentinelle', json_build_object('tipo', 'segnalazione_valutata', 'id', NEW.id,
       'utente_id', NEW.utente_id, 'stato', NEW.stato)::text);
@@ -65,6 +81,10 @@ CREATE TRIGGER segnalazione_nuova_notifica AFTER INSERT ON segnalazione
 DROP TRIGGER IF EXISTS segnalazione_valutata_notifica ON segnalazione;
 CREATE TRIGGER segnalazione_valutata_notifica AFTER UPDATE OF stato ON segnalazione
   FOR EACH ROW WHEN (OLD.stato IS DISTINCT FROM NEW.stato) EXECUTE FUNCTION notifica_sentinelle();
+DROP TRIGGER IF EXISTS segnalazione_aggiornata_notifica ON segnalazione;
+CREATE TRIGGER segnalazione_aggiornata_notifica AFTER UPDATE OF stato_ufficiale, aggiornata_il ON segnalazione
+  FOR EACH ROW WHEN (OLD.stato_ufficiale IS DISTINCT FROM NEW.stato_ufficiale
+    OR OLD.aggiornata_il IS DISTINCT FROM NEW.aggiornata_il) EXECUTE FUNCTION notifica_sentinelle();
 DROP TRIGGER IF EXISTS mappatura_nuova_notifica ON missione_completata;
 CREATE TRIGGER mappatura_nuova_notifica AFTER INSERT ON missione_completata
   FOR EACH ROW WHEN (NEW.geom IS NOT NULL) EXECUTE FUNCTION notifica_sentinelle();

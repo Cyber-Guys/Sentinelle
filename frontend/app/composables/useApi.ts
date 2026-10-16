@@ -1,3 +1,4 @@
+import type { TipoSegnalazione, StatoUfficiale, Condivisa } from './useWaze'
 export function useApi() {
   const base = useRuntimeConfig().public.apiBaseUrl as string
 
@@ -20,7 +21,7 @@ export function messaggioErrore(e: unknown, azione = 'caricare i dati') {
 }
 
 export type Livello = { nome: string; soglia: number; prossima_soglia: number | null; progresso: number }
-export type Utente = { id: number; nome: string; comune: string; punti: number; livello?: Livello }
+export type Utente = { id: number; nome: string; comune: string; punti: number; livello?: Livello; affidabilita?: { valore: number; etichetta: string } }
 export type Missione = {
   id: number; codice: string; titolo: string; descrizione: string; punti: number
   tipo: 'quiz' | 'posizione' | 'esplora'; disponibile: boolean; motivo: string | null
@@ -42,9 +43,11 @@ export const CENTRI_COMUNI: Record<string, [number, number]> = {
   SAMASSI: [8.91, 39.49], SERRENTI: [8.92, 39.47], SANLURI: [8.90, 39.56],
 }
 export type Segnalazione = {
-  id: number; utente_id: number; tipo: 'fuoco' | 'area_a_rischio'; lat: number; lon: number
+  id: number; utente_id: number; tipo: TipoSegnalazione; lat: number; lon: number
   foto_url: string | null; priorita: number; motivazioni: string[]; fattori: Fattore[]; comune: string | null
   stato: StatoSegnalazione; creata_il: string; valutata_il?: string | null; punti_ottenuti?: number
+  stato_ufficiale?: StatoUfficiale; conferme?: number; smentite?: number
+  affidabilita?: Condivisa['affidabilita']; probabilmente_spento?: boolean
 }
 export type StatoSegnalazione = 'nuova' | 'confermata' | 'archiviata'
 // stato della segnalazione per le persone: sempre colore + parola
@@ -56,7 +59,7 @@ export const STATI: Record<StatoSegnalazione, { etichetta: string; colore: strin
 export const dataOra = (iso: string) => new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 // un termine della priorita': valore 0..1, peso effettivo (rinormalizzato), contributo in punti 0..100
 export type Fattore = {
-  chiave: 'hotspot' | 'meteo' | 'suolo' | 'pericolo' | 'vicine' | 'storico'; etichetta: string
+  chiave: 'affidabilita' | 'hotspot' | 'meteo' | 'suolo' | 'pericolo' | 'vicine' | 'storico'; etichetta: string
   valore: number; peso: number; contributo: number; testo: string; disponibile: boolean
 }
 // 'SAN GAVINO MONREALE' -> 'San Gavino Monreale', "SANT'ANTIOCO" -> "Sant'Antioco"

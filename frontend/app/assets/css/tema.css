@@ -27,6 +27,9 @@ html[data-tema='scuro'] {
   --ambra: #f5b83d;
   --macchia: #3fb37f;
   --cielo: #5aa9e6;
+  /* tipo di segnalazione fumo: grigio-azzurro */
+  --fumo: #a3b3c4;
+  --viola: #b48cf2;
   --ombra: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.25);
   --ombra-pillola: 0 4px 14px -6px rgba(0, 0, 0, 0.55);
   --atmosfera:
@@ -54,6 +57,8 @@ html[data-tema='chiaro'] {
   --ambra: #956207;
   --macchia: #277752;
   --cielo: #2a72ad;
+  --fumo: #566676;
+  --viola: #6a46a6;
   --ombra: 0 16px 36px -14px rgba(40, 30, 20, 0.22), 0 0 0 1px rgba(20, 20, 10, 0.04);
   --ombra-pillola: 0 3px 12px -6px rgba(40, 30, 20, 0.22);
   --atmosfera:
@@ -78,6 +83,8 @@ html[data-tema='chiaro'] {
   --color-ambra: var(--ambra);
   --color-macchia: var(--macchia);
   --color-cielo: var(--cielo);
+  --color-fumo: var(--fumo);
+  --color-viola: var(--viola);
   /* scala della priorita' e del rischio: sempre con la parola accanto */
   --color-alta: var(--brace);
   --color-media: var(--ambra);
@@ -316,6 +323,7 @@ body::after {
 .pin-ambra { --pin: var(--ambra); }
 .pin-macchia { --pin: var(--macchia); }
 .pin-cielo { --pin: var(--cielo); }
+.pin-fumo { --pin: var(--fumo); }
 /* Missione mirata dal rischio: pin discreto con icona Target (colore = rischio, via text-ambra/text-brace) */
 .pin-mirata {
   display: flex; align-items: center; justify-content: center;

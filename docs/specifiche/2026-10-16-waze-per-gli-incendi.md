@@ -30,8 +30,8 @@ necessarie.
   se il GPS e' entro il raggio della segnalazione (2 km); fuori raggio i
   pulsanti sono disattivati con il motivo ("Avvicinati entro 2 km per
   confermare").
-- **Tipi nella demo:** Fuoco, Fumo, Area a rischio, Strada bloccata, Persone o
-  animali in pericolo (tutti e cinque).
+- **Tipi nella demo:** Fuoco, Fumo, Area a rischio (focus solo sul fuoco:
+  strada bloccata e persone o animali in pericolo tolti il 2026-10-16).
 - **Chiusura:** possono chiuderla sia i cittadini ("Non c'e' piu'") sia
   l'operatore.
 - **Privacy:** mai i nomi; solo conteggi ("8 cittadini hanno confermato").
@@ -42,8 +42,7 @@ necessarie.
 ## 1. Segnalare in due tocchi
 
 - Un solo pulsante "Segnala" -> griglia di tipi grandi con icona:
-  Fuoco, Fumo, Area a rischio (sterpaglie/rifiuti), Strada bloccata,
-  Persone o animali in pericolo. *[proposta]* niente sotto-domande obbligatorie.
+  Fuoco, Fumo, Area a rischio (sterpaglie/rifiuti). *[proposta]* niente sotto-domande obbligatorie.
 - Posizione GPS automatica (correggibile toccando la mappa), foto facoltativa,
   invio immediato.
 - **Anti-doppione:** se entro il raggio esiste gia' una segnalazione dello
@@ -145,7 +144,7 @@ ora, conferme che contano solo se il GPS e' entro 2 km dal punto.
    usano questi.
 
 Chiuse il 2026-10-16: visibilita' (tutti vedono, conferma solo entro 2 km),
-cinque tipi nella demo, punti (tabella sopra).
+tre tipi nella demo (ridotti da cinque il 2026-10-16), punti (tabella sopra).
 
 ## Fuori perimetro della demo
 
