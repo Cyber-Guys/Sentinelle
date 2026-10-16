@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `0139007` — 2026-10-16
+> **Riferimento:** commit `122a8ab` — 2026-10-16
 
 ## Fase
 
@@ -43,6 +43,8 @@ dal dump della release GitHub `dati-v1`) e `./scripts/avvia.sh`; guida in
 **Fatto:** "Waze per gli incendi" (piano `2026-10-16-waze-per-gli-incendi`, chiuso): app = mappa condivisa (3 tipi: fuoco, fumo, area a rischio; conferma / "non c'e' piu'" entro 2 km, anti-doppione, alert di prossimita' con app aperta), affidabilita' calcolata (`affidabilita.py`, pesi in `pesi.toml`), cruscotto con tipi, livello, conteggi, filtro per tipo, stato ufficiale (`POST /segnalazioni/{id}/stato`, visto nell'app in < 1 s) e "Probabilmente spento". Provato in browser desktop e 375 px; telefono vero via tunnel non provato.
 
 **Operativo nel cruscotto (fatto):** basi reali VVF/CFVA/AIB (`dati/basi.json`, `scripts/aggiorna_basi.py`, `GET /basi`; 19 con `coord_incerta` da verificare), flotta SIMULATA deterministica (`flotta.py`, `GET /flotta?t=`): mezzi di terra mai in mare (percorsi riportati sulla terraferma con l'unione dei comuni, cache calcolata all'avvio), aerei base -> invaso -> obiettivo. Icone canvas squircle/sagome in `useMappa.ts` (`registraMezzi`). Default del cruscotto: accesi solo aree critiche, incendi attivi e storico segnalazioni; storico con i segnaposti per tipo (colore = confermata, grigio = spenta/falso allarme) e popup con stato ufficiale, conferme, affidabilita'.
+
+**Docker (fatto):** stack completo con `./scripts/docker.sh` (`compose.yaml`: db PostGIS alpine, servizio `dati` che ripristina `dati/sentinelle.dump` se il db e' vuoto, backend python slim non-root con dipendenze bloccate in `backend/requirements.txt`, frontend Nuxt statico servito da nginx che fa anche da proxy `/api` e SSE). `./scripts/docker.sh dev` = hot reload (`compose.dev.yaml`). RAM misurata: frontend 7 MiB, backend 105 MiB, db 303 MiB. Verificato su Linux/WSL2 amd64: cruscotto e `/app` a 375 px nel browser, `prova_percorso.py` nel container OK. Il flusso senza Docker (`infra/compose.yaml`, `setup.sh`, `avvia.sh`) resta ma non va usato insieme (stessa porta 3000).
 
 **Prossimo passo:** pitch e prove su telefono vero; il dump `dati-v1` va ripubblicato (schema cambiato, `scripts/pubblica_dati.sh`).
 
@@ -90,6 +92,7 @@ Ognuno modifica solo la propria riga.
 
 ## Aperto
 
+- Docker non provato su Mac/arm64 (hot reload su Docker Desktop incluso), upload foto via nginx e tunnel da telefono. Immagine db alpine = collation musl: un `ORDER BY` su testo puo' differire dal flusso senza Docker. Decidere col team se ritirare `infra/compose.yaml`, `setup.sh` e `avvia.sh`.
 - Trappola nota: un handler `styleimagemissing` che ridisegna tutte le immagini (remove+add) va in loop e blocca la mappa; ridisegnare solo se l'immagine manca davvero (`cruscotto.vue`).
 - Simulazione area da hotspot lenta (~6 s): da ottimizzare se serve in demo.
 
