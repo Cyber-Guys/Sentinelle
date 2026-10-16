@@ -26,7 +26,8 @@ Una volta per clone, dalla radice del repository:
    Claude Code `.claude/launch.json` (`backend`, `frontend`). Entrambi passano
    per `scripts/backend.sh`, che trova da solo l'ambiente Python.
 3. Verifica: `curl localhost:8000/salute` risponde `{"ok":true}` e
-   http://localhost:3000/app mostra la mappa.
+   http://localhost:3000/app mostra la mappa (percorso sul sistema). Con Docker: app cittadino su
+   http://localhost:3000, cruscotto su http://localhost:3001/cruscotto.
 
 Comandi Python del progetto sempre con `./scripts/python.sh <script>`: funziona
 con conda e con venv. Problemi frequenti e guida per le persone in
@@ -178,8 +179,10 @@ scripts/           setup.sh (primo avvio), avvia.sh, backend.sh, python.sh,
                    carica_dati, semina_demo, reset_demo.sql, prova_*, genera_tiles, tunnel.sh
 backend/           FastAPI (src/sentinelle: fonti/ FIRMS meteo Corine, api/, rischio,
                    verifica = priorita', gioco, eventi = SSE), config/*.toml, tests/
-frontend/          Nuxt 4: pages/app.vue (cittadino), pages/cruscotto.vue (operatori),
-                   public/tiles/*.pmtiles (mappa base offline e storico)
+frontend/          Nuxt 4, cruscotto operatori (da riscrivere) + vecchio /app; tile condivisi:
+                   public/tiles/*.pmtiles (mappa base offline e storico), public/basemap
+webapp/            Nuxt 4, app cittadino (concept G+H): pages/ (mappa, segnala, localita, storico,
+                   profilo), composables/, utils/; stesso backend, container separato
 ```
 
 Avvio e comandi in `README.md`; `.claude/launch.json` ha `backend` e `frontend`.

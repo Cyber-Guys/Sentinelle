@@ -11,15 +11,30 @@ Prerequisiti: Docker con compose, git, `gh` autenticato con accesso al repo (sol
 Niente Node, Python o conda sul sistema: tutto gira nei container, uguale per tutti.
 
 ```bash
-./scripts/docker.sh        # prima volta: scarica il dump dei dati (~140 MB), costruisce, ripristina, avvia (~2 min)
-./scripts/docker.sh dev    # alternativa per sviluppare: hot reload su backend e frontend
-./scripts/docker.sh down   # ferma (i dati restano); "down -v" riparte da zero
+./scripts/docker.sh                 # prima volta: scarica il dump dei dati (~140 MB), costruisce, ripristina, avvia (~2 min)
+./scripts/docker.sh dev             # sviluppo: hot reload su backend e webapp
+./scripts/docker.sh dev-dashboard   # sviluppo: hot reload sul cruscotto
+./scripts/docker.sh down            # ferma (i dati restano); "down -v" riparte da zero
 ```
 
-Stesse URL di sotto (3000 app, 8000 API). Stack leggero: frontend statico + nginx (~7 MB di RAM), backend
-(~100 MB), PostGIS (~300 MB). Porte: `SENTINELLE_PORTA_APP`, `SENTINELLE_PORTA_API`. Senza `gh`: copiare
-`sentinelle.dump` in `dati/` e lanciare lo script. Comandi nel backend: `./scripts/docker.sh exec backend python scripts/prova_percorso.py`.
-Dipendenze Python bloccate in `backend/requirements.txt` (comando di rigenerazione in `backend/Dockerfile`).
+Tre servizi separati che parlano solo col backend (stesso database: una segnalazione fatta nell'app compare
+subito nel cruscotto):
+
+| Servizio | Cartella | Indirizzo |
+|---|---|---|
+| App cittadino (`webapp`) | `webapp/` | http://localhost:3000 |
+| Cruscotto operatori (`dashboard`, da riscrivere) | `frontend/` | http://localhost:3001/cruscotto |
+| Backend (`backend`) | `backend/` | http://localhost:8000/salute |
+
+Stack leggero: webapp e dashboard statiche + nginx (~7 MB di RAM ciascuna), backend (~100 MB), PostGIS
+(~300 MB). Porte: `SENTINELLE_PORTA_APP`, `SENTINELLE_PORTA_DASHBOARD`, `SENTINELLE_PORTA_API`. Senza `gh`:
+copiare `sentinelle.dump` in `dati/` e lanciare lo script. Comandi nel backend:
+`./scripts/docker.sh exec -T backend python scripts/prova_webapp.py`. Dipendenze Python bloccate in
+`backend/requirements.txt` (comando di rigenerazione in `backend/Dockerfile`).
+
+App cittadino senza GPS (computer, prove): aggiungere `?pos=39.4216,8.9223&dir=45` all'indirizzo per fissare
+posizione e direzione dello sguardo. Dal telefono usa l'indirizzo HTTPS del tunnel che lo script stampa a fine
+avvio (vedi "Prova da telefono").
 
 ## Avvio rapido senza Docker per l'app (ambiente sul sistema)
 
@@ -33,7 +48,7 @@ cd hackaton-incendi
 ./scripts/avvia.sh     # ogni volta: backend + frontend, Ctrl+C ferma entrambi
 ```
 
-- App cittadino: http://localhost:3000/app (pensata per il telefono)
+- App cittadino (vecchia): http://localhost:3000/app (pensata per il telefono)
 - Cruscotto operatori: http://localhost:3000/cruscotto
 - API: http://localhost:8000/salute
 
@@ -42,13 +57,15 @@ In Claude Code gli stessi server partono da `.claude/launch.json`.
 
 ## Prova da telefono
 
-GPS e fotocamera richiedono HTTPS. Con l'app avviata, in un altro terminale:
+GPS e fotocamera richiedono HTTPS. Con Docker il tunnel parte da solo: `./scripts/docker.sh` crea un
+Cloudflare Quick Tunnel verso la sola app cittadino e a fine avvio stampa l'indirizzo
+`https://xxxx.trycloudflare.com` e un QR code da inquadrare. L'indirizzo cambia a ogni avvio; per
+ristamparlo: `./scripts/docker.sh tunnel`. Chiunque lo conosca vede l'app finche' lo stack e' acceso;
+cruscotto e backend restano fuori, e dal tunnel passano solo le rotte dell'app cittadino (le azioni degli
+operatori rispondono 403). Senza tunnel: `SENTINELLE_TUNNEL=0 ./scripts/docker.sh`.
 
-```bash
-./scripts/tunnel.sh    # richiede cloudflared e qrencode (brew install cloudflared qrencode)
-```
-
-Stampa l'URL pubblico di `/app` e un QR code da inquadrare. Ctrl+C chiude il tunnel.
+Senza Docker (flusso sul sistema): `./scripts/tunnel.sh` in un altro terminale (richiede `cloudflared` e
+`qrencode`), che punta a localhost:3000.
 
 ## Comandi utili
 
@@ -59,6 +76,7 @@ Stampa l'URL pubblico di `/app` e un QR code da inquadrare. Ctrl+C chiude il tun
 | Riportare la demo a zero e riseminare la classifica | `docker compose -f infra/compose.yaml exec -T db psql -U sentinelle < scripts/reset_demo.sql && ./scripts/python.sh scripts/semina_demo.py` |
 | Test della priorita' | `cd backend && ../scripts/python.sh -m pytest -q` |
 | Prova end-to-end (backend attivo) | `./scripts/python.sh scripts/prova_percorso.py` |
+| Prova del backend della webapp cittadino (utenti, localita', avvisi, media, storico) | `./scripts/docker.sh exec -T backend python scripts/prova_webapp.py` |
 | Prova del gioco (backend attivo) | `./scripts/python.sh scripts/prova_gioco.py` |
 | Senza rete (FIRMS, meteo, Corine da `dati/offline/`) | `MODALITA_OFFLINE=1 ./scripts/avvia.sh` |
 | Rigenerare i tile dello storico (richiede tippecanoe) | `./scripts/python.sh scripts/genera_tiles.py` |

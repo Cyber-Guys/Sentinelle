@@ -20,7 +20,7 @@ GIORNO_LOCALE = "(completata_il AT TIME ZONE 'Europe/Rome')::date"
 
 
 def _utente(s: Session, utente_id: int):
-    r = s.execute(text("SELECT u.id, u.nome, c.nome AS comune, u.punti FROM utente u "
+    r = s.execute(text("SELECT u.id, u.nome, c.nome AS comune, u.punti, u.telefono FROM utente u "
                        "LEFT JOIN comune c ON c.id = u.comune_id WHERE u.id = :i"), {"i": utente_id}).one_or_none()
     if r is None:
         raise HTTPException(404, "utente non trovato")
@@ -51,7 +51,10 @@ def utente(id: int):
     with Session(engine) as s:
         u = _utente(s, id)
         r = affidabilita_utenti(s, [id])[id]
+        n = s.execute(text("SELECT count(*) AS tot, count(*) FILTER (WHERE foto IS NOT NULL OR video IS NOT NULL) AS media "
+                           "FROM segnalazione WHERE utente_id = :i"), {"i": id}).one()
     return {"id": u.id, "nome": u.nome, "comune": u.comune, "punti": u.punti, "livello": livello(u.punti),
+            "telefono": u.telefono, "n_segnalazioni": n.tot, "n_con_media": n.media,
             "affidabilita": {"valore": round(r, 3), "etichetta": "Sentinella affidabile" if r >= 0.7
                              else "Sentinella in prova" if r < 0.4 else "Sentinella"}}
 

@@ -1,4 +1,5 @@
 import json
+import shutil
 import uuid
 from pathlib import Path
 
@@ -26,7 +27,10 @@ PUNTI_VOTO, PUNTI_PRIMO = 10, 5
 LIVELLI = {"da_verificare": "Da verificare", "probabile": "Probabile",
            "comunita": "Confermata dalla comunità", "operatori": "Confermata dagli operatori"}
 
-SELEZIONE = ("SELECT s.id, s.utente_id, s.tipo, ST_Y(s.geom) AS lat, ST_X(s.geom) AS lon, s.foto, s.priorita, "
+FOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v", ".3gp"}
+
+SELEZIONE = ("SELECT s.id, s.utente_id, s.tipo, ST_Y(s.geom) AS lat, ST_X(s.geom) AS lon, s.foto, s.video, s.nota, s.direzione, s.priorita, "
              "s.motivazioni, s.fattori, s.stato, s.creata_il, s.valutata_il, s.punti_ottenuti, s.stato_ufficiale, s.aggiornata_il, "
              "(SELECT count(*) FROM voto_segnalazione v WHERE v.segnalazione_id = s.id AND v.voto = 'ancora') AS conferme, "
              "(SELECT count(*) FROM voto_segnalazione v WHERE v.segnalazione_id = s.id AND v.voto = 'finito') AS smentite, "
@@ -36,7 +40,8 @@ SELEZIONE = ("SELECT s.id, s.utente_id, s.tipo, ST_Y(s.geom) AS lat, ST_X(s.geom
 
 def _json(r) -> dict:
     return {"id": r.id, "utente_id": r.utente_id, "tipo": r.tipo, "lat": r.lat, "lon": r.lon,
-            "foto_url": f"/foto/{r.foto}" if r.foto else None, "priorita": r.priorita,
+            "foto_url": f"/foto/{r.foto}" if r.foto else None, "video_url": f"/foto/{r.video}" if r.video else None,
+            "nota": r.nota, "direzione": r.direzione, "priorita": r.priorita,
             "motivazioni": r.motivazioni, "fattori": r.fattori or [], "comune": r.comune, "stato": r.stato, "creata_il": r.creata_il.isoformat(),
             "valutata_il": r.valutata_il.isoformat() if r.valutata_il else None, "punti_ottenuti": r.punti_ottenuti,
             "stato_ufficiale": r.stato_ufficiale, "aggiornata_il": r.aggiornata_il.isoformat(),
@@ -115,24 +120,37 @@ def aggiorna_priorita(s, id: int) -> None:
                    "WHERE id = :i"), {"p": pr, "f": json.dumps(fa), "i": id})
 
 
+def salva_media(f: UploadFile | None, ammesse: set[str], predefinita: str) -> str | None:
+    """Salva un allegato in DIR_FOTO (a blocchi: i video sono grandi) e restituisce il nome del file."""
+    if not f or not f.filename:
+        return None
+    ext = Path(f.filename).suffix.lower()
+    nome = uuid.uuid4().hex + (ext if ext in ammesse else predefinita)
+    DIR_FOTO.mkdir(exist_ok=True)
+    with open(DIR_FOTO / nome, "wb") as out:
+        shutil.copyfileobj(f.file, out)
+    return nome
+
+
 @router.post("/segnalazioni")
 def crea_segnalazione(utente_id: int = Form(), tipo: str = Form(), lat: float = Form(), lon: float = Form(),
-                      foto: UploadFile | None = File(None)):
+                      foto: UploadFile | None = File(None), video: UploadFile | None = File(None),
+                      nota: str | None = Form(None), direzione: int | None = Form(None)):
     if tipo not in TIPI:
         raise HTTPException(422, "tipo non valido")
-    nome_foto = None
-    if foto and foto.filename:
-        DIR_FOTO.mkdir(exist_ok=True)
-        nome_foto = uuid.uuid4().hex + Path(foto.filename).suffix.lower()
-        (DIR_FOTO / nome_foto).write_bytes(foto.file.read())
+    nome_foto = salva_media(foto, FOTO_EXT, ".jpg")
+    nome_video = salva_media(video, VIDEO_EXT, ".mp4")
+    nota = (nota or "").strip()[:500] or None
+    direzione = direzione % 360 if direzione is not None else None
     with Session(engine) as s:
         esito = calcola_priorita(raccogli_contesto(s, lat, lon), PESI)
         nuovo = s.execute(text(
-            "INSERT INTO segnalazione (utente_id, tipo, geom, foto, priorita, motivazioni, fattori) "
-            "VALUES (:u, :t, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :p, CAST(:m AS jsonb), "
+            "INSERT INTO segnalazione (utente_id, tipo, geom, foto, video, nota, direzione, priorita, motivazioni, fattori) "
+            "VALUES (:u, :t, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :f, :v, :n, :d, :p, CAST(:m AS jsonb), "
             "CAST(:fa AS jsonb)) RETURNING id"),
-            {"u": utente_id, "t": tipo, "lon": lon, "lat": lat, "f": nome_foto, "p": esito.priorita,
-             "m": json.dumps(esito.motivazioni), "fa": json.dumps(esito.fattori)}).scalar()
+            {"u": utente_id, "t": tipo, "lon": lon, "lat": lat, "f": nome_foto, "v": nome_video, "n": nota,
+             "d": direzione, "p": esito.priorita, "m": json.dumps(esito.motivazioni),
+             "fa": json.dumps(esito.fattori)}).scalar()
         punti_ottenuti = 0
         if tipo == "area_a_rischio":
             # +10 subito, al massimo 3 segnalazioni al giorno (ora locale) che danno punti

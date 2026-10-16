@@ -31,8 +31,8 @@ git clone https://github.com/ale24cocco/hackaton-incendi.git && cd hackaton-ince
 ./scripts/docker.sh        # ~2 minuti la prima volta, poi pochi secondi
 ```
 
-Poi http://localhost:3000/app e http://localhost:3000/cruscotto. Per lavorare sul codice con hot reload:
-`./scripts/docker.sh dev`. Fermare: `./scripts/docker.sh down`. Dettagli nel `README.md`.
+Poi l'app cittadino su http://localhost:3000 e il cruscotto su http://localhost:3001/cruscotto. Per lavorare sul
+codice con hot reload: `./scripts/docker.sh dev` (backend e webapp) o `dev-dashboard`. Fermare: `./scripts/docker.sh down`. Dettagli nel `README.md`.
 Il percorso sotto (setup.sh + avvia.sh) resta valido ma non serve se usi Docker; non farli girare insieme (stessa porta 3000).
 
 **Percorso sul sistema (setup.sh):**
@@ -84,8 +84,9 @@ dell'agente: cosi' chiunque (persona o agente) riprende da dove si era rimasti.
 
 ## 6. Prova da telefono
 
-Con l'app avviata: `./scripts/tunnel.sh` in un altro terminale. Inquadra il QR
-code: si apre `/app` in HTTPS (serve per GPS e fotocamera).
+Con Docker, `./scripts/docker.sh` crea da solo il tunnel HTTPS e stampa indirizzo e QR code: inquadralo e si
+apre l'app (GPS e fotocamera funzionano). Per ristamparlo: `./scripts/docker.sh tunnel`. Senza Docker:
+`./scripts/tunnel.sh` in un altro terminale.
 
 ## 7. Prompt per lavorare con l'agente
 

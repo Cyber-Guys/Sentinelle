@@ -1,7 +1,8 @@
 # Sviluppo con hot reload, sopra compose.yaml:  ./scripts/docker.sh dev
-# Backend: uvicorn --reload sui sorgenti montati. Frontend: nuxt dev (porta 3000, ~600 MB di RAM:
-# per solo guardare l'app usare lo stack normale, che pesa una frazione).
-# Aggiungere un file in cima a frontend/ (non dentro app/, public/, server/) richiede di montarlo qui.
+# Backend: uvicorn --reload sui sorgenti montati. Webapp: nuxt dev (porta 3000, ~600 MB di RAM: per solo
+# guardare l'app usare lo stack normale, che pesa una frazione). Il cruscotto resta quello statico;
+# per lavorarci: ./scripts/docker.sh dev-dashboard (compose.dev-dashboard.yaml).
+# Aggiungere un file in cima a webapp/ (non dentro app/) richiede di montarlo qui.
 services:
   backend:
     command: ["uvicorn", "sentinelle.main:app", "--host", "0.0.0.0", "--port", "8000",
@@ -14,19 +15,21 @@ services:
       - ./scripts:/app/scripts:ro
       - foto:/app/backend/foto
 
-  frontend:
+  webapp:
     build: !override
-      context: ./frontend
+      context: ./webapp
       target: dev
-    image: sentinelle-docker-frontend-dev
+    image: sentinelle-docker-webapp-dev
     environment:
       BACKEND_URL: http://backend:8000
     ports: !override
       - "${SENTINELLE_PORTA_APP:-3000}:3000"
     # node_modules e .nuxt restano nel container: niente file di root nel clone
     volumes: !override
-      - ./frontend/app:/app/app
-      - ./frontend/public:/app/public
-      - ./frontend/server:/app/server
-      - ./frontend/nuxt.config.ts:/app/nuxt.config.ts:ro
-      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./webapp/app:/app/app
+      - ./webapp/nuxt.config.ts:/app/nuxt.config.ts:ro
+      - ./webapp/tsconfig.json:/app/tsconfig.json:ro
+      - ./webapp/public/manifest.webmanifest:/app/public/manifest.webmanifest:ro
+      - ./webapp/public/icona.svg:/app/public/icona.svg:ro
+      - ./frontend/public/tiles:/app/public/tiles:ro
+      - ./frontend/public/basemap:/app/public/basemap:ro

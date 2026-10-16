@@ -88,3 +88,15 @@ CREATE TRIGGER segnalazione_aggiornata_notifica AFTER UPDATE OF stato_ufficiale,
 DROP TRIGGER IF EXISTS mappatura_nuova_notifica ON missione_completata;
 CREATE TRIGGER mappatura_nuova_notifica AFTER INSERT ON missione_completata
   FOR EACH ROW WHEN (NEW.geom IS NOT NULL) EXECUTE FUNCTION notifica_sentinelle();
+-- webapp cittadino: telefono, media/nota/direzione delle segnalazioni, localita' monitorate (piano 2026-10-16-webapp-cittadino)
+ALTER TABLE utente ADD COLUMN IF NOT EXISTS telefono text;
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS video text;
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS nota text;
+ALTER TABLE segnalazione ADD COLUMN IF NOT EXISTS direzione int;
+CREATE TABLE IF NOT EXISTS localita (id serial PRIMARY KEY, utente_id int NOT NULL REFERENCES utente ON DELETE CASCADE,
+  nome text NOT NULL, tipo text NOT NULL DEFAULT 'altro' CHECK (tipo IN ('casa','terreno','vigna','altro')),
+  indirizzo text, geom geometry(Point,4326) NOT NULL, avvisi_attivi boolean NOT NULL DEFAULT true,
+  avvisi_tipi text[] NOT NULL DEFAULT '{fuoco,fumo}', raggio_km int NOT NULL DEFAULT 5 CHECK (raggio_km IN (2,5,10)),
+  urgenza text NOT NULL DEFAULT 'urgenti_importanti' CHECK (urgenza IN ('urgenti','urgenti_importanti','tutti')),
+  creata_il timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS localita_utente_idx ON localita (utente_id);

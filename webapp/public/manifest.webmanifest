@@ -1,0 +1,11 @@
+{
+  "name": "Sentinelle",
+  "short_name": "Sentinelle",
+  "description": "Segnala incendi e fumo in Sardegna e ricevi gli avvisi per la tua casa e i tuoi terreni.",
+  "lang": "it",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef1f5",
+  "theme_color": "#eef1f5",
+  "icons": [{ "src": "/icona.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

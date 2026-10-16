@@ -1,8 +1,15 @@
-# Stack completo in Docker: db + dati (ripristino una tantum) + backend + frontend.
+# Stack completo in Docker, tre servizi separati che parlano tra loro solo via backend:
+#   webapp     app cittadino (webapp/)            http://localhost:3000
+#   dashboard  cruscotto operatori (frontend/)    http://localhost:3001/cruscotto   (da riscrivere)
+#   backend    FastAPI, unico accesso ai dati     http://localhost:8000/salute
+# + db e dati (ripristino una tantum). Una segnalazione inviata dalla webapp compare subito nel cruscotto:
+# stesso backend, stesso database.
 #   ./scripts/docker.sh        scarica il dump dei dati se manca e avvia tutto
 #   docker compose up -d --build --wait
 # Sviluppo con hot reload: vedi compose.dev.yaml. Il flusso senza Docker (infra/compose.yaml) resta com'e'.
-# Porte: SENTINELLE_PORTA_APP (default 3000), SENTINELLE_PORTA_API (default 8000, solo localhost).
+# Porte: SENTINELLE_PORTA_APP (3000), SENTINELLE_PORTA_DASHBOARD (3001), SENTINELLE_PORTA_API (8000, solo localhost).
+# Tunnel HTTPS per il telefono: servizio `tunnel` (profilo "tunnel"), lo accende scripts/docker.sh
+# (SENTINELLE_TUNNEL=0 per non crearlo) e stampa indirizzo e QR code.
 name: sentinelle-docker
 
 x-db: &db
@@ -61,13 +68,37 @@ services:
     volumes:
       - foto:/app/backend/foto
 
-  frontend:
-    build: ./frontend
+  # App cittadino. Tile e font della mappa stanno in frontend/public e sono condivisi in sola lettura.
+  webapp:
+    build: ./webapp
     restart: unless-stopped
     depends_on:
       backend: { condition: service_healthy }
     ports:
       - "${SENTINELLE_PORTA_APP:-3000}:80"
+    volumes:
+      - ./frontend/public/tiles:/usr/share/nginx/html/tiles:ro
+      - ./frontend/public/basemap:/usr/share/nginx/html/basemap:ro
+
+  # Tunnel HTTPS pubblico (Cloudflare Quick Tunnel) verso la SOLA webapp: GPS e fotocamera del telefono lo
+  # richiedono. L'indirizzo https://xxxx.trycloudflare.com e' casuale e cambia a ogni avvio del servizio.
+  # Fuori dal tunnel restano cruscotto e backend. A mano: docker compose --profile tunnel up -d tunnel
+  tunnel:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:2026.10.1
+    restart: unless-stopped
+    depends_on:
+      webapp: { condition: service_started }
+    command: tunnel --no-autoupdate --url http://webapp:80
+
+  # Cruscotto operatori attuale (contiene ancora il vecchio /app del cittadino): sara' riscritto.
+  dashboard:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "${SENTINELLE_PORTA_DASHBOARD:-3001}:80"
     volumes:
       - ./frontend/public/tiles:/usr/share/nginx/html/tiles:ro
 

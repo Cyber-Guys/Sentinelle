@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 from . import eventi
 from .api import gioco as api_gioco
-from .api import scenario, segnalazioni, storico
+from .api import cittadino, scenario, segnalazioni, storico
 from .config import impostazioni
 from .db import engine
 from .gioco import prepara_db
@@ -47,6 +47,7 @@ app.include_router(segnalazioni.router)
 app.include_router(api_gioco.router)
 app.include_router(eventi.router)
 app.include_router(scenario.router)
+app.include_router(cittadino.router)
 
 
 @app.get("/salute")

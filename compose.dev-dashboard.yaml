@@ -1,0 +1,21 @@
+# Cruscotto in sviluppo (nuxt dev), sopra compose.yaml:  ./scripts/docker.sh dev-dashboard
+# nuxt dev del cruscotto (porta 3001, ~600 MB di RAM: per solo guardare l'app usare lo stack normale).
+# Per il backend con hot reload usare compose.dev.yaml.
+# Aggiungere un file in cima a frontend/ (non dentro app/, public/, server/) richiede di montarlo qui.
+services:
+  dashboard:
+    build: !override
+      context: ./frontend
+      target: dev
+    image: sentinelle-docker-dashboard-dev
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports: !override
+      - "${SENTINELLE_PORTA_DASHBOARD:-3001}:3000"
+    # node_modules e .nuxt restano nel container: niente file di root nel clone
+    volumes: !override
+      - ./frontend/app:/app/app
+      - ./frontend/public:/app/public
+      - ./frontend/server:/app/server
+      - ./frontend/nuxt.config.ts:/app/nuxt.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
