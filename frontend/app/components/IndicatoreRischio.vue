@@ -9,7 +9,7 @@ const aperto = ref(false)
 type Meteo = { vento_kmh?: number; raffiche_kmh?: number; umidita?: number; temperatura?: number; giorni_senza_pioggia?: number }
 const meteo = computed(() => (props.rischio?.meteo ?? {}) as Meteo)
 const colore = computed(() =>
-  props.rischio?.livello === 'alto' ? 'var(--brace)' : props.rischio?.livello === 'medio' ? 'var(--ambra)' : 'var(--macchia)',
+  props.rischio?.livello === 'alto' || props.rischio?.livello === 'molto alto' ? 'var(--brace)' : props.rischio?.livello === 'medio' ? 'var(--ambra)' : 'var(--macchia)',
 )
 // semicerchio: lunghezza dell'arco proporzionale al valore 0-1
 const ARCO = Math.PI * 14
@@ -38,7 +38,7 @@ const righe = computed(() => [
       </svg>
       <span class="text-left leading-none">
         <span class="etichetta block !text-[.58rem]">Rischio</span>
-        <span v-if="rischio" class="mt-0.5 block text-[.84rem] font-semibold capitalize" :style="{ color: colore }">{{ rischio.livello }}</span>
+        <span v-if="rischio" class="mt-0.5 block text-[.84rem] font-semibold whitespace-nowrap first-letter:uppercase" :style="{ color: colore }">{{ rischio.livello }}</span>
         <span v-else-if="errore" class="mt-0.5 block text-[.8rem] font-semibold text-testo-2">Riprova</span>
         <span v-else class="scheletro mt-1 block h-3 w-11" aria-hidden="true" />
       </span>

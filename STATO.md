@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `7329ec0` — 2026-10-16
+> **Riferimento:** commit `49e56b2` — 2026-10-16
 
 ## Fase
 
@@ -48,7 +48,7 @@ Ognuno modifica solo la propria riga.
 
 | Persona | Branch | Task corrente | Piano |
 |---|---|---|---|
-| Alessandro | main | miglioramento piattaforma | — |
+| Alessandro | main | aree critiche di oggi fatte (`/aree-critiche`, scheda cruscotto, avviso app, missioni nelle zone): da committare | `docs/piani/2026-10-16-aree-critiche.md` (chiuso) |
 | Nicholas | — | — | — |
 | Andrea | — | — | — |
 | Nicola | — | — | — |

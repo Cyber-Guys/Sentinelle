@@ -116,6 +116,15 @@ def rischio(lat: float, lon: float):
     return {"valore": v, "livello": "basso" if v < 0.33 else "medio" if v < 0.66 else "alto", "meteo": vars(m)}
 
 
+@router.get("/rischio/comune")
+def rischio_comune(nome: str, lat: float, lon: float):
+    """Indicatore dell'app: stesso indice per cella delle aree critiche, meteo del punto per il dettaglio."""
+    from ..aree_critiche import indice_comune, livello_indice
+    v = round(indice_comune(nome, lat, lon), 3)
+    m = meteo(lat, lon)
+    return {"valore": v, "livello": livello_indice(v), "meteo": vars(m) if m else None}
+
+
 @router.get("/foto/{nome}")
 def foto(nome: str):
     percorso = DIR_FOTO / Path(nome).name

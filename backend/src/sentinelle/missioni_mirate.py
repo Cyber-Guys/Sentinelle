@@ -4,6 +4,7 @@ from datetime import datetime, time, timedelta
 
 from sqlalchemy import text
 
+from .aree_critiche import aree_critiche
 from .gioco import FUSO, oggi
 from .rischio_oggi import PESI, meteo_peggiore
 from .fonti.meteo_orario import previsione, serie_vicina
@@ -26,9 +27,9 @@ def livello(v: float) -> tuple[str, int]:
 
 
 def scegli(celle: list[dict], n: int = QUANTE, distanza_min: float = DISTANZA_MIN_KM) -> list[dict]:
-    """Le n celle a rischio piu' alto, scartando quelle a meno di distanza_min km da una gia' scelta."""
+    """Le n celle a rischio piu' alto (prima quelle dentro un'area critica di oggi), scartando quelle a meno di distanza_min km da una gia' scelta."""
     scelte = []
-    for c in sorted(celle, key=lambda c: -c["valore"]):
+    for c in sorted(celle, key=lambda c: -(c["valore"] + (0.2 if c.get("critica") else 0))):
         if all(km(c["lon"], c["lat"], s["lon"], s["lat"]) >= distanza_min for s in scelte):
             scelte.append(c)
             if len(scelte) == n:
@@ -66,6 +67,9 @@ def _genera(conn, utente_id: int) -> None:
                       "raffiche": max((o.raffiche_kmh for o in ore), default=0),
                       "umidita": min((o.umidita for o in ore), default=50),
                       "dist_km": km(u.lon, u.lat, r.lon, r.lat)})
+    critiche = {i for a in aree_critiche()["aree"] for i in a["celle"]}
+    for c in celle:
+        c["critica"] = c["id"] in critiche
     domani = oggi() + timedelta(days=1)
     scade = datetime.combine(domani, time(20), FUSO)
     for c in scegli(celle):

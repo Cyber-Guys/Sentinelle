@@ -63,11 +63,11 @@ const carScenario = ref(false)
 const errScenario = ref('')
 let richiesta = 0
 const coordinate = (lat: number, lon: number) => `${lat.toFixed(3)}, ${lon.toFixed(3)}`
-function avviaScenario(lat: number, lon: number, titolo = '') {
+function avviaScenario(lat: number, lon: number, titolo = '', grezzo = false) {
   chiudiPopup()
   livelliAperti.value = false
   selezionata.value = null
-  scenario.value = { lat, lon, titolo: titolo ? nomeComune(titolo) : coordinate(lat, lon) }
+  scenario.value = { lat, lon, titolo: titolo ? (grezzo ? titolo : nomeComune(titolo)) : coordinate(lat, lon) }
   datiScenario.value = null
   rimuoviScenario(mappa)
   if (mobile.value && foglio.value === 'chiuso') foglio.value = 'meta'
@@ -108,6 +108,50 @@ function chiudiScenario() {
 watch(oreScenario, () => calcolaScenario())
 watch(cursore, (o) => impostaOraScenario(mappa, coloriMappa(tema.value), o))
 const vaiAcqua = (lon: number, lat: number) => mappa?.flyTo({ center: [lon, lat], zoom: Math.max(mappa.getZoom(), 12), padding: paddingScenario() })
+/*
+  Aree critiche di oggi: zone a rischio alto calcolate dal backend (rischio per cella + meteo orario).
+  Scheda accanto a Segnalazioni; sulla mappa contorni sempre visibili, la selezionata piena.
+*/
+const vista = ref<'segnalazioni' | 'aree'>('segnalazioni')
+const aree = shallowRef<AreeCritiche | null>(null)
+const carAree = ref(false)
+const errAree = ref(false)
+const areaSel = ref<number | null>(null)
+const nAree = computed(() => aree.value?.aree.length ?? 0)
+let timerAree: ReturnType<typeof setInterval> | undefined
+async function caricaAree() {
+  carAree.value = true; errAree.value = false
+  try { aree.value = await chiama<AreeCritiche>('/aree-critiche') } catch { errAree.value = true }
+  carAree.value = false
+  if (areaSel.value && !aree.value?.aree.some((a) => a.id === areaSel.value)) areaSel.value = null
+  impostaAree()
+}
+const geojsonAree = () => ({ type: 'FeatureCollection' as const, features: (aree.value?.aree ?? []).map((a) => ({ type: 'Feature' as const, geometry: a.area, properties: { id: a.id, livello: a.livello, sel: a.id === areaSel.value ? 1 : 0 } })) })
+const impostaAree = () => (mappa?.getSource('aree') as maplibregl.GeoJSONSource | undefined)?.setData(geojsonAree())
+watch(areaSel, impostaAree)
+// durante lo scenario il velo delle aree si spegne: resta solo il contorno
+watch(() => !!scenario.value, (v) => { if (mappa?.getLayer('aree-velo')) mappa.setLayoutProperty('aree-velo', 'visibility', v ? 'none' : 'visible') })
+function limitiArea(a: AreaCritica): [[number, number], [number, number]] {
+  const p: number[][] = (a.area.type === 'MultiPolygon' ? a.area.coordinates.flat(2) : a.area.coordinates.flat(1))
+  const xs = p.map((c) => c[0]!), ys = p.map((c) => c[1]!)
+  return [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]]
+}
+async function selezionaArea(a: AreaCritica) {
+  if (areaSel.value === a.id) { areaSel.value = null; return }
+  areaSel.value = a.id
+  selezionata.value = null
+  if (scenario.value) chiudiScenario()
+  if (mobile.value && foglio.value !== 'alto') foglio.value = 'meta'
+  await nextTick()
+  const padding = mobile.value
+    ? { top: 72, bottom: ALTEZZE.value[foglio.value] + 24, left: 24, right: 72 }
+    : { top: 96, bottom: 80, left: 416, right: 96 }
+  mappa?.fitBounds(limitiArea(a), { padding, maxZoom: 11.5, duration: 900 })
+}
+const simulaArea = (a: AreaCritica) => avviaScenario(a.punto_peggiore.lat, a.punto_peggiore.lon, `Area critica ${a.nome}`, true)
+// prima apertura: con la coda vuota si parte dalle aree critiche, non da una mappa vuota
+watch(caricamento, (c) => { if (!c && !coda.value.length) vista.value = 'aree' }, { once: true })
+
 const mostraIncendi = ref(true)
 const filtroIncendi = ref('2025')
 const filtroStorico = ref<'entrambe' | 'confermata' | 'archiviata'>('entrambe')
@@ -254,6 +298,12 @@ function aggiungiLivelli() {
   const prio: any = ['step', ['get', 'priorita'], c.macchia, 30, c.ambra, 60, c.brace]
   aggiungiStoricoIncendi(m, c, filtroIncendi.value, mostraIncendi.value && !scenario.value) // sotto a tutto il resto
   aggiungiRischio(m, c, geojsonRischio(griglia.value), mostraRischio.value, 'storico-riempimento') // sotto lo storico
+  // aree critiche: velo e contorno tratteggiato, la selezionata piena con bordo continuo
+  const tinta: any = ['match', ['get', 'livello'], 'molto_alto', c.brace, c.ambra]
+  m.addSource('aree', { type: 'geojson', data: geojsonAree() })
+  m.addLayer({ id: 'aree-velo', type: 'fill', source: 'aree', layout: { visibility: scenario.value ? 'none' : 'visible' }, paint: { 'fill-color': tinta, 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.24, 0.07] as any } })
+  m.addLayer({ id: 'aree-bordo', type: 'line', source: 'aree', filter: ['==', ['get', 'sel'], 0], paint: { 'line-color': tinta, 'line-width': 1.2, 'line-opacity': 0.75, 'line-dasharray': [2, 1.5] } })
+  m.addLayer({ id: 'aree-selezione', type: 'line', source: 'aree', filter: ['==', ['get', 'sel'], 1], paint: { 'line-color': tinta, 'line-width': 2.5 } })
   aggiungiHotspot(m, c, datiHotspot)
   visibilitaHotspot()
   // mappature: raggruppate fino a zoom 11 (cerchio di vetro con numero), poi segnaposto a icona
@@ -378,6 +428,8 @@ onMounted(() => {
     ])
   }
   aggiorna()
+  caricaAree()
+  timerAree = setInterval(caricaAree, 3600_000)
   caricaStorico() // serve anche alla scheda in sola lettura
   // aggiornamenti dagli eventi SSE; il polling ogni 30 s e' solo una rete di sicurezza
   const valutate = () => { if (schedaBox.value !== 'nuova') caricaStorico() }
@@ -388,11 +440,11 @@ onMounted(() => {
     eventi.on('segnalazione_nuova', aggiorna),
     eventi.on('segnalazione_valutata', () => { aggiorna(); valutate() }),
     eventi.on('mappatura_nuova', caricaMappature),
-    eventi.on('hotspot_aggiornati', caricaHotspot),
+    eventi.on('hotspot_aggiornati', () => { caricaHotspot(); caricaAree() }),
   ]
 })
 
-onBeforeUnmount(() => { fermaTelefono(); fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
+onBeforeUnmount(() => { fermaTelefono(); fermaEventi.forEach((f) => f()); clearInterval(timer); clearInterval(timerValutate); clearInterval(timerMappature); clearInterval(timerAree); clearTimeout(tAvviso); fermaAloni(); mappa?.remove() })
 
 function seleziona(s: Segnalazione) {
   selezionata.value = s.id
@@ -582,12 +634,14 @@ const contatoriBrevi = computed(() => [
     </header>
 
     <!-- colonna della coda: cresce col contenuto, si ferma sopra la barra in basso, poi scorre -->
-    <aside v-if="!mobile" class="vetro absolute top-[4.75rem] left-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[23rem] flex-col !bg-[var(--vetro-mappa)] shadow-[var(--ombra-pillola)]" aria-label="Segnalazioni">
-      <div class="shrink-0 space-y-2.5 border-b border-bordo p-3 pt-3.5">
-        <h1 class="px-2 text-[.92rem] font-semibold">Segnalazioni</h1>
-        <SchedeStato v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" />
+    <aside v-if="!mobile" class="vetro absolute top-[4.75rem] left-4 z-10 flex max-h-[calc(100%-4.75rem-4rem)] w-[23rem] flex-col !bg-[var(--vetro-mappa)] shadow-[var(--ombra-pillola)]" aria-label="Segnalazioni e aree critiche">
+      <div class="shrink-0 space-y-2.5 border-b border-bordo p-3 pt-3.5" :class="vista === 'aree' && 'pb-2.5'">
+        <h1 class="sr-only">Sala operativa</h1>
+        <VistaCruscotto v-model="vista" :n-coda="coda.length" :n-aree="nAree" />
+        <SchedeStato v-if="vista === 'segnalazioni'" v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" />
       </div>
-      <ElencoSegnalazioni :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
+      <ElencoAreeCritiche v-if="vista === 'aree'" :dati="aree" :caricamento="carAree" :errore="errAree" :selezionata="areaSel" @seleziona="selezionaArea" @simula="simulaArea" @riprova="caricaAree" />
+      <ElencoSegnalazioni v-else :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
     </aside>
 
     <!-- scheda della segnalazione selezionata -->
@@ -738,6 +792,9 @@ const contatoriBrevi = computed(() => [
             <span class="punto-vivo punto-ambra shrink-0" aria-hidden="true" />
             <p class="min-w-0 flex-1 truncate text-[.92rem]"><span class="font-semibold">Connessione persa</span> <span class="text-testo-2">· riprovo da solo</span></p>
           </template>
+          <p v-else-if="vista === 'aree'" class="cifre min-w-0 flex-1 truncate text-[.92rem]">
+            <span class="font-semibold" :class="nAree ? 'text-brace' : ''">{{ nAree }}</span> {{ nAree === 1 ? 'area critica' : 'aree critiche' }} oggi<template v-if="coda.length"> <span class="text-testo-3">·</span> {{ coda.length }} in coda</template>
+          </p>
           <p v-else-if="caricamento" class="flex-1 text-[.92rem] text-testo-2">Caricamento della coda…</p>
           <p v-else-if="coda.length" class="cifre min-w-0 flex-1 truncate text-[.92rem]">
             <span class="font-semibold text-brace">{{ coda.length }}</span> in coda <span class="text-testo-3">·</span> priorità max <span class="font-semibold" :style="{ color: varPriorita(prioMax) }">{{ prioMax }}</span>
@@ -761,11 +818,13 @@ const contatoriBrevi = computed(() => [
         </div>
       </div>
       <PannelloScenario v-if="scenario" v-model:ore="oreScenario" v-model:cursore="cursore" telefono :pad-fondo="padScroll" :titolo="scenario.titolo" :dati="datiScenario" :caricamento="carScenario" :errore="errScenario" @chiudi="chiudiScenario" @riprova="calcolaScenario()" @vai="vaiAcqua" />
-      <div v-else-if="!scheda" class="shrink-0 border-b border-bordo px-3 pb-3">
-        <SchedeStato v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" grande />
+      <div v-else-if="!scheda" class="shrink-0 space-y-2.5 border-b border-bordo px-3 pb-3">
+        <VistaCruscotto v-model="vista" :n-coda="coda.length" :n-aree="nAree" grande />
+        <SchedeStato v-if="vista === 'segnalazioni'" v-model="schedaBox" :schede="SCHEDE_BOX" :conteggi="nBox" grande />
       </div>
       <div v-if="!scenario" class="min-h-0 flex-1 overflow-y-auto overscroll-contain" :class="scheda && 'border-t border-bordo'" :style="{ paddingBottom: `${padScroll}px` }">
-        <ElencoSegnalazioni v-if="!scheda" :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
+        <ElencoAreeCritiche v-if="!scheda && vista === 'aree'" :dati="aree" :caricamento="carAree" :errore="errAree" :selezionata="areaSel" @seleziona="selezionaArea" @simula="simulaArea" @riprova="caricaAree" />
+        <ElencoSegnalazioni v-else-if="!scheda" :scheda="schedaBox" :coda="coda" :valutate="valutate" :caricamento="caricamento" :errore="errore" :selezionata="selezionata" :appena="appena" @seleziona="seleziona" @riprova="aggiorna" />
         <div v-else class="space-y-4 px-4 pt-4"><CorpoScheda :s="scheda" @simula="avviaScenario(scheda.lat, scheda.lon, scheda.comune ?? '')" /></div>
       </div>
     </section>

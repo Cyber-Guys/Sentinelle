@@ -61,7 +61,7 @@ export type Fattore = {
 }
 // 'SAN GAVINO MONREALE' -> 'San Gavino Monreale', "SANT'ANTIOCO" -> "Sant'Antioco"
 export const nomeComune = (c?: string | null) => (c ?? '').toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase())
-export type Rischio = { valore: number; livello: 'basso' | 'medio' | 'alto'; meteo: unknown }
+export type Rischio = { valore: number; livello: 'basso' | 'medio' | 'alto' | 'molto alto'; meteo: unknown }
 
 export const coloreAlta = '#ff6a2b'
 export const coloreMedia = '#f5b83d'
@@ -70,3 +70,12 @@ export const colorePriorita = (p: number) => (p >= 60 ? coloreAlta : p >= 30 ? c
 // stessa scala come token CSS (segue il tema)
 export const varPriorita = (p: number) => (p >= 60 ? 'var(--brace)' : p >= 30 ? 'var(--ambra)' : 'var(--macchia)')
 export const etichettaPriorita = (p: number) => (p >= 60 ? 'Alta' : p >= 30 ? 'Media' : 'Bassa')
+// aree critiche di oggi (GET /aree-critiche): zone contigue a rischio alto, con motivi dai dati
+export type AreaCritica = {
+  id: number; livello: 'alto' | 'molto_alto'; indice: number; centro: { lat: number; lon: number }
+  area: any; comuni: string[]; nome: string; motivo: string; picco: { dalle: string; alle: string }
+  fattori: { chiave: string; etichetta: string; valore: number; testo: string }[]
+  punto_peggiore: { lat: number; lon: number }; invaso: { nome: string; distanza_km: number; riempimento: number | null } | null
+}
+export type AreeCritiche = { aggiornato_il: string; meteo_simulato: boolean; aree: AreaCritica[] }
+export const LIVELLI_AREA = { molto_alto: { etichetta: 'Molto alto', colore: 'var(--brace)' }, alto: { etichetta: 'Alto', colore: 'var(--ambra)' } } as const

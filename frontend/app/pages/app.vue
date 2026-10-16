@@ -84,6 +84,7 @@ async function scegli(u: Utente) {
   caricaRischio()
   caricaMie()
   caricaMirate()
+  caricaAree()
   clearInterval(tMie); tMie = setInterval(caricaMie, 30000) // rete di sicurezza: gli eventi SSE aggiornano subito
   await nextTick()
   avviaMappa()
@@ -180,7 +181,7 @@ function caricaHotspot() {
 
 function caricaRischio() {
   rischio.value = null; rischioErrore.value = false
-  chiama<Rischio>(`/rischio?lat=${centro.value[1]}&lon=${centro.value[0]}`).then((r) => (rischio.value = r)).catch(() => (rischioErrore.value = true))
+  chiama<Rischio>(`/rischio/comune?nome=${encodeURIComponent(utente.value?.comune ?? '')}&lat=${centro.value[1]}&lon=${centro.value[0]}`).then((r) => (rischio.value = r)).catch(() => (rischioErrore.value = true))
 }
 
 function cambiaUtente() {
@@ -327,6 +328,25 @@ watch(scheda, async (s) => {
 })
 
 // missioni mirate: pin Target (ambra rischio medio, brace alto e molto alto), tocco -> apri la missione
+// avviso del giorno: il comune dell'utente rientra in un'area critica di oggi (chiudibile fino a domani)
+const areeOggi = shallowRef<AreeCritiche | null>(null)
+const chiusoOggi = ref('')
+const chiaveAvviso = () => `avvisoArea:${utente.value?.id}:${new Date().toDateString()}`
+function caricaAree() {
+  try { chiusoOggi.value = localStorage.getItem(chiaveAvviso()) ?? '' } catch { chiusoOggi.value = '' }
+  chiama<AreeCritiche>('/aree-critiche').then((d) => (areeOggi.value = d)).catch(() => {})
+}
+const areaUtente = computed(() => {
+  const norma = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f']/g, '')
+  const c = norma(utente.value?.comune ?? '')
+  return c ? areeOggi.value?.aree.find((a) => a.comuni.some((x) => norma(x) === c)) ?? null : null
+})
+const oraTonda = (h: string) => String(Number(h.slice(0, 2)))
+function chiudiAvviso() {
+  chiusoOggi.value = '1'
+  try { localStorage.setItem(chiaveAvviso(), '1') } catch {}
+}
+
 async function caricaMirate() {
   const u = utente.value
   if (!u) return
@@ -344,7 +364,11 @@ function aggiornaPinMirate() {
     el.setAttribute('aria-label', `Missione mirata: ${mm.titolo}`)
     el.innerHTML = ICONA_TARGET
     el.addEventListener('click', (ev) => { ev.stopPropagation(); if (!pannello.value && !missione.value) avviaMirata(mm) })
-    pinMirate.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([mm.lon, mm.lat]).addTo(mappa))
+    // MapLibre posiziona il marker con transform: le transizioni dei pulsanti lo farebbero saltare,
+    // quindi il marker e' un contenitore neutro e il pulsante sta dentro.
+    const guscio = document.createElement('div')
+    guscio.appendChild(el)
+    pinMirate.push(new maplibregl.Marker({ element: guscio, anchor: 'center' }).setLngLat([mm.lon, mm.lat]).addTo(mappa))
   }
 }
 watch(mirate, aggiornaPinMirate)
@@ -482,6 +506,17 @@ async function invia() {
           <InterruttoreTema compatto class="pointer-events-auto" />
         </div>
       </header>
+
+      <!-- avviso del giorno: zona critica sul comune dell'utente -->
+      <Transition name="foglio">
+        <div v-if="areaUtente && !chiusoOggi && scheda === 'mappa' && !missione" class="sospeso absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-[4.25rem] left-3 z-20 mx-auto flex max-w-[440px] items-start gap-2.5 py-2.5 pr-1.5 pl-3" role="alert">
+          <TriangleAlert class="mt-0.5 size-4 shrink-0" :style="{ color: LIVELLI_AREA[areaUtente.livello].colore }" aria-hidden="true" />
+          <p class="min-w-0 flex-1 text-[.82rem] leading-snug">
+            <span class="font-semibold" :style="{ color: LIVELLI_AREA[areaUtente.livello].colore }">Oggi rischio {{ LIVELLI_AREA[areaUtente.livello].etichetta.toLowerCase() }}</span> nella tua zona tra le {{ oraTonda(areaUtente.picco.dalle) }} e le {{ oraTonda(areaUtente.picco.alle) }}: niente fuochi, segnala subito il fumo.
+          </p>
+          <button type="button" class="tocco flex size-8 shrink-0 items-center justify-center rounded-full text-testo-2 transition-colors hover:bg-vetro-forte" aria-label="Chiudi l'avviso per oggi" @click="chiudiAvviso"><X class="size-4" aria-hidden="true" /></button>
+        </div>
+      </Transition>
 
       <!-- colonna destra sotto il tema: Livelli, zoom, "i" (passo 14 px dal flex; il posto di Livelli resta anche se nascosto) -->
       <div class="absolute top-[calc(max(.75rem,env(safe-area-inset-top))+58px)] right-3 z-20 flex w-11 flex-col items-center gap-[14px]">
