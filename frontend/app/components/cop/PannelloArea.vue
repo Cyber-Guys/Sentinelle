@@ -24,6 +24,7 @@ const emesso = computed(() => props.bollettino ? new Date(props.bollettino.emess
 const attivi = computed(() => props.incendi.filter((i) => i.stato === 'attivo'))
 const ettariAttivi = computed(() => attivi.value.reduce((s, i) => s + i.ettari, 0))
 const libero = (m: any) => MEZZO_LIBERO.includes(m.stato)
+const ENTRO_MIN = 45 // oltre, il mezzo libero non e' una risposta utile: va dirottato uno in missione
 const terraArea = computed(() => props.flottaArea.filter((m) => m.categoria === 'terra'))
 const aerei = computed(() => props.flotta.filter((m) => m.categoria === 'aereo'))
 const acquaMedia = computed(() => {
@@ -119,7 +120,8 @@ const nAcqua = useConteggio(() => Math.round(acquaMedia.value * 100))
         <span class="min-w-0 flex-1">
           <span class="block truncate text-[.84rem] font-medium">{{ i.nome }}</span>
           <span class="cifre block truncate text-[.74rem] text-testo-3">da {{ fmtOre(i.inizio, ora) }} · {{ fmtNum(i.ettari) }} ha
-            <template v-if="piuVicino(i)"> · {{ piuVicino(i)!.m.sigla }} a {{ piuVicino(i)!.min }} min</template>
+            <template v-if="piuVicino(i) && piuVicino(i)!.min <= ENTRO_MIN"> · {{ piuVicino(i)!.m.sigla }} a {{ piuVicino(i)!.min }} min</template>
+            <span v-else class="text-ambra"> · nessun mezzo libero entro {{ ENTRO_MIN }} min</span>
           </span>
         </span>
         <ChevronRight class="size-4 shrink-0 text-testo-3" aria-hidden="true" />

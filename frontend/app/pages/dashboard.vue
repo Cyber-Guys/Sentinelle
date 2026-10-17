@@ -7,7 +7,7 @@ import PannelloLivelli from '~/components/cop/PannelloLivelli.vue'
 import PannelloArea from '~/components/cop/PannelloArea.vue'
 import SchedaIncendio from '~/components/cop/SchedaIncendio.vue'
 import VistaSegnalazioni from '~/components/cop/VistaSegnalazioni.vue'
-import { LIVELLI_CFD, dentro, type AreaCop, type Bollettino, type Incendio, type Statistiche, type LivelloCfd } from '~/composables/useCop'
+import { LIVELLI_CFD, dentro, raggruppa, type AreaCop, type Bollettino, type Incendio, type Statistiche, type LivelloCfd } from '~/composables/useCop'
 
 /*
   Dashboard degli operatori COP (piano 2026-10-17-dashboard-cop). Ingresso con le 7 aree sulla stessa mappa,
@@ -109,12 +109,14 @@ const listaIncendi = computed<Incendio[]>(() => (incendi.value.features ?? []).m
 const incendiArea = computed(() => listaIncendi.value.filter((i) => i.area === areaSel.value))
 const inArea = (p: [number, number]) => !!area.value && dentro(p, area.value.geometria)
 const segnArea = computed(() => segnalazioni.value.filter((s) => inArea([s.lon, s.lat])))
+// si conta per gruppo (segnalazioni vicine = un evento), come nella coda della vista Segnalazioni
+const daVerificare = computed(() => raggruppa(area.value ? segnArea.value : segnalazioni.value).length)
 const flottaArea = computed(() => flotta.value.filter((m) => inArea([m.lon, m.lat])))
 const invasiArea = computed(() => (invasi.value.features ?? []).filter((f: any) => inArea(f.geometry.coordinates)))
 const fuochiArea = computed(() => (fuochi.value.features ?? []).filter((f: any) => f.properties.area === areaSel.value))
 const perArea = (conta: (a: AreaCop) => number) => Object.fromEntries(aree.value.map((a) => [a.id, conta(a)]))
 const incendiPerArea = computed(() => perArea((a) => listaIncendi.value.filter((i) => i.area === a.id && i.stato === 'attivo').length))
-const segnPerArea = computed(() => perArea((a) => segnalazioni.value.filter((s) => dentro([s.lon, s.lat], a.geometria)).length))
+const segnPerArea = computed(() => perArea((a) => raggruppa(segnalazioni.value.filter((s) => dentro([s.lon, s.lat], a.geometria))).length))
 const conteggi = computed(() => ({
   incendi: listaIncendi.value.filter((i) => i.stato === 'attivo').length, spenti: listaIncendi.value.filter((i) => i.stato === 'spento').length,
   invasi: invasi.value.features.length, vedette: vedette.value.features.length, fuochi: fuochi.value.features.length,
@@ -221,7 +223,7 @@ const orologio = computed(() => new Date(ora.value).toLocaleTimeString('it-IT', 
         </button>
         <button type="button" class="scheda flex h-8 items-center gap-1.5 rounded-full px-3 text-[.82rem] font-medium" :aria-current="vista === 'segnalazioni' ? 'page' : undefined" @click="vai({ vista: 'segnalazioni' })">
           <Siren class="size-4" aria-hidden="true" />Segnalazioni
-          <span v-if="(area ? segnArea : segnalazioni).length" class="contatore cifre rounded-full px-1.5 text-[.7rem] font-semibold">{{ (area ? segnArea : segnalazioni).length }}</span>
+          <span v-if="daVerificare" class="contatore cifre rounded-full px-1.5 text-[.7rem] font-semibold">{{ daVerificare }}</span>
         </button>
       </nav>
 
@@ -259,12 +261,12 @@ const orologio = computed(() => new Date(ora.value).toLocaleTimeString('it-IT', 
         </div>
       </Transition>
       <Transition name="pannello">
-        <aside v-if="area && vista === 'mappa'" class="pannello sospeso absolute top-3 right-3 bottom-3 z-10 flex flex-col overflow-hidden" :style="{ width: `min(${PANNELLO}px, calc(100% - 24px))` }" aria-label="Statistiche dell'area">
+        <aside v-if="area && vista === 'mappa'" class="pannello sospeso absolute top-[42%] right-3 bottom-3 md:top-3 z-10 flex flex-col overflow-hidden" :style="{ width: `min(${PANNELLO}px, calc(100% - 24px))` }" aria-label="Statistiche dell'area">
           <div class="cop-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
             <Transition name="scheda" mode="out-in">
               <SchedaIncendio v-if="incendio" :key="incendio.id" :incendio="incendio" :area="area.nome" :flotta="flotta" :invasi="invasi.features" :vedette="vedette.features"
                 :ora="ora" :ore-area-spenta="incendi.ore_area_spenta ?? 72" :in-corso="chiusura" @indietro="chiudiIncendio" @concludi="concludi" />
-              <PannelloArea v-else :key="area.id" :area="area" :bollettino="bollettino" :giorno="giorno" :incendi="incendiArea" :da-verificare="segnArea.length"
+              <PannelloArea v-else :key="area.id" :area="area" :bollettino="bollettino" :giorno="giorno" :incendi="incendiArea" :da-verificare="daVerificare"
                 :flotta="flotta" :flotta-area="flottaArea" :invasi="invasiArea" :fuochi="fuochiArea" :statistiche="statistiche" :ora="ora"
                 @incendio="apriIncendio" @segnalazioni="vai({ vista: 'segnalazioni' })" />
             </Transition>

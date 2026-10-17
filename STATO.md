@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `278787c` — 2026-10-17
+> **Riferimento:** commit `defe1a1` — 2026-10-17
 
 ## Fase
 
@@ -55,7 +55,7 @@ Ognuno modifica solo la propria riga.
 | Persona | Branch | Task corrente | Piano |
 |---|---|---|---|
 | Alessandro | main | Tutto committato (Waze, aree critiche, incendi attivi, operativo, storico ridisegnato). Prossimo: ripubblicare dump `dati-v1`, verificare coordinate basi incerte, provare su telefono vero, pitch | `docs/piani/2026-10-16-waze-per-gli-incendi.md` (chiuso) |
-| Nicholas | nicholas/dashboard-cop | Dashboard COP (`/dashboard`, ex cruscotto): ingresso 7 aree, bollettino CFD simulato, livelli, statistiche, segnalazioni da certificare, concludi incendio. Codice scritto, verificata solo la schermata d'ingresso. Prossimo: bollettini generati da un collega (`./scripts/docker.sh bollettini 7`), poi verifica completa nel browser | `docs/piani/2026-10-17-dashboard-cop.md` |
+| Nicholas | nicholas/dashboard-cop | Dashboard COP (`/dashboard`, ex cruscotto) completa e verificata nel browser (1440 px e telefono, build Docker statico): ingresso 7 aree, bollettino CFD simulato da file, livelli, statistiche, scheda incendio e chiusura, segnalazioni da certificare (l'app le vede). Prossimo: prova del team, tema chiaro, merge su main | `docs/piani/2026-10-17-dashboard-cop.md` |
 | Andrea | — | — | — |
 | Nicola | — | — | — |
 

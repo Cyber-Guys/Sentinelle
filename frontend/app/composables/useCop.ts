@@ -108,9 +108,8 @@ export function valutaFoto(url: string, segnalazione: number): FotoValutata {
   const nome = url.split('/').pop() ?? url
   const demo = AI_DEMO[nome]
   if (demo) return { url, nome, pertinenza: demo[0], motivo: demo[1], segnalazione }
-  let h = 0
-  for (const c of nome) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return { url, nome, pertinenza: 0.6 + (h % 35) / 100, motivo: 'Possibile fumo o fiamme', segnalazione }
+  // foto fuori dalla demo: il modello simulato non le conosce, restano in primo piano ma senza giudizio
+  return { url, nome, pertinenza: SOGLIA_PERTINENZA, motivo: 'Classificazione incerta, guardala tu', segnalazione }
 }
 export const SOGLIA_PERTINENZA = 0.6
 

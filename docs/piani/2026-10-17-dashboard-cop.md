@@ -47,10 +47,10 @@ che non abbiamo si simulano e lo si dichiara nell'interfaccia.
 ## Task
 
 - [x] 1. Backend `/cop/*` + seed segnalazioni demo con foto (`scripts/semina_cop.py`, foto in `dati/demo_foto/`)
-- [x] 2. Frontend: ingresso aree + zoom, mappa con layer, pannello statistiche (scritto; verificato solo l'ingresso)
-- [x] 3. Frontend: vista Segnalazioni (foto, validazione, certifica / falso allarme) (scritto, non verificato)
+- [x] 2. Frontend: ingresso aree + zoom, mappa con layer, pannello statistiche
+- [x] 3. Frontend: vista Segnalazioni (foto, validazione, certifica / falso allarme)
 - [x] 4. Concludi incendio, rinomina `/cruscotto` -> `/dashboard`, docker e README
-- [ ] 5. Verifica nel browser (1440 px e telefono) + build Docker: fatta solo la schermata d'ingresso
+- [x] 5. Verifica nel browser (1440 px e telefono) + build Docker statico: ingresso, zoom, pannello, scheda incendio, concludi, certificazione (app la vede come "operatori", 20 avvisati). Tema chiaro non provato
 - [x] 6. Bollettino generato fuori dal server (deviazione, sotto)
 
 ## Deviazione: bollettino precalcolato (2026-10-17)
@@ -61,12 +61,21 @@ ha bloccato due volte il portatile di sviluppo (WSL con 7 GB). Ora il backend no
 su un PC capiente e committati (guida nel README). Giorno mancante -> file piu' vicino (`ripiego_da`);
 nessun file -> nessuna zona, tutto verde (`mancante: true`).
 
+Bollettini 17-23 ottobre generati da un collega e committati (`dati/bollettini/`).
+
+## Scelte fatte in verifica
+
+- Segnalazioni certificate entro 2,5 km = un solo incendio (`segnalazioni` nelle proprieta'); "concluso" chiude tutto il gruppo.
+- Coda ordinata per priorita' + segnalazioni congiunte + conferme - smentite; badge contati per gruppo.
+- Mezzo libero oltre 45 min: avviso "nessun mezzo libero entro 45 min" invece del tempo.
+- Foto non della demo: "classificazione incerta" (il modello AI e' simulato solo sulle foto demo).
+- `semina_cop.py` aggiunge residenti con una localita' monitorata: il conteggio degli avvisati non e' zero.
+- Telefono: pannello come foglio in basso, mappa inquadrata sopra.
+
 ## Da fare
 
-- Generare i bollettini dei giorni dell'evento e committarli.
-- Verificare nel browser: zoom sull'area, livelli, pannello, scheda incendio, vista Segnalazioni,
-  certificazione visibile nell'app (http://localhost:3000), larghezza telefono.
-- Passata finale `impeccable detect` sui file in `frontend/app/components/cop/` e `pages/dashboard.vue`.
+- Provare il tema chiaro; merge su `main` dopo una prova del team.
+- Dopo una demo: `./scripts/docker.sh exec -T backend python scripts/semina_cop.py` ripristina le segnalazioni.
 
 ## Verifica
 

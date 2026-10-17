@@ -19,15 +19,22 @@ const gruppi = computed(() => raggruppa(props.segnalazioni.filter((s) => !soloAr
   return {
     id: capo.id, capo, membri: g, foto, pertinenti: foto.filter((f) => f.pertinenza >= SOGLIA_PERTINENZA), scartate: foto.filter((f) => f.pertinenza < SOGLIA_PERTINENZA),
     conferme: g.reduce((s, x) => s + x.conferme, 0), smentite: g.reduce((s, x) => s + x.smentite, 0), aff,
-    luogo: nomeComune(capo.comune) || 'Località sconosciuta', prima: g.reduce((m, x) => (x.creata_il < m ? x.creata_il : m), capo.creata_il),
+    // stesso nome dell'incendio che nasce dalla certificazione: comune della prima segnalazione
+    luogo: nomeComune(g.reduce((m, x) => (x.creata_il < m.creata_il ? x : m), capo).comune) || 'Località sconosciuta',
+    prima: g.reduce((m, x) => (x.creata_il < m ? x.creata_il : m), capo.creata_il),
     fuoco: g.some((x) => x.tipo === 'fuoco'), note: g.filter((x) => x.nota).map((x) => x.nota!),
   }
-}))
+}).sort((a, b) => peso(b) - peso(a)))
+// ordine della coda: priorita' del capogruppo + segnalazioni congiunte + conferme dei vicini - smentite
+function peso(g: { capo: Segn; membri: Segn[]; conferme: number; smentite: number }) {
+  return g.capo.priorita + 8 * (g.membri.length - 1) + 3 * g.conferme - 4 * g.smentite
+}
 const fuoriArea = computed(() => props.area ? raggruppa(props.segnalazioni.filter((s) => !nell(s))).length : 0)
 const gruppo = computed(() => gruppi.value.find((g) => g.membri.some((m) => m.id === selezionato.value)) ?? gruppi.value[0] ?? null)
 watch(gruppo, (g) => { if (g && !g.membri.some((m) => m.id === selezionato.value)) selezionato.value = g.id }, { immediate: true })
 
 const fotoSel = ref<FotoValutata | null>(null)
+const avvisa = ref(true)
 const mostraScartate = ref(false)
 watch(() => gruppo.value?.id, () => { fotoSel.value = gruppo.value?.pertinenti[0] ?? null; mostraScartate.value = false; avvisa.value = true }, { immediate: true })
 
@@ -43,7 +50,6 @@ const segnali = computed(() => {
   ]
 })
 
-const avvisa = ref(true)
 const inCorso = ref<'certifica' | 'archivia' | null>(null)
 const errore = ref('')
 async function certifica() {
@@ -187,7 +193,7 @@ const pct = (v: number) => `${Math.round(v * 100)}%`
 
           <div v-if="gruppo.aff" class="vetro mt-2 p-3">
             <div class="flex items-baseline justify-between text-[.8rem]"><span>Affidabilità della comunità</span><span class="cifre font-semibold">{{ pct(gruppo.aff.valore) }}</span></div>
-            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-vetro-forte"><div class="metro h-full rounded-full bg-macchia" :style="{ width: pct(gruppo.aff.valore) }" /></div>
+            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-vetro-forte"><div class="metro h-full w-full rounded-full bg-macchia" :style="{ transform: `scaleX(${gruppo.aff.valore})` }" /></div>
             <p class="mt-1.5 text-[.72rem] text-testo-3">{{ gruppo.aff.etichetta }}: conferme pesate per l'affidabilità storica di chi risponde</p>
           </div>
           <div class="vetro mt-2 flex items-center justify-between p-3 text-[.8rem]">
@@ -232,7 +238,7 @@ const pct = (v: number) => `${Math.round(v * 100)}%`
 .scartate-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 240ms var(--ease-out); }
 .scartate-wrap.aperto { grid-template-rows: 1fr; }
 .scartate-wrap > div { overflow: hidden; }
-.metro { transition: width 500ms var(--ease-out); }
+.metro { transform-origin: left; transition: transform 500ms var(--ease-out); }
 .foto-enter-active, .foto-leave-active { transition: opacity 220ms ease, filter 220ms ease; }
 .foto-enter-from, .foto-leave-to { opacity: 0; filter: blur(4px); }
 .dettaglio-enter-active { transition: opacity 220ms ease, transform 260ms var(--ease-out); }

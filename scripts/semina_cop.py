@@ -1,7 +1,8 @@
 """Segnalazioni dimostrative per la vista Segnalazioni della dashboard COP (piano 2026-10-17-dashboard-cop).
 
 SIMULATE: gruppi di segnalazioni vicine con foto (dati/demo_foto, licenze in CREDITI.md), conferme e smentite
-di altri utenti nel raggio. Idempotente: cancella solo cio' che ha creato (utenti "(demo-cop)").
+di altri utenti nel raggio, residenti con una localita' monitorata (per il conteggio degli avvisati).
+Idempotente: cancella solo cio' che ha creato (utenti "(demo-cop)").
 Uso: ./scripts/docker.sh exec backend python scripts/semina_cop.py
 """
 import math
@@ -61,6 +62,10 @@ with Session(engine) as s:
     DIR_FOTO.mkdir(exist_ok=True)
     n_utente, totale = 0, 0
 
+    def casa(u, la, lo):
+        s.execute(text("INSERT INTO localita (utente_id, nome, tipo, geom) VALUES (:u, 'Casa', 'casa', ST_SetSRID(ST_MakePoint(:lo, :la), 4326))"),
+                  {"u": u, "lo": lo, "la": la})
+
     def utente():
         global n_utente
         n_utente += 1
@@ -84,9 +89,13 @@ with Session(engine) as s:
                 for voto, quanti in (("ancora", conferme), ("finito", smentite)):
                     for _ in range(quanti):
                         vla, vlo = punto_vicino(la, lo, 1500)
+                        u = utente()
                         s.execute(text("INSERT INTO voto_segnalazione (segnalazione_id, utente_id, voto, geom, creato_il) VALUES "
                                        "(:i, :u, :v, ST_SetSRID(ST_MakePoint(:lo, :la), 4326), now() - make_interval(mins => :m))"),
-                                  {"i": id, "u": utente(), "v": voto, "lo": vlo, "la": vla, "m": rng.randint(1, max(minuti - 1, 1))})
+                                  {"i": id, "u": u, "v": voto, "lo": vlo, "la": vla, "m": rng.randint(1, max(minuti - 1, 1))})
+                        casa(u, vla, vlo)
+                for _ in range(rng.randint(12, 30)):  # residenti con una localita' monitorata: li avvisa la certificazione
+                    casa(utente(), *punto_vicino(la, lo, 4500))
             aggiorna_priorita(s, id)
             totale += 1
     s.commit()

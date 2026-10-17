@@ -179,14 +179,20 @@ function inquadra(anima = true) {
   if (!mappa) return
   const a = props.aree.find((x) => x.id === props.areaSel)
   const largo = contenitore.value!.clientWidth
-  const padding = a
-    ? { top: 72, bottom: 40, left: largo > 900 ? 300 : 24, right: props.padDestra + 32 }
-    : { top: 56, bottom: 48, left: largo > 900 ? 470 : 24, right: 56 }
+  const alto = contenitore.value!.clientHeight
+  // telefono: il pannello e' un foglio in basso (58% dell'altezza), la mappa sta sopra
+  const padding = largo < 768
+    ? { top: 16, left: 16, right: 16, bottom: a ? Math.round(alto * 0.6) : 16 }
+    : a
+      ? { top: 72, bottom: 40, left: largo > 900 ? 300 : 24, right: props.padDestra + 32 }
+      : { top: 56, bottom: 48, left: largo > 900 ? 470 : 24, right: 56 }
   mappa.fitBounds((a?.bbox ?? ISOLA) as any, { padding, duration: anima && !riduciMoto() ? 1500 : 0, easing: curva, essential: true })
 }
 defineExpose({
   inquadra,
-  volaA(c: [number, number], zoom = 12) { mappa?.flyTo({ center: c, zoom, duration: riduciMoto() ? 0 : 1100, easing: curva, essential: true, padding: { right: props.padDestra, top: 0, bottom: 0, left: 0 } }) },
+  volaA(c: [number, number], zoom = 12) { mappa?.flyTo({ center: c, zoom, duration: riduciMoto() ? 0 : 1100, easing: curva, essential: true, padding: contenitore.value!.clientWidth < 768
+    ? { right: 0, top: 0, left: 0, bottom: Math.round(contenitore.value!.clientHeight * 0.6) }
+    : { right: props.padDestra, top: 0, bottom: 0, left: 0 } }) },
 })
 
 // ---------------------------------------------------------------- popup
@@ -273,7 +279,15 @@ watch(fcRaggi, (d) => fonte('raggi')?.setData(d as any))
 watch(() => props.basi, (d) => fonte('basi')?.setData(d ?? VUOTO))
 watch(fcFlotta, (d) => fonte('flotta')?.setData(d as any))
 watch(fcSegn, (d) => fonte('segn')?.setData(d as any))
-watch(fcAree, (d) => { fonte('aree')?.setData(d as any); fonte('sedi')?.setData(fcSedi.value as any); if (mappa) aggiornaStatoAree(mappa) })
+// le aree arrivano dopo la mappa: con ?area= nell'indirizzo si inquadra e si maschera solo adesso
+let inquadrata = false
+watch(fcAree, (d) => {
+  fonte('aree')?.setData(d as any); fonte('sedi')?.setData(fcSedi.value as any)
+  if (!mappa) return
+  aggiornaStatoAree(mappa)
+  aggiornaMaschera(mappa, false)
+  if (props.areaSel && !inquadrata && props.aree.length) { inquadrata = true; inquadra() }
+})
 watch(() => props.invasi, (d) => impostaInvasi(mappa, d ?? VUOTO, props.livelli.invasi))
 watch(() => props.areaHover, () => mappa && aggiornaStatoAree(mappa))
 watch(() => props.areaSel, () => {

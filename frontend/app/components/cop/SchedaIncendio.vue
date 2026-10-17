@@ -48,6 +48,9 @@ watch(() => props.incendio.id, () => (conferma.value = false))
     <template v-if="attivo">
       <section class="vetro p-1.5" aria-labelledby="t-mezzi-vicini">
         <h3 id="t-mezzi-vicini" class="px-2 pt-1.5 pb-1 text-[.86rem] font-semibold">Mezzi liberi più vicini</h3>
+        <p v-if="!mezzi.length || mezzi[0]!.min > 45" class="mx-2 mb-1.5 rounded-s bg-ambra/12 px-2.5 py-2 text-[.76rem] leading-snug text-ambra">
+          Nessun mezzo libero entro 45 minuti: valuta il dirottamento di un mezzo in missione o il supporto aereo.
+        </p>
         <ul>
           <li v-for="x in mezzi" :key="x.m.id" class="flex items-center gap-3 rounded-m px-2 py-1.5">
             <span class="flex size-8 shrink-0 items-center justify-center rounded-s bg-vetro-forte text-testo-2">

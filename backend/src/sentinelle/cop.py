@@ -252,16 +252,28 @@ def incendi() -> dict:
             "(SELECT nome FROM comune co WHERE ST_Intersects(co.geom, s.geom) LIMIT 1) comune FROM segnalazione s "
             "WHERE s.tipo IN ('fuoco', 'fumo') AND s.stato = 'confermata' AND (s.stato_ufficiale <> 'spento' "
             "OR s.aggiornata_il > now() - make_interval(hours => :h))"), {"h": ORE_AREA_SPENTA}).all()
-    for r in righe:
-        anello = _sagoma(r.lon, r.lat, 260, f"s{r.id}", 0.5)
-        spento = r.stato_ufficiale == "spento"
+    # segnalazioni certificate entro 2,5 km = un solo incendio (capogruppo = la piu' vecchia)
+    gruppi: list[list] = []
+    for r in sorted(righe, key=lambda r: r.creata_il):
+        g = next((g for g in gruppi if _km(g[0], r) <= 2.5), None)
+        (g.append(r) if g else gruppi.append([r]))
+    for g in gruppi:
+        r = g[0]
+        lon, lat = sum(x.lon for x in g) / len(g), sum(x.lat for x in g) / len(g)
+        anello = _sagoma(lon, lat, 260 + 60 * (len(g) - 1), f"s{r.id}", 0.5)
+        spento = all(x.stato_ufficiale == "spento" for x in g)
         comune = (r.comune or "").title()
         out.append({"type": "Feature", "geometry": {"type": "Polygon", "coordinates": anello}, "properties": {
-            "id": f"s{r.id}", "nome": f"Incendio {comune or 'segnalato'}", "comune": comune, "area": _area_di(r.lon, r.lat),
+            "id": f"s{r.id}", "nome": f"Incendio {comune or 'segnalato'}", "comune": comune, "area": _area_di(lon, lat),
             "stato": "spento" if spento else "attivo", "inizio": r.creata_il.isoformat(),
-            "spento_il": r.aggiornata_il.isoformat() if spento else None, "ettari": _ettari(anello[0], r.lat),
-            "fronte_m": 680, "centro": [r.lon, r.lat], "origine": "segnalazione", "segnalazione_id": r.id}})
+            "spento_il": max(x.aggiornata_il for x in g).isoformat() if spento else None, "ettari": _ettari(anello[0], lat),
+            "fronte_m": 680, "centro": [lon, lat], "origine": "segnalazione", "segnalazione_id": r.id,
+            "segnalazioni": [x.id for x in g]}})
     return {"type": "FeatureCollection", "ore_area_spenta": ORE_AREA_SPENTA, "features": out}
+
+
+def _km(a, b) -> float:
+    return math.hypot((a.lon - b.lon) * 111.32 * math.cos(math.radians(a.lat)), (a.lat - b.lat) * 110.57)
 
 
 def concludi(id: str) -> dict | None:
@@ -269,7 +281,9 @@ def concludi(id: str) -> dict | None:
         _stato_demo[id] = _stato_demo[id] or datetime.now(timezone.utc)
     elif id.startswith("s") and id[1:].isdigit():
         from .api.segnalazioni import StatoUfficiale, imposta_stato
-        imposta_stato(int(id[1:]), StatoUfficiale(stato_ufficiale="spento"))
+        f = next((f for f in incendi()["features"] if f["properties"]["id"] == id), None)
+        for sid in (f["properties"]["segnalazioni"] if f else [int(id[1:])]):  # tutto il gruppo
+            imposta_stato(sid, StatoUfficiale(stato_ufficiale="spento"))
     return next((f for f in incendi()["features"] if f["properties"]["id"] == id), None)
 
 
