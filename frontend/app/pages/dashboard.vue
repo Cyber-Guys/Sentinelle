@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Flame, ChevronDown, Map as IconaMappa, Siren, Check, ShieldCheck, X, LayoutGrid } from '@lucide/vue'
+import { Flame, ChevronDown, Map as IconaMappa, Siren, Check, ShieldCheck, X, LayoutGrid, Satellite, WifiOff } from '@lucide/vue'
 import { DropdownMenuRoot, DropdownMenuTrigger, DropdownMenuPortal, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from 'reka-ui'
 import MappaCop, { type Livelli } from '~/components/cop/MappaCop.vue'
 import IngressoAree from '~/components/cop/IngressoAree.vue'
@@ -54,6 +54,11 @@ const anni = ref<[number, number]>([2015, 2025])
 const livelliMappa = computed<Livelli>(() => areaSel.value ? livelli.value
   : { rischio: true, incendi: true, spenti: false, storico: false, invasi: false, fuochi: false, vedette: false, basi: false, terra: false, aerei: false, segnalazioni: false })
 const incendioSel = ref<string | null>(null)
+// mappa base: satellitare di default (online), vettoriale offline come alternativa; scelta ricordata nel browser
+type Base = 'satellite' | 'vettoriale'
+const CHIAVE_BASE = 'sentinelle-mappa-base'
+const base = ref<Base>((() => { try { return localStorage.getItem(CHIAVE_BASE) === 'vettoriale' ? 'vettoriale' : 'satellite' } catch { return 'satellite' } })())
+function scegliBase(b: Base) { base.value = b; try { localStorage.setItem(CHIAVE_BASE, b) } catch {} }
 
 async function caricaFissi() {
   try {
@@ -146,11 +151,15 @@ function apriIncendio(id: string) {
 function chiudiIncendio() { incendioSel.value = null; mappaRef.value?.inquadra() }
 function apriSegnalazione(id: number) { segnSel.value = id; vai({ vista: 'segnalazioni' }) }
 
-type Avviso = { testo: string; dettaglio?: string; azione?: { etichetta: string; fn: () => void } }
+type Avviso = { testo: string; dettaglio?: string; icona?: 'ok' | 'rete'; azione?: { etichetta: string; fn: () => void } }
 const avviso = ref<Avviso | null>(null)
 let timerAvviso: ReturnType<typeof setTimeout> | undefined
 function mostra(a: Avviso) { avviso.value = a; clearTimeout(timerAvviso); timerAvviso = setTimeout(() => (avviso.value = null), 7000) }
 
+function satelliteKo() {
+  base.value = 'vettoriale' // senza salvarlo: al prossimo avvio si riprova il satellitare
+  mostra({ testo: 'Mappa satellitare non raggiungibile', dettaglio: 'Manca la rete: uso la mappa offline. Puoi riprovare dal selettore in alto.', icona: 'rete' })
+}
 async function certificato(e: { luogo: string; avvisati: number; centro: [number, number] }) {
   await Promise.all([caricaSegnalazioni(), caricaIncendi()])
   mostra({
@@ -236,15 +245,23 @@ const orologio = computed(() => new Date(ora.value).toLocaleTimeString('it-IT', 
             <span class="font-medium">{{ LIVELLI_CFD[allerta(bollettini[g])].breve }}</span>
           </span>
         </div>
+        <div class="schede flex rounded-full p-0.5" role="radiogroup" aria-label="Mappa base">
+          <button type="button" role="radio" :aria-checked="base === 'satellite'" class="scheda flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[.8rem] font-medium" :aria-current="base === 'satellite' ? 'page' : undefined" title="Mappa satellitare (serve la rete)" @click="scegliBase('satellite')">
+            <Satellite class="size-4" aria-hidden="true" /><span class="hidden xl:inline">Satellite</span>
+          </button>
+          <button type="button" role="radio" :aria-checked="base === 'vettoriale'" class="scheda flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[.8rem] font-medium" :aria-current="base === 'vettoriale' ? 'page' : undefined" title="Mappa stradale (funziona offline)" @click="scegliBase('vettoriale')">
+            <IconaMappa class="size-4" aria-hidden="true" /><span class="hidden xl:inline">Stradale</span>
+          </button>
+        </div>
         <span class="hidden items-center gap-2 text-[.8rem] text-testo-2 sm:flex"><span class="punto-vivo punto-verde" aria-hidden="true" /><span class="cifre">{{ orologio }}</span></span>
         <InterruttoreTema compatto class="!size-9" />
       </div>
     </header>
 
-    <main class="relative min-h-0 flex-1">
+    <main class="relative min-h-0 flex-1" :class="{ 'con-pannello': area && vista === 'mappa' }">
       <MappaCop ref="mappaRef" :aree="aree" :area-sel="areaSel" :area-hover="areaHover" :bollettino="bollettino" :livelli="livelliMappa" :anni="anni"
         :incendi="incendi" :vedette="vedette" :fuochi="fuochi" :invasi="invasi" :basi="basi" :flotta="flotta" :segnalazioni="segnalazioni"
-        :incendio-sel="incendioSel" :pad-destra="PANNELLO + 12" @scegli="scegliArea" @hover="areaHover = $event" @incendio="apriIncendio" @segnalazione="apriSegnalazione" />
+        :incendio-sel="incendioSel" :pad-destra="PANNELLO + 12" :base="base" @satellite-ko="satelliteKo" @scegli="scegliArea" @hover="areaHover = $event" @incendio="apriIncendio" @segnalazione="apriSegnalazione" />
 
       <!-- Ingresso: scelta dell'area -->
       <Transition name="ingresso">
@@ -298,7 +315,8 @@ const orologio = computed(() => new Date(ora.value).toLocaleTimeString('it-IT', 
       <!-- Avviso dopo un'azione -->
       <Transition name="avviso">
         <div v-if="avviso" class="avviso sospeso absolute bottom-5 left-1/2 z-40 flex w-[min(520px,calc(100%-32px))] items-center gap-3 p-3 pl-3.5" role="status">
-          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-macchia/15 text-macchia"><ShieldCheck class="size-[18px]" aria-hidden="true" /></span>
+          <span v-if="avviso.icona === 'rete'" class="flex size-9 shrink-0 items-center justify-center rounded-full bg-ambra/15 text-ambra"><WifiOff class="size-[18px]" aria-hidden="true" /></span>
+          <span v-else class="flex size-9 shrink-0 items-center justify-center rounded-full bg-macchia/15 text-macchia"><ShieldCheck class="size-[18px]" aria-hidden="true" /></span>
           <span class="min-w-0 flex-1">
             <span class="block text-[.88rem] font-semibold">{{ avviso.testo }}</span>
             <span v-if="avviso.dettaglio" class="block text-[.78rem] text-testo-2">{{ avviso.dettaglio }}</span>
@@ -324,6 +342,10 @@ const orologio = computed(() => new Date(ora.value).toLocaleTimeString('it-IT', 
 .punto-verde { --pin: var(--macchia); }
 .sfondo-vista { background: var(--fondo); }
 .sfondo-vista::before { content: ''; position: absolute; inset: 0; background: var(--atmosfera); z-index: -1; }
+
+/* attribuzione della mappa (immagini Esri, OSM) sempre visibile: si sposta accanto al pannello */
+.con-pannello :deep(.maplibregl-ctrl-bottom-right) { right: 424px; transition: right 300ms var(--ease-out); }
+@media (max-width: 767px) { .con-pannello :deep(.maplibregl-ctrl-bottom-right) { right: 0; bottom: 58%; } }
 
 /* menu delle aree: scala dal trigger (origine fornita da Reka) */
 :global(.menu) { transform-origin: var(--reka-dropdown-menu-content-transform-origin); animation: menu-entra 160ms var(--ease-out); }

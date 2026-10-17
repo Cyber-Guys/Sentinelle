@@ -71,6 +71,8 @@ Bollettini 17-23 ottobre generati da un collega e committati (`dati/bollettini/`
 - Foto non della demo: "classificazione incerta" (il modello AI e' simulato solo sulle foto demo).
 - `semina_cop.py` aggiunge residenti con una localita' monitorata: il conteggio degli avvisati non e' zero.
 - Telefono: pannello come foglio in basso, mappa inquadrata sopra.
+- Mappa base satellitare predefinita (Esri World Imagery, online) con etichette Protomaps; stradale offline come
+  alternativa; senza rete ritorno automatico alla stradale (provato con il browser offline).
 
 ## Da fare
 

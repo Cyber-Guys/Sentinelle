@@ -37,6 +37,12 @@ App cittadino senza GPS (computer, prove): aggiungere `?pos=39.4216,8.9223&dir=4
 posizione e direzione dello sguardo. Dal telefono usa l'indirizzo HTTPS del tunnel che lo script stampa a fine
 avvio (vedi "Prova da telefono").
 
+## Mappa base della dashboard COP
+
+Predefinita la **satellitare** (immagini Esri World Imagery, **serve la rete**); in alternativa la **stradale**
+vettoriale, tutta offline. Si cambia dalla barra in alto e la scelta resta nel browser. Se le immagini non
+arrivano (rete della sala giu') la dashboard passa da sola alla stradale e lo dice.
+
 ## Bollettino CFD simulato (dashboard COP)
 
 Le zone di rischio della dashboard vengono da un bollettino del Centro Funzionale Decentrato **simulato**

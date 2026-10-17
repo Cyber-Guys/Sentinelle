@@ -3,7 +3,7 @@ import maplibregl, { type Map as MappaLibre, type GeoJSONSource } from 'maplibre
 import { h } from 'vue'
 import { Binoculars, FlameKindling, Truck, Plane, Building2 } from '@lucide/vue'
 import {
-  stileMappa, registraPmtiles, LOCALE_MAPPA, animaAloni, apriPopup, chiudiPopup, aggiungiStoricoIncendi, aggiungiInvasi, impostaInvasi,
+  stileMappa, stileSatellite, registraPmtiles, LOCALE_MAPPA, animaAloni, apriPopup, chiudiPopup, aggiungiStoricoIncendi, aggiungiInvasi, impostaInvasi,
   clicInvasi, registraSegnaposti, aggiungiOperativo, impostaVisOperativo, registraMezzi, statoMezzo, famigliaMezzo, ENTI_BASI, FAMIGLIE,
   coloriMappa, type Alone, type Segnaposto,
 } from '~/composables/useMappa'
@@ -23,16 +23,19 @@ const props = defineProps<{
   aree: AreaCop[]; areaSel: string | null; areaHover: string | null; bollettino: Bollettino | null; livelli: Livelli
   anni: [number, number]; incendi: any; vedette: any; fuochi: any; invasi: any; basi: any; flotta: any[]
   segnalazioni: { id: number; lat: number; lon: number; priorita: number }[]; incendioSel: string | null; padDestra: number
+  base: 'satellite' | 'vettoriale'
 }>()
-const emit = defineEmits<{ scegli: [id: string]; hover: [id: string | null]; incendio: [id: string]; segnalazione: [id: number] }>()
+const emit = defineEmits<{ scegli: [id: string]; hover: [id: string | null]; incendio: [id: string]; segnalazione: [id: number]; satelliteKo: [] }>()
 
 const { tema } = useTema()
 const contenitore = ref<HTMLElement>()
 let mappa: MappaLibre | null = null
 let fermaAloni = () => {}
+let erroriSatellite = 0
 const VUOTO = { type: 'FeatureCollection', features: [] as any[] }
 const ISOLA: [number, number, number, number] = [8.1, 38.84, 9.85, 41.32]
 const vis = (b: boolean) => (b ? 'visible' : 'none')
+const stile = () => (props.base === 'satellite' ? stileSatellite(tema.value) : stileMappa(tema.value))
 
 const tinte = () => {
   const s = tema.value === 'scuro'
@@ -254,12 +257,17 @@ function eventi(m: MappaLibre) {
 onMounted(() => {
   registraPmtiles()
   mappa = new maplibregl.Map({
-    container: contenitore.value!, style: stileMappa(tema.value), bounds: ISOLA as any,
+    container: contenitore.value!, style: stile(), bounds: ISOLA as any,
     fitBoundsOptions: { padding: { top: 56, bottom: 48, left: contenitore.value!.clientWidth > 900 ? 470 : 24, right: 56 } },
     attributionControl: { compact: true }, locale: LOCALE_MAPPA, maxPitch: 0, dragRotate: false, minZoom: 6.3,
   })
   mappa.touchZoomRotate.disableRotation()
-  mappa.on('style.load', () => aggiungiLivelli(mappa!))
+  mappa.on('style.load', () => { erroriSatellite = 0; aggiungiLivelli(mappa!) })
+  // satellitare senza rete: dopo qualche tile fallito si avvisa la pagina, che torna alla mappa offline
+  mappa.on('error', (e: any) => {
+    if (e.sourceId !== 'satellite' || props.base !== 'satellite') return
+    if (++erroriSatellite === 4) emit('satelliteKo')
+  })
   mappa.on('styleimagemissing', (e: any) => {
     if (/^(mezzo|ombra|base)-/.test(String(e.id))) registraMezzi(mappa!, tema.value)
     else if (String(e.id).startsWith('cop-')) registraSegnaposti(mappa!, segnaposti(), tema.value)
@@ -268,7 +276,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => { fermaAloni(); chiudiPopup(); mappa?.remove(); mappa = null })
 
-watch(tema, (t) => mappa?.setStyle(stileMappa(t), { diff: false }))
+watch([tema, () => props.base], () => mappa?.setStyle(stile(), { diff: false }))
 const fonte = (id: string) => mappa?.getSource(id) as GeoJSONSource | undefined
 watch(() => props.bollettino, (b) => fonte('cfd')?.setData(b?.zone ?? VUOTO))
 watch(() => props.incendi, (d) => fonte('incendi')?.setData(d ?? VUOTO))

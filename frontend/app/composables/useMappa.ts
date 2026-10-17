@@ -87,6 +87,35 @@ export const stileMappa = (t: Tema): StyleSpecification => {
   }
 }
 
+/*
+  Satellitare (dashboard COP, predefinita): immagini Esri World Imagery, ONLINE, sotto le sole etichette e i confini
+  di Protomaps (offline). Le etichette sono quelle del flavor scuro (testo chiaro, alone scuro): si leggono su
+  qualsiasi immagine. Senza rete i tile non arrivano: MappaCop lo segnala e la dashboard torna alla vettoriale.
+*/
+export const stileSatellite = (t: Tema): StyleSpecification => {
+  const vett = stileMappa('scuro')
+  const etichette = vett.layers.filter((l) => l.type === 'symbol' || l.id.startsWith('boundaries'))
+  const scuro = t === 'scuro'
+  return {
+    ...vett,
+    sources: {
+      ...vett.sources,
+      satellite: {
+        type: 'raster', tileSize: 256, maxzoom: 19,
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        attribution: 'Immagini © Esri, Maxar, Earthstar Geographics',
+      },
+    },
+    layers: [
+      { id: 'sfondo', type: 'background', paint: { 'background-color': '#0a1426' } },
+      // nel tema scuro l'immagine si abbassa un po': i livelli colorati sopra restano leggibili
+      { id: 'satellite', type: 'raster', source: 'satellite', paint: {
+        'raster-brightness-max': scuro ? 0.78 : 0.95, 'raster-saturation': scuro ? -0.2 : -0.05, 'raster-contrast': scuro ? 0.06 : 0, 'raster-fade-duration': 200 } },
+      ...etichette,
+    ],
+  }
+}
+
 // Limiti della mappa: l'estratto copre lat 38.75-41.35 (bbox di genera_tiles). In latitudine si resta
 // dentro l'estratto (a nord c'e' la Corsica, assente); in longitudine si concede piu' spazio perche' a
 // est e a ovest c'e' solo mare aperto e il fondo dello stile e' gia' mare. Lo zoom minimo si ricalcola
