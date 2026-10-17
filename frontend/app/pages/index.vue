@@ -23,11 +23,11 @@ import { Smartphone, MonitorCog, Flame, ArrowRight } from '@lucide/vue'
           </span>
           <ArrowRight class="size-4 shrink-0 text-testo-3 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </NuxtLink>
-        <NuxtLink to="/cruscotto" class="vetro group flex items-center gap-3.5 p-4 text-left transition-colors hover:bg-vetro-forte">
+        <NuxtLink to="/dashboard" class="vetro group flex items-center gap-3.5 p-4 text-left transition-colors hover:bg-vetro-forte">
           <span class="flex size-10 shrink-0 items-center justify-center rounded-s bg-cielo/12 text-cielo ring-1 ring-cielo/25"><MonitorCog class="size-5" aria-hidden="true" /></span>
           <span class="min-w-0 flex-1">
-            <span class="block font-semibold">Cruscotto operatori</span>
-            <span class="block text-[.8rem] text-testo-2">Coda per priorità e mappa in tempo reale</span>
+            <span class="block font-semibold">Dashboard COP</span>
+            <span class="block text-[.8rem] text-testo-2">Aree COP, bollettino CFD, risorse e segnalazioni da certificare</span>
           </span>
           <ArrowRight class="size-4 shrink-0 text-testo-3 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </NuxtLink>

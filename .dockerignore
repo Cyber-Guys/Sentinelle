@@ -7,5 +7,7 @@
 !infra/schema.sql
 !dati/*.json
 !dati/offline
+!dati/bollettini
+!dati/demo_foto
 !scripts/*.py
 **/__pycache__

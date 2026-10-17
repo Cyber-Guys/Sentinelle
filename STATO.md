@@ -1,6 +1,6 @@
 # Stato del lavoro
 
-> **Riferimento:** commit `122a8ab` — 2026-10-16
+> **Riferimento:** commit `278787c` — 2026-10-17
 
 ## Fase
 
@@ -55,7 +55,7 @@ Ognuno modifica solo la propria riga.
 | Persona | Branch | Task corrente | Piano |
 |---|---|---|---|
 | Alessandro | main | Tutto committato (Waze, aree critiche, incendi attivi, operativo, storico ridisegnato). Prossimo: ripubblicare dump `dati-v1`, verificare coordinate basi incerte, provare su telefono vero, pitch | `docs/piani/2026-10-16-waze-per-gli-incendi.md` (chiuso) |
-| Nicholas | — | — | — |
+| Nicholas | nicholas/dashboard-cop | Dashboard COP (`/dashboard`, ex cruscotto): ingresso 7 aree, bollettino CFD simulato, livelli, statistiche, segnalazioni da certificare, concludi incendio. Codice scritto, verificata solo la schermata d'ingresso. Prossimo: bollettini generati da un collega (`./scripts/docker.sh bollettini 7`), poi verifica completa nel browser | `docs/piani/2026-10-17-dashboard-cop.md` |
 | Andrea | — | — | — |
 | Nicola | — | — | — |
 
@@ -69,6 +69,9 @@ Ognuno modifica solo la propria riga.
   mobile del browser.
 
 ## Scoperto fuori da un piano
+
+- Portatile di sviluppo bloccato due volte (WSL 7 GB di RAM, C: quasi pieno): calcoli PostGIS pesanti + nuxt dev +
+  browser. Il bollettino CFD ora si precalcola su un PC capiente (README, "Bollettino CFD simulato").
 
 - WFS regionale `https://webgis2.regione.sardegna.it/geoserver/dbu/ows`
   instabile: i dati vanno precaricati (`scripts/scarica_dati.py`).

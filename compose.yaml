@@ -1,6 +1,6 @@
 # Stack completo in Docker, tre servizi separati che parlano tra loro solo via backend:
 #   webapp     app cittadino (webapp/)            http://localhost:3000
-#   dashboard  cruscotto operatori (frontend/)    http://localhost:3001/cruscotto   (da riscrivere)
+#   dashboard  dashboard COP (frontend/)          http://localhost:3001/dashboard
 #   backend    FastAPI, unico accesso ai dati     http://localhost:8000/salute
 # + db e dati (ripristino una tantum). Una segnalazione inviata dalla webapp compare subito nel cruscotto:
 # stesso backend, stesso database.

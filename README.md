@@ -13,17 +13,18 @@ Niente Node, Python o conda sul sistema: tutto gira nei container, uguale per tu
 ```bash
 ./scripts/docker.sh                 # prima volta: scarica il dump dei dati (~140 MB), costruisce, ripristina, avvia (~2 min)
 ./scripts/docker.sh dev             # sviluppo: hot reload su backend e webapp
-./scripts/docker.sh dev-dashboard   # sviluppo: hot reload sul cruscotto
+./scripts/docker.sh dev-dashboard   # sviluppo: hot reload sulla dashboard COP
+./scripts/docker.sh bollettini 7    # genera i bollettini CFD simulati (vedi sotto, PC con almeno 16 GB di RAM)
 ./scripts/docker.sh down            # ferma (i dati restano); "down -v" riparte da zero
 ```
 
 Tre servizi separati che parlano solo col backend (stesso database: una segnalazione fatta nell'app compare
-subito nel cruscotto):
+subito nella dashboard COP):
 
 | Servizio | Cartella | Indirizzo |
 |---|---|---|
 | App cittadino (`webapp`) | `webapp/` | http://localhost:3000 |
-| Cruscotto operatori (`dashboard`, da riscrivere) | `frontend/` | http://localhost:3001/cruscotto |
+| Dashboard COP operatori (`dashboard`) | `frontend/` | http://localhost:3001/dashboard |
 | Backend (`backend`) | `backend/` | http://localhost:8000/salute |
 
 Stack leggero: webapp e dashboard statiche + nginx (~7 MB di RAM ciascuna), backend (~100 MB), PostGIS
@@ -35,6 +36,30 @@ copiare `sentinelle.dump` in `dati/` e lanciare lo script. Comandi nel backend:
 App cittadino senza GPS (computer, prove): aggiungere `?pos=39.4216,8.9223&dir=45` all'indirizzo per fissare
 posizione e direzione dello sguardo. Dal telefono usa l'indirizzo HTTPS del tunnel che lo script stampa a fine
 avvio (vedi "Prova da telefono").
+
+## Bollettino CFD simulato (dashboard COP)
+
+Le zone di rischio della dashboard vengono da un bollettino del Centro Funzionale Decentrato **simulato**
+(verde, arancione, rosso, emesso il giorno prima). Calcolarlo costa ~10 s e molta RAM per ogni giorno: su un
+portatile con poca memoria blocca il PC. Per questo il backend non lo calcola mai, legge i file JSON in
+`dati/bollettini/`. Si generano una volta su un PC capiente e si committano.
+
+Chi genera (PC con almeno 16 GB di RAM):
+
+```bash
+git pull                              # branch con la dashboard COP
+./scripts/docker.sh                   # stack acceso e ricostruito col codice aggiornato
+./scripts/docker.sh bollettini 7      # 7 giorni da oggi; per partire da un'altra data: bollettini 7 2026-10-20
+git add dati/bollettini && git commit -m "bollettini CFD simulati" && git push
+```
+
+Il comando gira nel container backend e scrive in `dati/bollettini/` un file per giorno
+(`bollettino-AAAA-MM-GG.json`, ~350 KB) piu' `aree-cop.json` con i confini delle 7 aree. Richiede ~15 s per
+giorno. Senza Docker, con l'ambiente di `setup.sh`: `./scripts/python.sh scripts/genera_bollettino.py --giorni 7`.
+
+Chi usa i file (anche il PC della demo): `git pull`, poi `./scripts/docker.sh` (i file entrano nell'immagine del
+backend alla build). Se manca il giorno richiesto il backend usa il file del giorno piu' vicino; se non c'e'
+nessun file la mappa resta senza zone (tutto verde). Per la demo generare i giorni dell'evento.
 
 ## Avvio rapido senza Docker per l'app (ambiente sul sistema)
 
@@ -49,7 +74,7 @@ cd hackaton-incendi
 ```
 
 - App cittadino (vecchia): http://localhost:3000/app (pensata per il telefono)
-- Cruscotto operatori: http://localhost:3000/cruscotto
+- Dashboard COP: http://localhost:3000/dashboard (`/cruscotto` reindirizza qui)
 - API: http://localhost:8000/salute
 
 Il browser chiama sempre `/api/**`: Nuxt lo inoltra al backend su :8000.

@@ -30,6 +30,10 @@ html[data-tema='scuro'] {
   /* tipo di segnalazione fumo: grigio-azzurro */
   --fumo: #a3b3c4;
   --viola: #b48cf2;
+  /* bollettino CFD (dashboard COP): sempre con la parola accanto */
+  --allerta-verde: #3fb37f;
+  --allerta-arancione: #ff9a3c;
+  --allerta-rosso: #ff4d4d;
   --ombra: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.25);
   --ombra-pillola: 0 4px 14px -6px rgba(0, 0, 0, 0.55);
   --atmosfera:
@@ -59,6 +63,9 @@ html[data-tema='chiaro'] {
   --cielo: #2a72ad;
   --fumo: #566676;
   --viola: #6a46a6;
+  --allerta-verde: #2f8f63;
+  --allerta-arancione: #b85d06;
+  --allerta-rosso: #c62828;
   --ombra: 0 16px 36px -14px rgba(40, 30, 20, 0.22), 0 0 0 1px rgba(20, 20, 10, 0.04);
   --ombra-pillola: 0 3px 12px -6px rgba(40, 30, 20, 0.22);
   --atmosfera:
@@ -85,6 +92,9 @@ html[data-tema='chiaro'] {
   --color-cielo: var(--cielo);
   --color-fumo: var(--fumo);
   --color-viola: var(--viola);
+  --color-allerta-verde: var(--allerta-verde);
+  --color-allerta-arancione: var(--allerta-arancione);
+  --color-allerta-rosso: var(--allerta-rosso);
   /* scala della priorita' e del rischio: sempre con la parola accanto */
   --color-alta: var(--brace);
   --color-media: var(--ambra);
@@ -101,6 +111,9 @@ html[data-tema='chiaro'] {
   --radius-s: 6px;
   --radius-ctrl: 999px;
   --radius-pill: 999px;
+  /* curve forti (uscita per ingressi e risposte, in-out per spostamenti sullo schermo) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
 }
@@ -395,3 +408,9 @@ html[data-tema='chiaro'] .popup-mappa .popup-icona { color: var(--tinta-chiaro);
 .interruttore::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 999px; background: var(--testo-3); transition: transform .18s cubic-bezier(.22, 1, .36, 1), background .18s; }
 .interruttore.acceso { background: var(--macchia); box-shadow: none; }
 .interruttore.acceso::after { transform: translateX(14px); background: #fff; }
+
+/* Dashboard COP: superfici del browser in tema (selezione, barre di scorrimento) */
+.cop ::selection { background: color-mix(in srgb, var(--brace) 35%, transparent); color: var(--testo); }
+.cop-scroll { scrollbar-width: thin; scrollbar-color: var(--bordo-luce) transparent; overscroll-behavior: contain; }
+.cop-scroll::-webkit-scrollbar { width: 8px; }
+.cop-scroll::-webkit-scrollbar-thumb { background: var(--bordo-luce); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }

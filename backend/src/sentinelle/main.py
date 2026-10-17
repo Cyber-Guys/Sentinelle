@@ -8,12 +8,13 @@ from sqlalchemy.exc import OperationalError
 from . import eventi
 from .api import gioco as api_gioco
 from .api import cittadino, scenario, segnalazioni, storico
+from .api import cop as api_cop
 from .config import impostazioni
 from .db import engine
 from .gioco import prepara_db
 from .invasi import carica as carica_invasi
 from .basi import carica as carica_basi
-from . import flotta
+from . import cop, flotta
 
 
 @asynccontextmanager
@@ -33,7 +34,7 @@ async def ciclo_vita(_):
     def scalda_flotta():  # la sagoma dell'isola per i mezzi di terra costa qualche secondo: si calcola subito
         with engine.connect() as conn:
             flotta.stato(conn, 0)
-    compiti = [asyncio.create_task(asyncio.to_thread(scalda_flotta)), asyncio.create_task(eventi.ascolta()), asyncio.create_task(eventi.controlla_hotspot())]
+    compiti = [asyncio.create_task(asyncio.to_thread(scalda_flotta)), asyncio.create_task(asyncio.to_thread(cop.scalda)), asyncio.create_task(eventi.ascolta()), asyncio.create_task(eventi.controlla_hotspot())]
     yield
     for c in compiti:
         c.cancel()
@@ -48,6 +49,7 @@ app.include_router(api_gioco.router)
 app.include_router(eventi.router)
 app.include_router(scenario.router)
 app.include_router(cittadino.router)
+app.include_router(api_cop.router)
 
 
 @app.get("/salute")

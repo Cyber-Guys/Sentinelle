@@ -4,8 +4,10 @@
 # dati/sentinelle.dump e lo ripristina.
 # Uso:  ./scripts/docker.sh                stack leggero (webapp e dashboard statiche + nginx) + tunnel
 #       ./scripts/docker.sh dev            hot reload su backend e webapp (compose.dev.yaml)
-#       ./scripts/docker.sh dev-dashboard  hot reload sul cruscotto (compose.dev-dashboard.yaml)
+#       ./scripts/docker.sh dev-dashboard  hot reload sulla dashboard COP (compose.dev-dashboard.yaml)
 #       ./scripts/docker.sh tunnel         ristampa indirizzo e QR code del tunnel gia' acceso
+#       ./scripts/docker.sh bollettini [giorni] [AAAA-MM-GG]  genera i bollettini CFD simulati in dati/bollettini/
+#                                          (calcolo pesante: farlo su un PC con RAM, poi committare i JSON)
 #       ./scripts/docker.sh down           ferma (i dati restano); "down -v" li cancella
 # Qualunque altro argomento va a docker compose (es. logs -f backend, ps, exec -T backend python scripts/...).
 # SENTINELLE_TUNNEL=0 avvia senza tunnel (l'app resta solo su localhost).
@@ -19,6 +21,7 @@ case "${1:-}" in
   dev) FILE+=(-f compose.dev.yaml); CMD=() ;;
   dev-dashboard) FILE+=(-f compose.dev-dashboard.yaml); CMD=() ;;
   tunnel) CMD=(tunnel) ;;
+  bollettini) CMD=(bollettini) ;;
 esac
 
 # Indirizzo https://xxxx.trycloudflare.com dai log di cloudflared (casuale, cambia a ogni avvio del servizio).
@@ -46,6 +49,14 @@ mostra_tunnel() {
 
 if [ "${CMD[0]:-}" = tunnel ]; then
   mostra_tunnel
+elif [ "${CMD[0]:-}" = bollettini ]; then
+  # gira nel container backend (il database non e' esposto fuori), poi copia i file nel repository
+  docker compose "${FILE[@]}" exec -T backend rm -rf /tmp/bollettini
+  docker compose "${FILE[@]}" exec -T backend python scripts/genera_bollettino.py \
+    --giorni "${2:-7}" --da "${3:-$(date +%F)}" --out /tmp/bollettini --forza
+  mkdir -p dati/bollettini
+  docker compose "${FILE[@]}" cp backend:/tmp/bollettini/. dati/bollettini/
+  echo "File in dati/bollettini/: committarli (git add dati/bollettini) o passarli a chi fa la demo."
 elif [ ${#CMD[@]} -eq 0 ]; then
   if [ ! -f "$FILE_DUMP" ] && ! docker compose "${FILE[@]}" ps -aq db 2>/dev/null | grep -q .; then
     echo "==> Scarico il dump dei dati (una volta, ~140 MB)"
@@ -60,7 +71,7 @@ elif [ ${#CMD[@]} -eq 0 ]; then
   docker compose "${FILE[@]}" up -d --build --remove-orphans --wait "${SERVIZI[@]}"
   echo
   echo "  App cittadino:   http://localhost:${SENTINELLE_PORTA_APP:-3000}"
-  echo "  Cruscotto:       http://localhost:${SENTINELLE_PORTA_DASHBOARD:-3001}/cruscotto"
+  echo "  Dashboard COP:   http://localhost:${SENTINELLE_PORTA_DASHBOARD:-3001}/dashboard"
   echo "  API (salute):    http://localhost:${SENTINELLE_PORTA_API:-8000}/salute"
   echo "  Prove senza GPS: aggiungere ?pos=39.4216,8.9223&dir=45 all'indirizzo dell'app"
   echo "  Log: ./scripts/docker.sh logs -f   Ferma: ./scripts/docker.sh down"

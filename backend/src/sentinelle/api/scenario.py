@@ -16,9 +16,11 @@ class Richiesta(BaseModel):
     area: dict | None = None  # GeoJSON: tutte le celle dentro partono a t=0
 
 
-@router.get("/rischio/griglia")
-def rischio_griglia():
-    return rischio_oggi.griglia()
+# Ricalcolo del rischio da FIRMS/meteo/Corine: sospeso, le zone a rischio vengono dal bollettino CFD
+# (simulato, /cop/bollettino). Piano 2026-10-17-dashboard-cop.
+# @router.get("/rischio/griglia")
+# def rischio_griglia():
+#     return rischio_oggi.griglia()
 
 
 @router.post("/simulazione")
@@ -32,9 +34,10 @@ def lista_invasi():
         return invasi.geojson(c)
 
 
-@router.get("/aree-critiche")
-def lista_aree_critiche():
-    return aree_critiche.aree_critiche()
+# Sospeso come /rischio/griglia: sostituito dal bollettino CFD.
+# @router.get("/aree-critiche")
+# def lista_aree_critiche():
+#     return aree_critiche.aree_critiche()
 
 
 @router.get("/incendi-attivi")
