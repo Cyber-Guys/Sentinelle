@@ -4,7 +4,8 @@
 
 <p align="center">
   <b>I cittadini segnalano incendi e completano missioni di prevenzione; gli operatori ricevono le segnalazioni già verificate e ordinate per priorità.</b><br>
-  <sub>GreenLab Sardegna Hackathon · Cagliari · Challenge 2 + Challenge 3 · realizzato il 16 e 17 ottobre 2026 dal team CyberGuys</sub>
+  <sub>GreenLab Sardegna Hackathon · Cagliari · Challenge 2, prevenzione incendi · realizzato il 16 e 17 ottobre 2026 dal team CyberGuys</sub><br>
+  <a href="docs/pitch/trailer/sentinelle-trailer.mp4">▶ Guarda il trailer (30 s)</a>
 </p>
 
 <p align="center">
@@ -15,17 +16,23 @@
   <img alt="PostGIS 17" src="https://img.shields.io/badge/PostGIS-17-336791">
   <img alt="MapLibre GL 5" src="https://img.shields.io/badge/MapLibre%20GL-5-396CB2">
   <img alt="Docker" src="https://img.shields.io/badge/docker-compose-2496ED">
+  <img alt="Licenza Apache 2.0" src="https://img.shields.io/badge/licenza-Apache%202.0-2EA44F">
 </p>
 
 ## Realizzato al GreenLab Sardegna Hackathon
 
 <p align="center">
-  <img src="docs/assets/greenlab.png" width="100%" alt="GreenLab Sardegna Hackathon, Open Campus, Sa Illetta (Cagliari), 16 e 17 ottobre 2026, Challenge 2: prevenzione incendi, Challenge 3: gamification">
+  <img src="docs/assets/greenlab.png" width="100%" alt="GreenLab Sardegna Hackathon, Open Campus, Sa Illetta (Cagliari), 16 e 17 ottobre 2026, Challenge 2: prevenzione incendi e mappatura partecipata">
 </p>
 
 Sentinelle è nato in due giorni al **GreenLab Sardegna Hackathon**, dedicato al monitoraggio ambientale, il 16 e 17 ottobre 2026 all'Open Campus di Sa Illetta, a Cagliari. L'evento è stato organizzato dalla Camera di Commercio di Cagliari-Oristano, con il Centro Regionale di Programmazione della Regione Sardegna e Promocamera di Sassari, nell'ambito del progetto europeo CIIRCLE (Interreg Italia-Francia Marittimo).
 
-Abbiamo unito in un solo prodotto due delle cinque challenge, entrambe sugli incendi: la **2** (prevenzione con il coinvolgimento dei cittadini) e la **3** (gamification per coinvolgere comunità locali e giovani). Sentinelle ha vinto il **2° posto**. Le challenge e i criteri di valutazione sono in [L'hackathon](#lhackathon).
+Abbiamo gareggiato nella **Challenge 2**: come supportare la prevenzione degli incendi coinvolgendo i cittadini, con un'app di allerta precoce e mappatura partecipata. Sentinelle ha vinto il **2° posto**. La challenge e i criteri di valutazione sono in [L'hackathon](#lhackathon).
+
+<p align="center">
+  <img src="docs/assets/greenlab-ufficiale.png" width="100%" alt="Banner ufficiale del GreenLab Sardegna Hackathon, progetto CIIRCLE, Interreg Marittimo IT-FR">
+  <br><sub>Il banner ufficiale dell'evento (versione francese), della Camera di Commercio di Cagliari-Oristano.</sub>
+</p>
 
 ## Team
 
@@ -71,18 +78,19 @@ Gli operatori (Comune, Barracelli, Protezione Civile) lavorano dalla dashboard C
 - [Comandi utili](#comandi-utili)
 - [Struttura del repository](#struttura-del-repository)
 - [Materiali del pitch](#materiali-del-pitch)
+- [Licenza](#licenza)
 
 ## L'hackathon
 
 Il **GreenLab Sardegna Hackathon** si è tenuto il 16 e 17 ottobre 2026, dalle 9 alle 18, all'Open Campus di Sa Illetta (Cagliari). Era aperto a studenti dell'Università di Cagliari e di Sassari e a cittadini, in team da 3 a 6 persone.
 
-Le cinque challenge:
+Le cinque challenge (noi abbiamo gareggiato nella 2):
 
 | # | Area | Domanda | Output atteso |
 |---|---|---|---|
 | 1 | Open data | Come risolvere la frammentazione tra i database ambientali sardi? | Dashboard web che unifica database diversi |
 | **2** | **Incendi** | **Come supportare la prevenzione coinvolgendo i cittadini?** | **App mobile di allerta precoce con mappatura partecipata di aree a rischio e focolai** |
-| **3** | **Incendi** | **Come coinvolgere comunità locali e giovani nella prevenzione?** | **Strumento di gamification (mini-game, app a premi, dinamiche interattive)** |
+| 3 | Incendi | Come coinvolgere comunità locali e giovani nella prevenzione? | Strumento di gamification (mini-game, app a premi, dinamiche interattive) |
 | 4 | Acqua | Come ottimizzare gestione e monitoraggio dei consumi idrici? | Piattaforma open source di raccolta e monitoraggio dei consumi |
 | 5 | Open data | Come rendere i dataset ambientali fruibili a tutti? | Portale web con API semplificate |
 
@@ -90,7 +98,7 @@ La giuria ha valutato sei criteri. Ecco come risponde Sentinelle:
 
 | Criterio | La nostra risposta |
 |---|---|
-| **Idea:** rispondenza alla sfida, fattibilità tecnica, creatività | Un'unica app risponde a entrambe le challenge sugli incendi: le missioni tengono l'app in uso tutto l'anno, la verifica incrociata toglie i falsi allarmi. |
+| **Idea:** rispondenza alla sfida, fattibilità tecnica, creatività | Un'app di allerta precoce in cui i cittadini segnalano e mappano focolai e aree a rischio. Le missioni di prevenzione la tengono in uso tutto l'anno, la verifica incrociata toglie i falsi allarmi. |
 | **Prototipo:** tecnologia impiegata e stadio di sviluppo | App cittadino e dashboard COP funzionanti su dati reali della Regione (perimetri CFVA 2005-2025, pericolo AIB, invasi), con aggiornamenti live, mappe offline e avvio con un solo comando Docker. Provato su telefono vero tramite tunnel HTTPS. |
 | **Fattore novità:** valore aggiunto e innovazione | Le segnalazioni arrivano agli operatori già con una priorità spiegata fattore per fattore, e il gioco premia il fuoco solo dopo la conferma. |
 | **Impatto sociale:** benefici per il territorio | Coinvolge chi vive dove partono gli incendi, durante tutto l'anno, e dà agli operatori meno rumore e più contesto. |
@@ -212,7 +220,13 @@ Come si lavora (persone e agenti): [`AGENTS.md`](AGENTS.md). Dove siamo: [`STATO
 | Cosa | Dove |
 |---|---|
 | Presentazione finale (due versioni) | [`docs/pitch/presentazione/`](docs/pitch/presentazione/) |
-| Trailer di 30 secondi | [`docs/pitch/trailer/sentinelle-trailer.mp4`](docs/pitch/trailer/sentinelle-trailer.mp4) |
+| Trailer di 30 secondi | [▶ `docs/pitch/trailer/sentinelle-trailer.mp4`](docs/pitch/trailer/sentinelle-trailer.mp4) |
 | Sorgenti del trailer (script, schermate, musica) | [`docs/pitch/trailer/`](docs/pitch/trailer/) |
 | Prompt usati per il trailer | [`docs/pitch/trailer-prompt.md`](docs/pitch/trailer-prompt.md), [`docs/pitch/trailer-prompt-2.md`](docs/pitch/trailer-prompt-2.md) |
 | Documenti degli organizzatori | [`docs/materiali/`](docs/materiali/) |
+
+## Licenza
+
+Sentinelle è rilasciato con la [licenza Apache 2.0](LICENSE). Puoi usarlo, modificarlo e condividerlo, anche per scopi commerciali, a condizione di mantenere il file [NOTICE](NOTICE) e di citare **Cyber Guys** come autori originali.
+
+I nomi "Sentinelle" e "Cyber Guys" e il logo del progetto non sono coperti dalla licenza. Non lo sono nemmeno i documenti degli organizzatori in `docs/materiali/` e il banner ufficiale dell'evento. I dati di terze parti (OpenStreetMap, Esri World Imagery, Regione Sardegna, NASA FIRMS, Open-Meteo, Copernicus Corine) mantengono le proprie licenze.
