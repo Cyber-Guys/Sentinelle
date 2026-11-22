@@ -60,7 +60,7 @@ elif [ "${CMD[0]:-}" = bollettini ]; then
 elif [ ${#CMD[@]} -eq 0 ]; then
   if [ ! -f "$FILE_DUMP" ] && ! docker compose "${FILE[@]}" ps -aq db 2>/dev/null | grep -q .; then
     echo "==> Scarico il dump dei dati (una volta, ~140 MB)"
-    gh release download dati-v1 --repo ale24cocco/hackaton-incendi -p sentinelle.dump -D dati || {
+    gh release download dati-v1 --repo Cyber-Guys/Sentinelle -p sentinelle.dump -D dati || {
       echo "Dump non scaricato: gh auth login (serve accesso al repo) oppure copiare il file in $FILE_DUMP"; exit 1; }
   fi
   SERVIZI=()

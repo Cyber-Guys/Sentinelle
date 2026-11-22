@@ -73,8 +73,8 @@ Prerequisiti: Docker (acceso), Node >= 20, git, e uno tra conda, uv o Python 3.1
 Per i dati serve `gh` autenticato con accesso al repo. Dettagli in `ONBOARDING.md`.
 
 ```bash
-git clone https://github.com/ale24cocco/hackaton-incendi.git
-cd hackaton-incendi
+git clone https://github.com/Cyber-Guys/Sentinelle.git
+cd Sentinelle
 ./scripts/setup.sh     # una volta: ambiente, dipendenze, database, dati demo (idempotente)
 ./scripts/avvia.sh     # ogni volta: backend + frontend, Ctrl+C ferma entrambi
 ```

@@ -13,7 +13,7 @@ set -euo pipefail
 RADICE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$RADICE"
 
-REPO_DATI="ale24cocco/hackaton-incendi"
+REPO_DATI="Cyber-Guys/Sentinelle"
 RELEASE_DATI="dati-v1"
 FILE_DUMP=""
 while [ $# -gt 0 ]; do

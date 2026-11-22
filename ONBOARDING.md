@@ -18,8 +18,8 @@ Codex, Gemini, Cursor). Le regole complete sono in `AGENTS.md`.
 
 ## 2. Accesso al repo
 
-Il repo `ale24cocco/hackaton-incendi` e' privato: Alessandro deve aggiungerti
-come collaboratore (GitHub -> Settings -> Collaborators). Accetta l'invito,
+Il repo `Cyber-Guys/Sentinelle` e' privato: un owner dell'organizzazione
+Cyber-Guys deve darti accesso. Accetta l'invito,
 poi `gh auth login` (serve anche per scaricare i dati).
 
 ## 3. Setup e avvio
@@ -27,7 +27,7 @@ poi `gh auth login` (serve anche per scaricare i dati).
 **Percorso Docker (consigliato):** servono solo git, Docker e `gh` (punto 2). Salta Node, Python e conda.
 
 ```bash
-git clone https://github.com/ale24cocco/hackaton-incendi.git && cd hackaton-incendi
+git clone https://github.com/Cyber-Guys/Sentinelle.git && cd Sentinelle
 ./scripts/docker.sh        # ~2 minuti la prima volta, poi pochi secondi
 ```
 
@@ -38,8 +38,8 @@ Il percorso sotto (setup.sh + avvia.sh) resta valido ma non serve se usi Docker;
 **Percorso sul sistema (setup.sh):**
 
 ```bash
-git clone https://github.com/ale24cocco/hackaton-incendi.git
-cd hackaton-incendi
+git clone https://github.com/Cyber-Guys/Sentinelle.git
+cd Sentinelle
 ./scripts/setup.sh      # una volta, ~2 minuti; si puo' rilanciare quando si vuole
 ./scripts/avvia.sh      # ogni volta; Ctrl+C ferma tutto
 ```
