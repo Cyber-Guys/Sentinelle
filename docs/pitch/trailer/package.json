@@ -1,0 +1,9 @@
+{
+  "name": "sentinelle-trailer",
+  "private": true,
+  "type": "module",
+  "description": "Trailer di 30 s (docs/pitch/trailer-prompt-2.md): HTML a 1920x1080, frame catturati con Playwright, MP4 con ffmpeg di sistema",
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

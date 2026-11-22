@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sentinelle trailer</title>
+<!-- Trailer di 60 s a 120 BPM (30 battute da 2 s), scaletta in README.md. Ogni fotogramma e' funzione del tempo:
+     render(t), asincrona solo per posizionare il video d'apertura. Aperta nel browser e' un'anteprima con l'audio
+     (spazio = play, frecce = un fotogramma, #t=12.5 = salta); rendi.mjs la cattura a 60 fps e passa i fotogrammi a
+     ffmpeg. Schermate reali in schermate/ (cattura.mjs), video d'apertura in media/, font in fonts/. -->
+<style>
+@font-face { font-family: 'Atkinson Next'; src: url('fonts/AtkinsonHyperlegibleNext-Variable.woff2') format('woff2'); font-weight: 200 800; }
+@font-face { font-family: 'Inter'; src: url('fonts/Inter-Variable.woff2') format('woff2'); font-weight: 100 900; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; overflow: hidden; }
+#palco { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0;
+  background: radial-gradient(110% 95% at 50% 42%, #151a21 0%, #0a0d11 55%, #040506 100%);
+  font-family: 'Atkinson Next', sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+.abs { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.nascosto { display: none !important; }
+img { display: block; }
+
+.testo { position: absolute; font-weight: 800; letter-spacing: -0.022em; line-height: 1; white-space: nowrap; }
+.riga { display: inline-block; overflow: hidden; padding: 0.06em 0.04em 0.12em; margin: -0.06em -0.04em -0.12em; vertical-align: top; }
+.dentro { display: inline-block; will-change: transform; }
+.tenue { color: rgba(255, 255, 255, 0.62); }
+.ombra { text-shadow: 0 2px 30px rgba(0, 0, 0, 0.55); }
+
+.vetro { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; align-items: center; gap: 14px; white-space: nowrap;
+  padding: 0 26px; height: 62px; border-radius: 999px; color: #fff; font-weight: 700; font-size: 29px; letter-spacing: -0.01em;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.06) 55%, rgba(255, 255, 255, 0.12));
+  backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.10), inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 14px 40px rgba(0, 0, 0, 0.32); }
+.vetro.scuro { background: linear-gradient(135deg, rgba(30, 36, 46, 0.62), rgba(14, 18, 24, 0.48)); }
+.vetro svg { width: 30px; height: 30px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vetro .num { display: grid; place-items: center; width: 38px; height: 38px; margin-left: -12px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); color: #14181f; font-size: 22px; font-weight: 800; }
+.vetro.piccolo { height: 54px; padding: 0 20px; font-size: 25px; gap: 11px; }
+.vetro.piccolo svg { width: 26px; height: 26px; }
+.vetro.mini { height: 36px; padding: 0 13px; font-size: 19px; gap: 6px; font-family: 'Inter', sans-serif; font-weight: 650; }
+
+#telefono { width: 417px; height: 876px; }
+#telefono .cornice { position: absolute; inset: 0; border-radius: 67px;
+  background: linear-gradient(150deg, #5b6068 0%, #25282d 22%, #17191c 55%, #2c3036 80%, #6a7078 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.22), inset 0 0 0 6px #0b0c0e, 0 60px 110px rgba(0, 0, 0, 0.55), 0 20px 40px rgba(0, 0, 0, 0.35); }
+#schermoT { left: 12px; top: 12px; width: 393px; height: 852px; border-radius: 55px; overflow: hidden; background: #eef1f5; }
+#barra { position: absolute; left: 0; top: 0; width: 393px; height: 59px; background: #eef1f5; }
+#barra .ora { position: absolute; left: 50px; top: 19px; font: 600 17px/22px 'Inter', sans-serif; color: #14181f; letter-spacing: -0.01em; }
+#barra svg { position: absolute; top: 22px; fill: #14181f; }
+.isola { position: absolute; left: 133.5px; top: 11px; width: 126px; height: 37px; border-radius: 20px; background: #000; }
+.home { position: absolute; left: 129.5px; bottom: 8px; width: 134px; height: 5px; border-radius: 3px; background: #14181f; opacity: 0.88; }
+#web { left: 0; top: 59px; width: 393px; height: 793px; overflow: hidden; background: #eef1f5; }
+.liv { position: absolute; left: 0; top: 0; width: 393px; height: 793px; transform-origin: 0 0; }
+.taglio { position: absolute; left: 0; top: 0; transform-origin: 0 0; background-repeat: no-repeat; background-size: 393px 793px; }
+.tocco { position: absolute; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.38); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 6px 18px rgba(0, 0, 0, 0.25); }
+.onda-tocco { position: absolute; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.9); }
+
+/* pin ricostruiti con le misure di webapp/app/assets/css/tema.css (1rem = 15px) */
+.pin { position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 39px; height: 39px; margin: -19.5px 0 0 -19.5px;
+  border: 3px solid #fff; border-radius: 999px; background: #14181f; color: #fff; box-shadow: 0 2px 6px rgba(20, 24, 31, 0.4); }
+.pin svg { width: 20.25px; height: 20.25px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.pin-fuoco { background: #c4360f; }
+.pin-fumo { background: #566170; }
+.pin .onda { position: absolute; inset: -3px; border-radius: 999px; background: #c4360f; z-index: -1; }
+.pin-conteggio { position: absolute; top: -6.75px; right: -6.75px; display: grid; place-items: center; min-width: 21px; height: 21px; padding: 0 4.5px;
+  border: 2px solid #fff; border-radius: 999px; background: #14181f; color: #fff; font: 800 11.25px/1 'Atkinson Next', sans-serif; }
+.pin-etichetta { position: absolute; left: 100%; top: 50%; transform: translate(5px, -50%); padding: 2px 9px; border: 1.5px solid #d3d9e0; border-radius: 999px;
+  background: #fff; color: #14181f; font: 800 12.75px/1.3 'Atkinson Next', sans-serif; white-space: nowrap; box-shadow: 0 1px 3px rgba(20, 24, 31, 0.14); }
+.io { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.io-cono { position: absolute; left: -88px; top: -88px; width: 176px; height: 176px; border-radius: 999px;
+  background: conic-gradient(from -28deg at 50% 50%, rgba(60, 130, 255, 0.9) 0deg 56deg, transparent 56deg 360deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 6%, rgba(0, 0, 0, 0.55) 40%, transparent 100%); mask-image: radial-gradient(closest-side, #000 6%, rgba(0, 0, 0, 0.55) 40%, transparent 100%); filter: blur(3px); }
+.io-punto { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; border: 3px solid #fff; border-radius: 999px; background: #1f55c4;
+  box-shadow: 0 0 0 7px rgba(31, 85, 196, 0.2), 0 1px 5px rgba(0, 0, 0, 0.5); }
+
+#display { width: 1952px; height: 1112px; }
+#display .cornice-d { position: absolute; inset: 0; border-radius: 28px; background: linear-gradient(160deg, #30353d 0%, #121418 35%, #0b0c0e 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.12), 0 50px 140px rgba(0, 0, 0, 0.6), 0 16px 40px rgba(0, 0, 0, 0.4); }
+#schermoD { left: 16px; top: 16px; width: 1920px; height: 1080px; border-radius: 12px; overflow: hidden; background: #0b0f14; }
+.livD { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.tD { position: absolute; left: 0; top: 0; transform-origin: 0 0; background-repeat: no-repeat; background-size: 1920px 1080px; }
+.evid { position: absolute; border-radius: 12px; box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.92), 0 0 0 9px rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.05); }
+.mezzo { position: absolute; left: 0; top: 0; width: 70px; height: 70px; margin: -35px 0 0 -35px; }
+.anello { position: absolute; left: 0; top: 0; border-radius: 50%; }
+
+#mappaB { width: 1920px; height: 1080px; overflow: hidden; background: #0a0d11; }
+.livB { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.sfuma { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%), linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%);
+  -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent 0, #000 14%, #000 86%, transparent 100%), linear-gradient(180deg, transparent 0, #000 16%, #000 84%, transparent 100%); mask-composite: intersect; }
+
+#introC, #introV { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 50% 50%; filter: contrast(1.06) saturate(1.08) brightness(0.94); }
+#pinG { width: 96px; height: 96px; }
+#pinG svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+#pinOnda, #pinOnda2 { position: absolute; inset: 0; border-radius: 50%; background: #c4360f; }
+#rosso { background: #c4360f; }
+#lineaSvg { width: 1920px; height: 1080px; overflow: visible; }
+#avvio { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); color: #fff; font: 700 28px 'Atkinson Next', sans-serif; cursor: pointer; z-index: 99; }
+</style>
+</head>
+<body>
+<div id="palco">
+
+  <!-- apertura: video reale di un incendio in montagna (media/intro-incendio.webm), poi dissolvenza sul palco -->
+  <canvas id="introC" width="1920" height="1080"></canvas>
+  <video id="introV" class="nascosto" src="media/intro-incendio.webm" muted playsinline preload="auto"></video>
+  <div id="scrimI" class="abs" style="width:1920px;height:1080px;background:radial-gradient(70% 55% at 50% 52%,rgba(4,5,7,.72) 0%,rgba(4,5,7,.38) 55%,rgba(4,5,7,.15) 100%);opacity:0"></div>
+
+  <!-- B: mappa satellitare grande (schermate b-mappa-*, zoom 16 -> 12 centrati sul cittadino) -->
+  <div id="mappaB" class="abs nascosto">
+    <img class="livB" id="b0" src="schermate/b-mappa-0.jpg" alt="">
+    <img class="livB" id="b1" src="schermate/b-mappa-1.jpg" alt="">
+    <img class="livB" id="b2" src="schermate/b-mappa-2.jpg" alt="">
+    <img class="livB" id="b3" src="schermate/b-mappa-3.jpg" alt="">
+    <img class="livB" id="b4" src="schermate/b-mappa-4.jpg" alt="">
+    <img class="livB" id="b5" src="schermate/b-mappa-5.jpg" alt="">
+    <svg id="tracciaB" class="abs" width="1920" height="1080" style="z-index:20"><path id="scia" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 13" opacity="0.9"/></svg>
+    <div id="meta-dest" class="abs nascosto" style="z-index:21;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.25),0 2px 8px rgba(0,0,0,.4)"></div>
+    <div id="scrimB" class="abs" style="z-index:22;width:1920px;height:1080px;background:linear-gradient(108deg,rgba(6,8,11,.72) 0%,rgba(6,8,11,.38) 36%,rgba(6,8,11,0) 62%)"></div>
+    <div id="buioB" class="abs" style="z-index:23;width:1920px;height:1080px;background:#06080b;opacity:0"></div>
+  </div>
+
+  <!-- dashboard COP: schermate reali d1, d2, d3 (avviso), d4 (mappa dopo "Vedi sulla mappa") -->
+  <div id="display" class="abs nascosto">
+    <div class="cornice-d"></div>
+    <div id="schermoD" class="abs">
+      <img class="livD" id="d1" src="schermate/d1-area.jpg" alt="">
+      <div class="tD" id="d2barra"></div>
+      <div class="tD" id="d2corpo"></div>
+      <div class="tD" id="codaFondo"></div>
+      <div class="tD" id="rc0"></div><div class="tD" id="rc1"></div><div class="tD" id="rc2"></div>
+      <div class="evid" id="ev1"></div><div class="evid" id="ev2"></div>
+      <div class="tD" id="premi"></div>
+      <div class="tD" id="toastD"></div>
+      <div id="badgeD" class="abs nascosto" style="overflow:hidden;text-align:center;font-family:'Inter',sans-serif"><div id="badgeN" style="display:flex;flex-direction:column"><span>2</span><span>3</span></div></div>
+      <div id="badgeOnda" class="anello nascosto" style="box-shadow:0 0 0 2.5px rgba(255,255,255,.95)"></div>
+      <img class="livD" id="d4" src="schermate/d4-mappa.jpg" alt="">
+      <svg id="scieD" class="abs" width="1920" height="1080" style="overflow:visible"></svg>
+      <div id="bersaglioD" class="anello nascosto" style="width:120px;height:120px;margin:-60px 0 0 -60px;box-shadow:inset 0 0 0 3px rgba(255,106,61,.95)"></div>
+      <div id="baseD" class="anello nascosto" style="width:70px;height:70px;margin:-35px 0 0 -35px;box-shadow:inset 0 0 0 3px rgba(59,167,255,.95)"></div>
+      <div id="flotta" class="abs"></div>
+      <div id="clicD" class="abs" style="width:70px;height:70px;margin:-35px 0 0 -35px;border-radius:50%;border:3px solid rgba(255,255,255,.9)"></div>
+      <svg id="cursore" class="abs" width="34" height="50" viewBox="-2 -2 22 31"><path d="M0 0 L0 22 L5.6 16.6 L9.6 25.4 L13.2 23.9 L9.3 15.3 L16.6 15.3 Z" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </div>
+    <div id="buioD" class="abs" style="left:16px;top:16px;width:1920px;height:1080px;border-radius:12px;background:#000;opacity:0"></div>
+  </div>
+
+  <!-- telefono: barra di stato disegnata, sotto le schermate reali dell'app (393 x 793) -->
+  <div id="telefono" class="abs nascosto">
+    <div class="cornice"></div>
+    <div id="schermoT" class="abs">
+      <div id="barra"><span class="ora" id="ora">13:16</span>
+        <svg style="left:291px" width="19" height="12" viewBox="0 0 19 12"><rect x="0" y="8" width="3.2" height="4" rx="1"/><rect x="5" y="5.5" width="3.2" height="6.5" rx="1"/><rect x="10" y="3" width="3.2" height="9" rx="1"/><rect x="15" y="0" width="3.2" height="12" rx="1"/></svg>
+        <svg style="left:315px;top:21.5px" width="17" height="12" viewBox="0 0 17 12"><path d="M8.5 2.3c2.3 0 4.4.9 6 2.4l1.3-1.3C13.9 1.5 11.3.5 8.5.5S3.1 1.5 1.2 3.4l1.3 1.3c1.6-1.5 3.7-2.4 6-2.4zm0 3.6c1.3 0 2.5.5 3.4 1.3l1.3-1.3a6.7 6.7 0 0 0-9.4 0l1.3 1.3c.9-.8 2.1-1.3 3.4-1.3zm0 3.6c.4 0 .8.2 1.1.4L8.5 11 7.4 9.9c.3-.2.7-.4 1.1-.4z"/></svg>
+        <svg style="left:337px;top:21px" width="28" height="13" viewBox="0 0 28 13"><rect x="0.5" y="0.5" width="24" height="12" rx="3.6" fill="none" stroke="#14181f" stroke-opacity=".4"/><rect x="2.5" y="2.5" width="18" height="8" rx="2"/><path d="M26 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2z" fill-opacity=".45"/></svg>
+      </div>
+      <div id="web" class="abs">
+        <img class="liv" id="a1" src="schermate/a1-mappa.png" alt="">
+        <img class="liv" id="a2" src="schermate/a2-segnala.png" alt="">
+        <img class="liv" id="a3a" src="schermate/a3a-tipo.png" alt="">
+        <img class="liv" id="a3b" src="schermate/a3b-nota.png" alt="">
+        <img class="liv" id="a4" src="schermate/a4-inviata.png" alt="">
+        <div class="liv" id="a4buio" style="background:#000"></div>
+        <img class="liv" id="a5v" src="schermate/a5-verifica.png" alt="">
+        <img class="liv" id="a5a" src="schermate/a5-allertati.png" alt="">
+        <img class="liv" id="a5m" src="schermate/a5-mezzi.png" alt="">
+        <img class="liv" id="a6" src="schermate/a6-dopo.png" alt="">
+        <div class="liv" id="dComp">
+          <div class="abs" id="dMappa" style="overflow:hidden;isolation:isolate">
+            <img class="abs" id="dm0" src="schermate/d-mappa-0.jpg" alt="">
+            <img class="abs" id="dm1" src="schermate/d-mappa-1.jpg" alt="">
+            <img class="abs" id="dm2" src="schermate/d-mappa-2.jpg" alt="">
+            <img class="abs" id="dm3" src="schermate/d-mappa-3.jpg" alt="">
+            <svg class="abs" id="dLinea" width="393" height="546" style="overflow:visible;z-index:20"><line id="dLineaL" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 8"/></svg>
+            <div class="abs" id="dPin" style="z-index:21"></div>
+          </div>
+          <img class="liv" id="dUi" src="schermate/d-ui.png" alt="">
+          <div class="abs" id="dBanner" style="border-radius:23px;box-shadow:0 0 0 3px #fff,0 0 0 9px rgba(255,255,255,.28)"></div>
+        </div>
+        <div class="liv" id="velo" style="background:rgba(20,24,31,.45)"></div>
+        <div class="taglio" id="foglio"></div>
+        <div class="taglio" id="sollevata"></div>
+        <img class="abs" id="fotoScatto" src="../../../dati/demo_foto/fiamme-1.jpg" alt="" style="object-fit:cover">
+        <div class="taglio" id="notaTaglio"></div>
+        <div class="taglio" id="etichettaPop"></div>
+        <div class="abs" id="anelloMic" style="width:41.3px;height:41.3px;border-radius:50%;box-shadow:0 0 0 3px rgba(31,85,196,.9)"></div>
+        <div class="abs" id="premiT" style="background:rgba(0,0,0,.14);border-radius:24px"></div>
+        <div class="tocco" id="tocco"></div><div class="onda-tocco" id="ondaTocco"></div>
+      </div>
+      <div class="home"></div>
+      <div class="isola"></div>
+    </div>
+  </div>
+
+  <!-- apertura e domanda -->
+  <div id="hook" class="abs" style="width:1920px;height:1080px">
+    <div class="testo ombra" id="h1a" style="left:0;top:318px;width:1920px;text-align:center;font-size:64px;font-weight:700;letter-spacing:-.01em;color:rgba(255,255,255,.82)"><span class="riga"><span class="dentro">In Sardegna, ogni anno</span></span></div>
+    <div class="testo ombra" id="h1b" style="left:0;top:418px;width:1920px;text-align:center;font-size:210px">
+      <span class="riga"><span class="dentro" id="contatore"></span></span><span class="riga"><span class="dentro" id="h1bParola">&nbsp;incendi.</span></span>
+    </div>
+    <div class="testo ombra" id="h1c" style="left:0;top:688px;width:1920px;text-align:center;font-size:25px;font-weight:600;letter-spacing:0;color:rgba(255,255,255,.62)"><span class="riga"><span class="dentro">Media annua 2005-2025, dati del Corpo forestale (CFVA)</span></span></div>
+    <div class="testo" id="h2a" style="left:0;top:0;font-size:150px;transform-origin:0 0"><span class="riga"><span class="dentro">Ogni minuto conta.</span></span></div>
+    <div class="testo" id="h2b" style="left:0;top:520px;width:1920px;text-align:center;font-size:150px">
+      <span class="riga"><span class="dentro" id="h2b1">Chi lo vede</span></span><span class="riga"><span class="dentro" id="h2b2">&nbsp;per primo</span></span><span id="slotDomanda" style="display:inline-block;width:.9em;height:.1em"></span>
+    </div>
+  </div>
+
+  <!-- testi delle scene -->
+  <div class="testo" id="tA" style="left:170px;top:318px;font-size:118px"><span class="riga"><span class="dentro">Tre tocchi.</span></span></div>
+  <div class="testo" id="tB1" style="left:124px;top:132px;font-size:92px"><span class="riga"><span class="dentro">In pochi secondi,</span></span></div>
+  <div class="testo" id="tB2" style="left:124px;top:238px;font-size:92px"><span class="riga"><span class="dentro">arriva già verificata.</span></span></div>
+  <div class="testo" id="tC1" style="left:150px;top:62px;font-size:64px"><span class="riga"><span class="dentro">L'operatore decide.</span></span></div>
+  <div class="testo" id="tC2" style="left:0;top:62px;width:1790px;text-align:right;font-size:64px"><span class="riga"><span class="dentro">Il cittadino vede.</span></span></div>
+  <div class="testo" id="tC4" style="left:150px;top:62px;font-size:72px"><span class="riga"><span class="dentro">I soccorsi partono subito.</span></span></div>
+  <div class="testo" id="tC3a" style="left:128px;top:404px;font-size:86px"><span class="riga"><span class="dentro">Una sola verità,</span></span></div>
+  <div class="testo" id="tC3b" style="left:128px;top:504px;font-size:86px"><span class="riga"><span class="dentro">in tempo reale.</span></span></div>
+  <div class="testo" id="tD1" style="left:128px;top:404px;font-size:86px"><span class="riga"><span class="dentro">Ti avvisa se brucia</span></span></div>
+  <div class="testo" id="tD2" style="left:128px;top:504px;font-size:86px"><span class="riga"><span class="dentro">vicino a casa.</span></span></div>
+  <div class="testo tenue" id="tF0" style="left:0;top:262px;width:1920px;text-align:center;font-size:52px;font-weight:700;letter-spacing:-.01em"><span class="riga"><span class="dentro">Dalla segnalazione alla centrale, in pochi secondi.</span></span></div>
+  <div class="testo" id="tF1" style="left:0;top:378px;width:1920px;text-align:center;font-size:200px"><span class="riga"><span class="dentro">Visto prima.</span></span></div>
+  <div class="testo" id="tF2" style="left:0;top:598px;width:1920px;text-align:center;font-size:200px"><span class="riga"><span class="dentro">Spento prima</span></span><span id="slotPunto" style="display:inline-block;width:.25em;height:.1em"></span></div>
+
+  <!-- vetri -->
+  <div class="vetro" id="v1"><span class="num">1</span>Foto</div>
+  <div class="vetro" id="v2"><span class="num">2</span>Cosa vedi</div>
+  <div class="vetro" id="v3"><span class="num">3</span>Invia</div>
+  <div class="vetro" id="vPos"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.8 5.41a2 2 0 0 1-1.27 1.27L7.76 16.24l1.8-5.41a2 2 0 0 1 1.27-1.27z"/></svg>Posizione e direzione: incluse</div>
+  <div class="vetro scuro piccolo" id="c0"><svg viewBox="0 0 24 24"><path d="M13 7 9 3 5 7l4 4"/><path d="m17 11 4 4-4 4-4-4"/><path d="m8 12 4 4 6-6-4-4Z"/><path d="m16 8 3-3"/><path d="M9 21a6 6 0 0 0-6-6"/></svg>Satellite</div>
+  <div class="vetro scuro piccolo" id="c1"><svg viewBox="0 0 24 24"><path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/></svg>Meteo</div>
+  <div class="vetro scuro piccolo" id="c2"><svg viewBox="0 0 24 24"><path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"/></svg>Vegetazione</div>
+  <div class="vetro scuro piccolo" id="c3"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Incendi passati</div>
+  <div class="vetro scuro piccolo" id="c4"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span id="c4n">7</span>&nbsp;conferme dai vicini</div>
+  <div class="vetro piccolo" id="cPri" style="background:#c4360f;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 30px rgba(0,0,0,.35)"><svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Priorità alta</div>
+  <div class="vetro scuro piccolo" id="vDest"><svg viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>Centrale operativa</div>
+  <div class="vetro scuro piccolo" id="vNotifica"><svg viewBox="0 0 24 24"><path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/></svg>Nuova segnalazione, già verificata</div>
+  <div class="vetro scuro piccolo" id="vKm" style="height:36px;padding:0 14px;font-size:18px">0,9 km</div>
+
+  <svg id="lineaSvg" class="abs nascosto"><path id="lineaP" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/><circle id="lineaDot" r="9" fill="#fff"/></svg>
+
+  <!-- pin conduttore: cerchio dell'app che diventa il quadrato smussato del logo -->
+  <div id="pinG" class="abs nascosto">
+    <div id="pinOnda"></div><div id="pinOnda2"></div>
+    <svg viewBox="0 0 96 96" style="filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))">
+      <rect id="pinCorpo" x="0" y="0" width="96" height="96" rx="48" fill="#c4360f"/>
+      <rect id="pinBordo" x="3.7" y="3.7" width="88.6" height="88.6" rx="44.3" fill="none" stroke="#fff" stroke-width="7.4"/>
+      <path id="pinFiamma" d="M33.6 56.4A10 10 0 0 0 44 48c0-5.52-2-8-4-12-4.288-8.572-.896-16.216 8-24 2 10 8 19.6 16 26 8 6.4 12 14 12 22a28 28 0 1 1-56 0c0-4.612 1.732-9.176 4-12a10 10 0 0 0 10 10z" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div id="rosso" class="abs nascosto"></div>
+
+  <!-- chiusura: resta tutto in quadro fino all'ultimo fotogramma -->
+  <div class="testo" id="parola" style="left:0;top:0;font-size:156px;letter-spacing:-.03em">Sentinelle</div>
+  <div class="testo" id="tag" style="left:0;top:568px;width:1920px;text-align:center;font-size:52px;font-weight:600;letter-spacing:-.01em;color:rgba(255,255,255,.8)"><span class="riga"><span class="dentro">Mille occhi sul territorio.</span></span></div>
+  <div class="testo" id="cta" style="left:0;top:652px;width:1920px;text-align:center;font-size:70px"><span class="riga"><span class="dentro">Diventa sentinella.</span></span></div>
+  <div class="testo" id="crediti" style="left:0;top:902px;width:1920px;text-align:center;font-size:31px;font-weight:700;letter-spacing:0;color:rgba(255,255,255,.78)"><span class="riga"><span class="dentro">Alessandro · Andrea · Nicholas · Nicola</span></span></div>
+  <div class="testo" id="evento" style="left:0;top:952px;width:1920px;text-align:center;font-size:24px;font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.5)"><span class="riga"><span class="dentro">GREENLAB SARDEGNA HACKATHON 2026</span></span></div>
+  <div class="testo" id="fonti" style="left:0;top:1032px;width:1920px;text-align:center;font-size:15px;font-weight:500;letter-spacing:0;color:rgba(255,255,255,.36)">Schermate reali del prototipo · Video d'apertura: incendio a Madeira (2017), Strinder, CC BY 3.0 · Mappe © Esri, Maxar, Earthstar Geographics, OpenStreetMap, Protomaps · Foto: U.S. Fish and Wildlife Service, pubblico dominio</div>
+  <div id="nero" class="abs" style="width:1920px;height:1080px;background:#000;opacity:1"></div>
+</div>
+
+<script src="schermate/meta.js"></script>
+<script>
+'use strict'
+const DUR = 60, FPS = 60, BEAT = 0.5
+const M = window.META
+const $ = (id) => document.getElementById(id)
+const RESA = new URLSearchParams(location.search).has('render')
+
+// ---------------------------------------------------------------- scaletta (secondi; 120 BPM, un battito = 0,5 s)
+const T = {
+  stat: 1.5, numero: 2.0, parola: 2.5, fonte: 3.0, sciogli: 4.5, esceStat: 6.26,
+  minuto: 6.54, domanda: 8.0, primo: 8.5, pinCade: 9.0, tuffo: 10.0,
+  tre: 10.3, toccoSegnala: 11.0, scatto: 11.5, riquadro: 12.5, tipo: 13.5, nota: 14.5, versoInvia: 15.5, toccoInvia: 16.5,
+  inviata: 17.0, posizione: 18.0, stacco: 19.0, mappaEntra: 19.36,
+  atterra: 20.0, viaggio: 20.8, chip: [21.5, 22.5, 23.5, 24.5, 25.5], verificata: 24.0, raccolta: 26.5, displayEntra: 27.5,
+  notifica: 29.0, clicScheda: 30.0, coda: 30.5, validazione: 30.95, ev1: 32.0, ev2: 32.75, versoCert: 33.2, certifica: 34.0,
+  indietro: 34.2, lineaA: 34.55, allertati: 34.9, vedi: 35.5, tilt: 35.6, partenza: 36.0, lineaB: 39.35, mezzi: 39.7, eroe: 40.5, giu: 41.5,
+  D: 42.0, casa: 43.0, zoomD: 44.6, toccoBanner: 46.0, avvisi: 46.5, riga1: 47.2, riga2: 47.9, via: 48.5, pinLibero: 49.45,
+  finale: 50.0, spento: 50.75, punto: 51.25, libera: 53.0, anello: 53.5, logo: 54.0, nome: 54.5, tag: 55.5, cta: 56.5,
+  crediti: 57.5, evento: 58.0, fonti: 58.5, ultimo: 58.6,
+}
+
+// ---------------------------------------------------------------- matematica
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x))
+const lerp = (a, b, k) => a + (b - a) * k
+const fase = (t, t0, d) => clamp((t - t0) / d)
+const liscio = (k) => k * k * (3 - 2 * k)
+const fuori3 = (k) => 1 - Math.pow(1 - k, 3)
+const fuoriExpo = (k) => (k >= 1 ? 1 : 1 - Math.pow(2, -10 * k))
+const dentroExpo = (k) => (k <= 0 ? 0 : Math.pow(2, 10 * k - 10))
+const entrambi3 = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2)
+// risposta di una molla smorzata a un gradino (0 -> 1): tutte le animazioni a molla passano da qui
+function molla(dt, f = 1.8, z = 0.85) {
+  if (dt <= 0) return 0
+  const w = 2 * Math.PI * f
+  if (z >= 1) return 1 - (1 + w * dt) * Math.exp(-w * dt)
+  const wd = w * Math.sqrt(1 - z * z)
+  return 1 - Math.exp(-z * w * dt) * (Math.cos(wd * dt) + (z * w / wd) * Math.sin(wd * dt))
+}
+const sp = (t, t0, a, b, f, z) => a + (b - a) * molla(t - t0, f, z)
+// tracce a molle sovrapposte: ogni chiave [t, {prop: valore}, {f, z, salto}] avvia una molla verso il nuovo valore;
+// "salto" riparte da fermo (oggetti che rientrano da fuori quadro). La chiave di partenza definisce tutte le proprieta'.
+function tracce(t, chiavi, f0 = 1.8, z0 = 0.85) {
+  const out = {}
+  let inizio = 0
+  for (let i = 0; i < chiavi.length; i++) if (chiavi[i][2]?.salto && chiavi[i][0] <= t) inizio = i
+  for (const p of Object.keys(chiavi[inizio][1])) {
+    let prec = chiavi[inizio][1][p], v = prec
+    for (let i = inizio + 1; i < chiavi.length; i++) {
+      const [ti, vi, o = {}] = chiavi[i]
+      if (ti > t) break
+      if (vi[p] === undefined) continue
+      v += (vi[p] - prec) * molla(t - ti, o.f ?? f0, o.z ?? z0)
+      prec = vi[p]
+    }
+    out[p] = v
+  }
+  return out
+}
+const PERSP = (p) => new DOMMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -1 / p, 0, 0, 0, 1])
+function matrice({ x, y, s = 1, rx = 0, ry = 0, w, h, p = 2600 }) {
+  const m = new DOMMatrix().translateSelf(x, y).multiplySelf(PERSP(p))
+  if (ry) m.rotateAxisAngleSelf(0, 1, 0, ry)
+  if (rx) m.rotateAxisAngleSelf(1, 0, 0, rx)
+  return m.scaleSelf(s, s).translateSelf(-w / 2, -h / 2)
+}
+function proietta(m, u, v) { const q = m.transformPoint(new DOMPoint(u, v, 0, 1)); return [q.x / q.w, q.y / q.w] }
+const bezier = (a, c, b, k) => { const v = 1 - k; return [v * v * a[0] + 2 * v * k * c[0] + k * k * b[0], v * v * a[1] + 2 * v * k * c[1] + k * k * b[1]] }
+
+// ---------------------------------------------------------------- stile
+const mostrati = new Map()
+function vis(el, on) { if (mostrati.get(el) !== on) { el.classList.toggle('nascosto', !on); mostrati.set(el, on) } return on }
+function tr(el, x, y, s = 1, extra = '') { el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${s.toFixed(4)})${extra}` }
+function op(el, o) { el.style.opacity = clamp(o).toFixed(3) }
+function rett(el, r) { el.style.left = r.x + 'px'; el.style.top = r.y + 'px'; el.style.width = r.w + 'px'; el.style.height = r.h + 'px' }
+// riga di testo dietro maschera: entra a t0, esce a t1
+function riga(el, t, t0, t1 = 999, f = 2.1, z = 0.86) {
+  if (!vis(el, t >= t0 - 0.01 && t < t1 + 0.3)) return
+  el.querySelectorAll('.dentro').forEach((d, i) => {
+    const ti = t0 + i * 0.06
+    const yIn = (1 - molla(t - ti, f, z)) * 112
+    const yOut = -112 * entrambi3(fase(t, t1 + i * 0.03, 0.26))
+    d.style.transform = `translateY(${(t < ti ? 112 : yIn + yOut).toFixed(2)}%)`
+  })
+}
+function taglioDa(el, img, r, sorgW = 393, sorgH = 793) {
+  el.style.backgroundImage = `url(${img})`
+  el.style.backgroundSize = `${sorgW}px ${sorgH}px`
+  el.style.backgroundPosition = `${-r.x}px ${-r.y}px`
+  rett(el, r)
+}
+const vetro = (el, x, y, s, o) => { if (vis(el, o > 0.002)) { tr(el, x, y, s); op(el, o) } }
+function impulso(el, t, t0, durata = 1, scala = 1.4, o0 = 0.5) {
+  const d = t - t0
+  if (d < 0 || d > durata) return false
+  vis(el, true)
+  el.style.transform = `scale(${(1 + scala * fuori3(d / durata)).toFixed(4)})`
+  op(el, o0 * (1 - d / durata))
+  return true
+}
+
+// ---------------------------------------------------------------- geometria delle catture
+const TEL = { w: 417, h: 876 }
+const WEB = { x: 12, y: 12 + 59 }
+const mezzo = (r) => [r.x + r.w / 2, r.y + r.h / 2]
+const A1 = M.a1, A2 = M.a2, A3 = M.a3, A4 = M.a4, A5 = M.a5, A7 = M.a7, D2 = M.d2
+const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360))
+const GRADI = 180 / Math.PI
+const bers = M.segnalazioni.find((s) => s.id === M.bersaglio)
+
+// mappa D (telefono): centro della tela, livelli (zoom relativo misurato sul pin "io"), proiezione di Casa e incendio
+const DMAP = M.d.mappa
+const DC = [DMAP.x + DMAP.w / 2, DMAP.y + DMAP.h / 2]
+const DLIV = M.d.livelli.map((l) => ({ io: l.marcatori.find((m) => m.classi === 'io'), pin: l.marcatori.filter((m) => m.classi.includes('pin ')) }))
+const dist0 = Math.hypot(DLIV[0].io.x - DC[0], DLIV[0].io.y - DC[1])
+DLIV.forEach((l) => { l.dz = Math.log2(Math.hypot(l.io.x - DC[0], l.io.y - DC[1]) / dist0) })
+const burcei = M.segnalazioni.filter((s) => s.tipo === 'fuoco').reduce((a, b) => (b.lon > a.lon ? b : a))
+const burceiPin = DLIV[0].pin.filter((m) => m.classi.includes('pin-fuoco')).reduce((a, b) => (b.x > a.x ? b : a))
+const KX = (burceiPin.x - DLIV[0].io.x) / (burcei.lon - M.io.lon)
+const geoD0 = (lat, lon) => [DLIV[0].io.x + (lon - M.io.lon) * KX, DLIV[0].io.y - (merc(lat) - merc(M.io.lat)) * KX * GRADI]
+const CASA0 = geoD0(M.casa.lat, M.casa.lon)
+const FUOCO0 = geoD0(bers.lat, bers.lon)
+
+// mappa B: MapLibre usa tessere da 512 px, zoom 16 - k (k = 0..5) centrati sul cittadino; Cagliari come centrale operativa
+const PX16 = (512 * Math.pow(2, 16)) / 360
+const geoB16 = (lat, lon) => [(lon - M.io.lon) * PX16, -(merc(lat) - merc(M.io.lat)) * PX16 * GRADI]
+const CAGLIARI16 = geoB16(39.2238, 9.1217)
+
+// mappa D4 (dashboard dopo "Vedi sulla mappa"): zoom 12 sul capo del gruppo, centro spostato dal pannello a destra
+const D4 = M.d4
+const PXD4 = (512 * Math.pow(2, D4.zoom)) / 360
+const C_D4 = [D4.mappa.x + (D4.mappa.w - D4.padDestra) / 2, D4.mappa.y + D4.mappa.h / 2]
+const geoD4 = (lat, lon) => [C_D4[0] + (lon - D4.capo.lon) * PXD4, C_D4[1] - (merc(lat) - merc(D4.capo.lat)) * PXD4 * GRADI]
+const FUOCO_D4 = geoD4(bers.lat, bers.lon)
+// soccorsi: basi reali (GET /basi); la flotta simulata manda i 3 mezzi di terra piu' vicini a 50 km/h, gli elicotteri
+// vanno a 200 km/h. Minuti = distanza dalla base / velocita'. Nel film il viaggio e' compresso in tre secondi.
+const MEZZI = [
+  { f: 'terra', base: [39.24355, 9.15086], min: 9, parte: 36.0, arriva: 37.9 }, // Vigili del fuoco di Cagliari, 7,5 km
+  { f: 'eli', base: [39.00743, 9.00165], min: 11, parte: 36.1, arriva: 38.3 }, // Base elicotteri AIB Pula, 36,8 km
+  { f: 'terra', base: [39.2172, 9.11331], min: 14, parte: 36.25, arriva: 38.75 }, // Servizio territoriale CFVA di Cagliari, 11,7 km
+  { f: 'terra', base: [39.25495, 9.05651], min: 15, parte: 36.4, arriva: 39.0 }, // Vigili del fuoco di Elmas, 12,7 km
+].map((m) => ({ ...m, p0: geoD4(...m.base) }))
+
+// icone dei mezzi disegnate come nella dashboard (frontend/app/composables/useMappa.ts: sagoma, dettagli, colori)
+function iconaMezzo(f, colore) {
+  const L = 44, pr = 3, c = L / 2
+  const cv = document.createElement('canvas'); cv.width = L * pr; cv.height = L * pr
+  const ctx = cv.getContext('2d'); ctx.scale(pr, pr); ctx.lineJoin = 'round'; ctx.lineCap = 'round'
+  const n = parseInt(colore.slice(1), 16), rgb = [n >> 16, (n >> 8) & 255, n & 255]
+  const alfa = (a) => `rgba(${rgb.join(',')},${a})`
+  const chiaro = `rgb(${rgb.map((v) => Math.round(v + (255 - v) * 0.4)).join(',')})`
+  if (f === 'eli') { ctx.beginPath(); ctx.arc(c, c - 3, 16, 0, Math.PI * 2); ctx.fillStyle = alfa(0.14); ctx.fill(); ctx.strokeStyle = alfa(0.75); ctx.lineWidth = 1; ctx.stroke() }
+  ctx.beginPath()
+  if (f === 'terra') ctx.roundRect(c - 6, c - 13, 12, 26, [4.5, 4.5, 2.5, 2.5])
+  else { ctx.ellipse(c, c - 3, 5.2, 8.5, 0, 0, Math.PI * 2); ctx.roundRect(c - 1.5, c + 3, 3, 14, 1.5); ctx.roundRect(c - 4.8, c + 14, 9.6, 2.8, 1.4) }
+  ctx.save(); ctx.shadowColor = alfa(0.6); ctx.shadowBlur = 6; ctx.fillStyle = colore; ctx.fill(); ctx.restore()
+  const g = ctx.createLinearGradient(0, c - 16, 0, c + 16); g.addColorStop(0, chiaro); g.addColorStop(1, colore)
+  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.stroke()
+  ctx.fillStyle = 'rgba(10,13,19,.55)'
+  if (f === 'terra') { ctx.beginPath(); ctx.roundRect(c - 4.4, c - 10.5, 8.8, 3, 1.3); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.roundRect(c - 3.4, c - 4, 6.8, 14, 2.6); ctx.fill() }
+  else { ctx.beginPath(); ctx.ellipse(c, c - 7, 3, 3, 0, Math.PI, Math.PI * 2); ctx.fill() }
+  return cv.toDataURL()
+}
+const ICONA_MEZZO = { terra: iconaMezzo('terra', '#3BA7FF'), eli: iconaMezzo('eli', '#3BA7FF'), terraPosto: iconaMezzo('terra', '#FF6A3D'), eliPosto: iconaMezzo('eli', '#FF6A3D') }
+MEZZI.forEach((m) => {
+  m.img = document.createElement('img'); m.img.className = 'mezzo'; m.img.src = ICONA_MEZZO[m.f]
+  m.chip = document.createElement('div'); m.chip.className = 'vetro scuro mini'
+  m.scia = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+  m.scia.setAttribute('stroke', m.f === 'eli' ? 'rgba(59,167,255,.55)' : 'rgba(59,167,255,.75)')
+  m.scia.setAttribute('stroke-width', '3'); m.scia.setAttribute('stroke-linecap', 'round'); m.scia.setAttribute('stroke-dasharray', m.f === 'eli' ? '2 10' : '10 8')
+  $('flotta').append(m.img, m.chip); $('scieD').appendChild(m.scia)
+})
+
+const ICONE = {
+  fuoco: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  fumo: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  casa: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+}
+function creaPin(tipo, conteggio, etichetta) {
+  const el = document.createElement('div')
+  el.className = `pin pin-${tipo}`
+  el.innerHTML = `${tipo === 'fuoco' ? '<span class="onda"></span>' : ''}<svg viewBox="0 0 24 24">${ICONE[tipo]}</svg>` +
+    (conteggio ? `<span class="pin-conteggio">${conteggio}</span>` : '') + (etichetta ? `<span class="pin-etichetta">${etichetta}</span>` : '')
+  $('dPin').appendChild(el)
+  return el
+}
+DLIV.forEach((l) => { l.el = l.pin.map((m) => creaPin(m.classi.includes('pin-fumo') ? 'fumo' : 'fuoco', m.conteggio)) })
+const ioEl = document.createElement('div')
+ioEl.className = 'io'
+ioEl.innerHTML = `<div class="io-cono" style="transform:rotate(${M.dir}deg)"></div><div class="io-punto"></div>`
+$('dPin').appendChild(ioEl)
+const casaEl = creaPin('casa', null, 'Casa')
+
+// ---------------------------------------------------------------- apertura: video, dato, domanda
+const CIFRE = [1, null, 3, 0, 0]
+const COL = 'display:inline-block;height:1em;line-height:1em;overflow:hidden;vertical-align:top;font-variant-numeric:tabular-nums'
+$('contatore').innerHTML = CIFRE.map((c) => c === null ? `<span style="${COL}">.</span>`
+  : `<span style="${COL}"><span class="nastro" style="display:block">${[...Array(20)].map((_, i) => `<span style="display:block;height:1em;line-height:1em">${i % 10}</span>`).join('')}</span></span>`).join('')
+const nastri = [...document.querySelectorAll('#contatore .nastro')]
+const VIDEO_FINE = 6.3
+const introCtx = $('introC').getContext('2d')
+async function introVideo(t) {
+  // in resa il fotogramma del video si cerca e si disegna sulla tela; in anteprima il video scorre da solo
+  if (!RESA || t >= VIDEO_FINE) return
+  const v = $('introV'), bersaglio = Math.min(t, 7.1)
+  if (v.readyState < 2 || Math.abs(v.currentTime - bersaglio) > 0.004) {
+    await new Promise((ok) => { v.addEventListener('seeked', ok, { once: true }); v.currentTime = bersaglio })
+  }
+  introCtx.drawImage(v, 0, 0, 1920, 1080)
+}
+function apertura(t) {
+  const c = RESA ? $('introC') : $('introV')
+  vis($('introC'), RESA && t < VIDEO_FINE); vis($('introV'), !RESA && t < VIDEO_FINE)
+  const sciolto = liscio(fase(t, T.sciogli, VIDEO_FINE - T.sciogli))
+  if (t < VIDEO_FINE) { c.style.transform = `scale(${(1 + 0.012 * t).toFixed(4)})`; op(c, 1 - sciolto) }
+  vis($('scrimI'), t < VIDEO_FINE); op($('scrimI'), fase(t, 1.1, 0.5) * (1 - sciolto))
+  // solo l'inizio arriva dal nero; la fine resta sul quadro finale
+  vis($('nero'), t < 0.5); op($('nero'), 1 - fase(t, 0, 0.45))
+
+  if (!vis($('hook'), t < T.tuffo + 0.14)) return
+  const tuffo = fase(t, T.tuffo, 0.12)
+  const zoom = 1 + Math.max(0, t - T.minuto) * 0.01
+  const [qx, qy] = SLOT_DOMANDA
+  const k = Math.pow(26, dentroExpo(tuffo) * 0.9 + tuffo * 0.1)
+  $('hook').style.transform = `translate(${qx}px, ${qy}px) scale(${(zoom * k).toFixed(4)}) translate(${-qx}px, ${-qy}px)`
+  op($('hook'), 1 - fase(t, T.tuffo + 0.04, 0.06))
+
+  riga($('h1a'), t, T.stat, T.esceStat)
+  riga($('h1b'), t, T.numero, T.esceStat)
+  const parola = $('h1bParola')
+  parola.parentElement.style.opacity = t >= T.parola - 0.02 ? 1 : 0
+  parola.style.transform = `translateY(${t < T.parola ? 112 : ((1 - molla(t - T.parola, 2.1, 0.86)) * 112 - 112 * entrambi3(fase(t, T.esceStat + 0.03, 0.26))).toFixed(2)}%)`
+  riga($('h1c'), t, T.fonte, T.esceStat)
+  const kr = fuori3(fase(t, T.numero, 0.85))
+  const finali = [1, 3, 0, 0], giri = [1, 2, 3, 4]
+  nastri.forEach((n, i) => { n.style.transform = `translateY(${(-(((finali[i] + 10 * giri[i]) * kr) % 10)).toFixed(3)}em)` })
+
+  const h2a = $('h2a')
+  if (vis(h2a, t >= T.minuto - 0.01)) {
+    const st = tracce(t, [[T.minuto, { y: 470, s: 1 }], [T.domanda, { y: 318, s: 0.46 }, { f: 1.9, z: 0.86 }]])
+    h2a.style.transform = `translate(${960 - (H2A_W * st.s) / 2}px, ${st.y - 75 * st.s}px) scale(${st.s})`
+    riga(h2a, t, T.minuto)
+    h2a.style.color = `rgba(255,255,255,${lerp(1, 0.62, fase(t, T.domanda, 0.3)).toFixed(3)})`
+  }
+  riga($('h2b'), t, T.domanda)
+  $('h2b2').style.transform = t < T.primo ? 'translateY(112%)' : `translateY(${((1 - molla(t - T.primo, 2.1, 0.86)) * 112).toFixed(2)}%)`
+}
+
+// ---------------------------------------------------------------- telefono
+const kTel = [
+  [T.tuffo, { x: 1300, y: 560, s: 1.22, ry: -2 }, { salto: true }],
+  [T.tuffo, { x: 1255, y: 545, s: 1.0 }, { f: 1.5, z: 0.9 }],
+  [T.tuffo + 0.65, { ry: -10 }, { f: 0.8, z: 0.95 }],
+  [T.versoInvia, { y: 452, s: 1.12, ry: -7 }, { f: 1.5, z: 0.9 }],
+  [T.inviata, { y: 545, s: 1.0, ry: -10 }, { f: 1.6, z: 0.9 }],
+  [T.stacco, { x: 2380, y: 600, s: 0.92, ry: -34 }, { f: 1.1, z: 0.95 }],
+  [T.displayEntra + 0.4, { x: 2350, y: 630, s: 0.62, ry: -22 }, { salto: true }],
+  [T.displayEntra + 0.42, { x: 1650, y: 630, s: 0.62, ry: -14 }, { f: 1.25, z: 0.9 }],
+  [T.validazione - 0.05, { x: 2250 }, { f: 1.1, z: 0.95 }],
+  [T.indietro, { x: 1585, y: 600, s: 0.74, ry: -12 }, { f: 1.3, z: 0.9 }],
+  [T.tilt, { x: 2300 }, { f: 1.1, z: 0.95 }],
+  [T.lineaB - 0.45, { x: 1585 }, { f: 1.4, z: 0.9 }],
+  [T.eroe, { x: 1190, y: 545, s: 1.02, ry: -6 }, { f: 1.2, z: 0.9 }],
+  [T.D, { x: 1250, s: 1.05, ry: 7 }, { f: 0.8, z: 0.95 }],
+  [T.via, { x: 960, y: 562, s: 0.3, ry: 0 }, { f: 1.5, z: 0.92 }],
+]
+let mT = null, sT = 1
+function statoTel(t) { const k = tracce(t, kTel); return { s: k.s, m: matrice({ x: k.x, y: k.y, s: k.s, ry: k.ry, w: TEL.w, h: TEL.h }) } }
+function telefono(t) {
+  if (!vis($('telefono'), (t >= T.tuffo + 0.11 && t < T.atterra - 0.05) || (t >= T.displayEntra + 0.4 && t < T.pinLibero + 0.35))) { mT = null; return }
+  const st = statoTel(t)
+  sT = st.s; mT = st.m
+  $('telefono').style.transform = mT.toString()
+  op($('telefono'), 1 - fase(t, T.pinLibero, 0.3))
+}
+const puntoTel = (u, v, m = mT) => (m ? proietta(m, WEB.x + u, WEB.y + v) : [0, 0])
+
+const LIV_T = ['a1', 'a2', 'a3a', 'a3b', 'a4', 'a5v', 'a5a', 'a5m', 'a6'].map($)
+function tocco(t, t0, x, y) {
+  const d = t - t0
+  if (d < -0.12 || d > 0.5) return false
+  const k = clamp((d + 0.12) / 0.12)
+  vis($('tocco'), true); vis($('ondaTocco'), d > 0)
+  tr($('tocco'), x, y, d < 0 ? lerp(1.25, 0.82, k) : lerp(0.82, 1, fuori3(clamp(d / 0.2))))
+  op($('tocco'), d < 0 ? k : 1 - fase(d, 0.18, 0.25))
+  if (d > 0) { tr($('ondaTocco'), x, y, 1 + fuori3(clamp(d / 0.45)) * 1.4); op($('ondaTocco'), 0.9 * (1 - clamp(d / 0.45))) }
+  return true
+}
+function premi(t, t0, r) {
+  const d = t - t0
+  if (d < 0 || d > 0.22) return false
+  vis($('premiT'), true); rett($('premiT'), r)
+  op($('premiT'), 1 - d / 0.22)
+  return true
+}
+function schermoTelefono(t) {
+  if (!mT) return
+  const base = t < T.scatto ? 'a1' : t < T.tipo ? 'a2' : t < T.nota + 0.45 ? 'a3a' : t < T.inviata ? 'a3b' : t < T.atterra ? 'a4'
+    : t < T.allertati ? 'a5v' : t < T.mezzi ? 'a5a' : t < T.giu ? 'a5m' : t < T.D ? 'a6' : 'd'
+  LIV_T.forEach((el) => vis(el, el.id === base))
+  // push iOS verso "Segnalazione inviata"
+  const push = t >= T.inviata && t < T.inviata + 0.6
+  vis($('a3b'), base === 'a3b' || push); vis($('a4buio'), push)
+  if (push || base === 'a4') {
+    const k = molla(t - T.inviata, 2.1, 0.92)
+    tr($('a4'), 393 * (1 - k), 0); tr($('a3b'), -118 * k, 0); op($('a4buio'), 0.18 * k)
+  } else { $('a3b').style.transform = ''; $('a4').style.transform = '' }
+
+  const t1 = tocco(t, T.toccoSegnala, ...mezzo(A1.segnala)) || tocco(t, T.tipo, ...mezzo(A2.tessere[0])) || tocco(t, T.toccoInvia, ...mezzo(A3.invia)) || tocco(t, T.toccoBanner, ...mezzo(M.d.banner))
+  if (!t1) { vis($('tocco'), false); vis($('ondaTocco'), false) }
+  if (!premi(t, T.toccoSegnala, A1.segnala) && !premi(t, T.toccoInvia, A3.invia)) vis($('premiT'), false)
+
+  // scatto: la foto riempie lo schermo e poi entra nel suo riquadro
+  const foto = $('fotoScatto')
+  if (vis(foto, t >= T.scatto - 0.02 && t < T.riquadro + 0.42)) {
+    const s0 = A1.segnala, sf = { x: 0, y: 0, w: 393, h: 793 }, sl = A2.foto
+    let r
+    if (t < T.riquadro) { const k = molla(t - T.scatto, 2.4, 0.86); r = { x: lerp(s0.x, sf.x, k), y: lerp(s0.y, sf.y, k), w: lerp(s0.w, sf.w, k), h: lerp(s0.h, sf.h, k), rr: lerp(24, 0, k) } }
+    else { const k = molla(t - T.riquadro, 2.2, 0.9); r = { x: lerp(sf.x, sl.x, k), y: lerp(sf.y, sl.y, k), w: lerp(sf.w, sl.w, k), h: lerp(sf.h, sl.h, k), rr: lerp(0, 19, k) } }
+    rett(foto, r); foto.style.borderRadius = r.rr + 'px'
+    op(foto, 1 - fase(t, T.riquadro + 0.3, 0.12))
+  }
+  // nota dettata lettera per lettera
+  const nota = $('notaTaglio')
+  if (vis(nota, t >= T.nota && t < T.nota + 0.45)) {
+    taglioDa(nota, 'schermate/a3b-nota.png', A3.testo)
+    const k = Math.floor(fase(t, T.nota + 0.05, 0.36) * 20) / 20
+    nota.style.clipPath = `inset(0 ${(100 - k * 100).toFixed(1)}% 0 0)`
+  }
+  const mic = $('anelloMic')
+  if (vis(mic, t >= T.nota && t < T.nota + 0.7)) {
+    const [mx, my] = mezzo(A2.microfono)
+    tr(mic, mx - 20.65, my - 20.65, 1 + 0.25 * Math.abs(Math.sin((t - T.nota) * 9)))
+    op(mic, 1 - fase(t, T.nota + 0.5, 0.2))
+  }
+  // stato ufficiale che si accende
+  const pop = $('etichettaPop')
+  if (vis(pop, (t >= T.allertati && t < T.allertati + 1) || (t >= T.mezzi && t < T.mezzi + 1.2))) {
+    const nome = t >= T.mezzi ? 'mezzi' : 'allertati', tp = t >= T.mezzi ? T.mezzi : T.allertati
+    const r = A5[nome].stato
+    taglioDa(pop, `schermate/a5-${nome}.png`, r)
+    pop.style.transformOrigin = `${r.w / 2}px ${r.h / 2}px`
+    pop.style.transform = `scale(${sp(t, tp, 1.28, 1, 2.6, 0.5).toFixed(4)})`
+    pop.style.borderRadius = '999px'
+    const kk = fuori3(fase(t, tp, 0.6))
+    pop.style.boxShadow = `0 0 0 ${(3 + 10 * kk).toFixed(1)}px ${nome === 'mezzi' ? 'rgba(23,112,74,' : 'rgba(31,85,196,'}${(0.35 * (1 - kk)).toFixed(3)})`
+  }
+  // foglio della scheda che scende (C -> D) e foglio degli avvisi che sale (D)
+  const velo = $('velo'), foglio = $('foglio')
+  const giu = t >= T.giu && t < T.D + 0.2
+  const avvisi = t >= T.avvisi && t < T.via + 0.35
+  vis(velo, giu || avvisi); vis(foglio, giu || avvisi)
+  if (giu) {
+    const k = molla(t - T.giu, 2.3, 0.95)
+    op(velo, 1 - k); taglioDa(foglio, 'schermate/a5-mezzi.png', A5.mezzi.foglio)
+    foglio.style.transform = `translateY(${(A5.mezzi.foglio.h * k).toFixed(2)}px)`
+  } else if (avvisi) {
+    const k = molla(t - T.avvisi, 2.2, 0.92) - molla(t - T.via, 2.6, 1)
+    op(velo, k); taglioDa(foglio, 'schermate/a7-avvisi.png', A7.foglio)
+    foglio.style.transform = `translateY(${(A7.foglio.h * (1 - k)).toFixed(2)}px)`
+  }
+  // righe degli avvisi che si sollevano
+  const sol = $('sollevata')
+  if (vis(sol, avvisi && t >= T.riga1 && t < T.via)) {
+    taglioDa(sol, 'schermate/a7-avvisi.png', A7.righe[t < T.riga2 ? 0 : 2])
+    const s = sp(t, t < T.riga2 ? T.riga1 : T.riga2, 1, 1.045, 2.4, 0.7)
+    sol.style.transformOrigin = '50% 50%'
+    sol.style.transform = `scale(${s.toFixed(4)})`
+    sol.style.borderRadius = '14px'
+    sol.style.boxShadow = `0 ${(14 * (s - 1) / 0.045).toFixed(1)}px 34px rgba(20,24,31,${(0.28 * (s - 1) / 0.045).toFixed(3)})`
+  }
+  scenaD(t, base === 'd')
+}
+
+// ---------------------------------------------------------------- D: mappa del telefono, Casa, zoom indietro
+function zoomD(t) { return 2.2 * molla(t - T.zoomD, 0.7, 1) + 0.8 * molla(t - T.via, 1.1, 1) }
+const STATO_D = {}
+function scalaD(p, k, q) { const c = [DMAP.w / 2, DMAP.h / 2], s = Math.pow(2, -DLIV[k].dz - q); return [c[0] + (p.x - DMAP.x - c[0]) * s, c[1] + (p.y - DMAP.y - c[1]) * s] }
+function gruppoD(t) {
+  const q = zoomD(t), kb = Math.min(3, Math.floor(q) + (q % 1 > 0.5 ? 1 : 0))
+  const g = DLIV[kb].pin.find((p) => p.conteggio && p.classi.includes('pin-fuoco')) ?? DLIV[kb].pin.find((p) => p.classi.includes('pin-fuoco'))
+  return scalaD(g, kb, q)
+}
+function scenaD(t, on) {
+  if (!vis($('dComp'), on)) return
+  rett($('dMappa'), DMAP)
+  const q = zoomD(t), c = [DMAP.w / 2, DMAP.h / 2]
+  const kc = Math.min(3, Math.ceil(q - 1e-6)), kf = Math.floor(q + 1e-6)
+  for (let k = 0; k < 4; k++) {
+    const el = $('dm' + k)
+    if (!vis(el, k === kc || k === kf || (k === Math.min(3, kc + 1) && q > 0))) continue
+    const s = Math.pow(2, -DLIV[k].dz - q)
+    el.style.width = DMAP.w + 'px'; el.style.height = DMAP.h + 'px'
+    tr(el, c[0] - c[0] * s, c[1] - c[1] * s, s)
+    el.style.zIndex = String(10 - k)
+    el.classList.toggle('sfuma', k === kf && kf !== kc)
+    op(el, k === kf && kf !== kc ? 1 - liscio(clamp((q - kf - 0.35) / 0.5)) : 1)
+  }
+  const ka = Math.min(3, Math.floor(q)), kb = Math.min(3, ka + 1)
+  const w = ka === kb ? 0 : liscio(clamp((q - ka - 0.3) / 0.4))
+  const pulsa = (el) => { const o = el.querySelector('.onda'); if (o) { const d = ((t - 0.25) % 1 + 1) % 1; o.style.transform = `scale(${(1 + 1.1 * fuori3(d)).toFixed(3)})`; o.style.opacity = (0.45 * (1 - d)).toFixed(3) } }
+  DLIV.forEach((l, k) => l.el.forEach((el, i) => {
+    if (!vis(el, (k === ka && w < 0.5) || (k === kb && w >= 0.5))) return
+    let [x, y] = scalaD(l.pin[i], k, q)
+    if (k === ka && kb !== ka) {
+      const dest = DLIV[kb].pin.map((p) => scalaD(p, kb, q)).reduce((a, b) => (Math.hypot(b[0] - x, b[1] - y) < Math.hypot(a[0] - x, a[1] - y) ? b : a))
+      const m = liscio(clamp(w * 2)); x = lerp(x, dest[0], m); y = lerp(y, dest[1], m)
+    }
+    const pop = k === kb && w >= 0.5 ? sp(q, ka + 0.5, 1.25, 1, 3, 0.6) : 1
+    el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${pop.toFixed(3)})`
+    pulsa(el)
+  }))
+  const sIo = Math.pow(2, -q), io0 = DLIV[0].io
+  ioEl.style.transform = `translate(${(c[0] + (io0.x - DMAP.x - c[0]) * sIo).toFixed(2)}px, ${(c[1] + (io0.y - DMAP.y - c[1]) * sIo).toFixed(2)}px)`
+  const casa = [c[0] + (CASA0[0] - DMAP.x - c[0]) * sIo, c[1] + (CASA0[1] - DMAP.y - c[1]) * sIo]
+  const fuoco = [c[0] + (FUOCO0[0] - DMAP.x - c[0]) * sIo, c[1] + (FUOCO0[1] - DMAP.y - c[1]) * sIo]
+  const via = fase(t, T.zoomD - 0.1, 0.3)
+  if (vis(casaEl, t >= T.casa && via < 1)) casaEl.style.transform = `translate(${casa[0].toFixed(2)}px, ${casa[1].toFixed(2)}px) scale(${(sp(t, T.casa, 0, 1, 2.6, 0.55) * (1 - via)).toFixed(3)})`
+  const lin = $('dLineaL')
+  if (vis($('dLinea'), t >= T.casa + 0.15 && via < 1)) {
+    const k = fuori3(fase(t, T.casa + 0.15, 0.4))
+    lin.setAttribute('x1', casa[0]); lin.setAttribute('y1', casa[1] - 8)
+    lin.setAttribute('x2', lerp(casa[0], fuoco[0], k)); lin.setAttribute('y2', lerp(casa[1] - 8, fuoco[1], k))
+    op($('dLinea'), 1 - via)
+  }
+  const b = $('dBanner')
+  if (vis(b, t >= T.D && t < T.D + 1.4)) {
+    const r = M.d.banner, k = fase(t, T.D, 1.3)
+    rett(b, { x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 })
+    b.style.transformOrigin = '50% 50%'
+    b.style.transform = `scale(${sp(t, T.D, 1.08, 1, 2.4, 0.6).toFixed(4)})`
+    op(b, k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3)
+  }
+  STATO_D.casa = casa; STATO_D.fuoco = fuoco; STATO_D.via = via
+}
+
+// ---------------------------------------------------------------- B: la segnalazione viaggia verso la centrale
+const zoomB = (t) => (t < T.atterra ? -0.75 * (1 - molla(t - (T.mappaEntra + 0.04), 1.3, 0.95)) : 4.0 * entrambi3(fase(t, T.atterra + 0.45, 6.0)))
+const fuocoB = (t) => 0.62 * entrambi3(fase(t, T.atterra + 0.6, 6.0))
+const percorsoB = (t) => entrambi3(fase(t, T.viaggio, 5.8))
+let BSTATO = { s: 1 }
+function statoB(t) {
+  const q = zoomB(t), f = fuocoB(t)
+  const rx = 62 * (1 - molla(t - (T.mappaEntra + 0.04), 1.25, 0.95))
+  const s = sp(t, T.mappaEntra + 0.04, 1.2, 1, 1.25, 0.95) * sp(t, T.displayEntra, 1, 0.9, 1.1, 0.95)
+  return { q, F16: [CAGLIARI16[0] * f, CAGLIARI16[1] * f], scala16: Math.pow(2, -q), s, m: matrice({ x: 960, y: 540, s, rx, w: 1920, h: 1080, p: 1600 }) }
+}
+function puntoPercorso(u) {
+  const a = [0, 0], b = CAGLIARI16
+  return bezier(a, [(a[0] + b[0]) / 2 + (b[1] - a[1]) * 0.22, (a[1] + b[1]) / 2 - (b[0] - a[0]) * 0.22], b, u)
+}
+// coordinate a zoom 16 (dal cittadino) -> piano della mappa -> schermo
+const pianoB = (p16, st = BSTATO) => [960 + (p16[0] - st.F16[0]) * st.scala16, 540 + (p16[1] - st.F16[1]) * st.scala16]
+const schermoB = (p16, st = BSTATO) => proietta(st.m, ...pianoB(p16, st))
+function mappaB(t) {
+  if (!vis($('mappaB'), t >= T.mappaEntra && t < T.displayEntra + 1.8)) { vis($('vDest'), false); return }
+  BSTATO = statoB(t)
+  const { q, F16, scala16, m } = BSTATO
+  $('mappaB').style.transform = m.toString()
+  op($('mappaB'), fase(t, T.mappaEntra, 0.22) * (1 - fase(t, T.displayEntra + 1.4, 0.4)))
+  op($('buioB'), 0.72 * fuori3(fase(t, T.displayEntra, 0.6)))
+  op($('scrimB'), fase(t, T.atterra - 0.1, 0.4))
+  const kf = Math.floor(q + 1e-6), kc = Math.ceil(q - 1e-6)
+  for (let k = 0; k < 6; k++) {
+    const el = $('b' + k)
+    if (!vis(el, k === kc || k === kf || k === Math.min(5, kc + 1))) continue
+    const s = Math.pow(2, k - q)
+    tr(el, 960 - F16[0] * scala16 - 960 * s, 540 - F16[1] * scala16 - 540 * s, s)
+    el.style.zIndex = String(10 - k)
+    el.classList.toggle('sfuma', k === kf && kf !== kc)
+    op(el, k === kf && kf !== kc ? 1 - liscio(clamp((q - kf - 0.3) / 0.55)) : 1)
+  }
+  // scia del viaggio, nel piano della mappa
+  const u = percorsoB(t), loc = []
+  for (let i = 0; i <= 48; i++) loc.push(pianoB(puntoPercorso((i / 48) * u)))
+  $('scia').setAttribute('d', u > 0.005 ? 'M' + loc.map((p) => p.map((v) => v.toFixed(1)).join(' ')).join(' L') : '')
+  const destLoc = pianoB(CAGLIARI16), dest = proietta(m, ...destLoc)
+  const inQuadro = dest[0] > 80 && dest[0] < 1840 && dest[1] > 80 && dest[1] < 1000
+  const tDest = T.viaggio + 3.6
+  if (vis($('meta-dest'), t >= tDest && inQuadro)) tr($('meta-dest'), destLoc[0], destLoc[1], sp(t, tDest, 0, 1, 2.5, 0.6))
+  vetro($('vDest'), dest[0] - VDEST_W - 26, dest[1] - 27, sp(t, tDest + 0.1, 0.85, 1, 2.4, 0.7), (inQuadro ? fase(t, tDest + 0.1, 0.2) : 0) * (1 - fase(t, T.displayEntra + 0.1, 0.25)))
+}
+
+// ---------------------------------------------------------------- C: dashboard
+const kDis = [
+  [T.displayEntra - 0.05, { x: -980, y: 560, s: 0.64, rx: 0, ry: 38, fx: 960, fy: 540 }, { salto: true }],
+  [T.displayEntra, { x: 820, y: 590, ry: 7 }, { f: 1.35, z: 0.9 }],
+  [T.validazione, { x: 960, y: 540, s: 1.12, ry: 1.5, fx: 1290, fy: 470 }, { f: 1.1, z: 0.95 }],
+  [T.versoCert, { s: 1.0, fx: 1170, fy: 625 }, { f: 1.1, z: 0.95 }],
+  [T.indietro, { x: 700, y: 560, s: 0.6, ry: 6, fx: 960, fy: 540 }, { f: 1.2, z: 0.95 }],
+  [T.tilt, { x: 900, y: 610, s: 1.3, rx: 40, ry: 0, fx: 660, fy: 790 }, { f: 0.9, z: 0.95 }],
+  [T.lineaB - 0.25, { x: 420, y: 560, s: 0.52, rx: 0, ry: 16, fx: 960, fy: 540 }, { f: 1.2, z: 0.95 }],
+  [T.lineaB + 0.35, { x: -1300 }, { f: 1.0, z: 0.95 }],
+]
+let mD = null
+function statoDis(t) {
+  const k = tracce(t, kDis)
+  const m = new DOMMatrix().translateSelf(k.x, k.y).multiplySelf(PERSP(2600))
+  m.rotateAxisAngleSelf(0, 1, 0, k.ry)
+  if (Math.abs(k.rx) > 0.01) m.rotateAxisAngleSelf(1, 0, 0, k.rx)
+  return m.scaleSelf(k.s, k.s).translateSelf(-(16 + k.fx), -(16 + k.fy))
+}
+const puntoDis = (u, v, m = mD) => (m ? proietta(m, 16 + u, 16 + v) : [0, 0])
+function display(t) {
+  if (!vis($('display'), t >= T.displayEntra - 0.05 && t < T.eroe + 0.3)) { mD = null; return }
+  mD = statoDis(t)
+  $('display').style.transform = mD.toString()
+  op($('buioD'), 0.55 * fuori3(fase(t, T.lineaB - 0.2, 0.5)))
+  const d2 = 'schermate/d2-segnalazioni.jpg'
+  // D1 -> D2: barra comune ferma, contenuto che scorre
+  const kv = molla(t - T.clicScheda, 2.2, 0.95)
+  const conD2 = t >= T.clicScheda && t < T.vedi + 0.5
+  if (vis($('d2barra'), conD2)) taglioDa($('d2barra'), d2, { x: 0, y: 0, w: 1920, h: 56 }, 1920, 1080)
+  if (vis($('d2corpo'), conD2)) { taglioDa($('d2corpo'), d2, { x: 0, y: 56, w: 1920, h: 1024 }, 1920, 1080); $('d2corpo').style.transform = `translateX(${(1920 * (1 - kv)).toFixed(1)}px)` }
+  if (vis($('d1'), t < T.clicScheda + 0.8)) $('d1').style.transform = t >= T.clicScheda ? `translateX(${(-560 * kv).toFixed(1)}px)` : ''
+  // notifica: il contatore della scheda Segnalazioni sale da 2 a 3 quando arriva la segnalazione
+  const bd = $('badgeD'), b = M.d1.badge, bs = M.d1.badgeStile
+  if (vis(bd, t < T.clicScheda)) {
+    rett(bd, b)
+    Object.assign(bd.style, { background: bs.bg, color: bs.col, fontSize: bs.fs, fontWeight: bs.fw, borderRadius: bs.r, lineHeight: b.h + 'px' })
+    $('badgeN').style.transform = `translateY(${(-b.h * molla(t - T.notifica, 2.6, 0.75)).toFixed(2)}px)`
+    bd.style.transformOrigin = '50% 50%'
+    bd.style.scale = sp(t, T.notifica, 1.5, 1, 2.6, 0.5).toFixed(4)
+  }
+  const bo = $('badgeOnda')
+  if (impulso(bo, t, T.notifica, 0.8, 2.2, 0.9)) rett(bo, { x: b.x - 2, y: b.y - (b.w - b.h) / 2 - 2, w: b.w + 4, h: b.w + 4 })
+  else vis(bo, false)
+  // coda: Capoterra e Burcei, poi arriva Settimo San Pietro in cima
+  const passo = D2.coda[1].y - D2.coda[0].y
+  const codaOn = t >= T.clicScheda && t < T.indietro
+  if (vis($('codaFondo'), codaOn)) {
+    taglioDa($('codaFondo'), d2, { x: D2.coda[0].x, y: 420, w: D2.coda[0].w, h: 3 * passo + 10 }, 1920, 1080)
+    $('codaFondo').style.top = (D2.coda[0].y - 4) + 'px'
+    $('codaFondo').style.transform = `translateX(${(1920 * (1 - kv)).toFixed(1)}px)`
+  }
+  ;[0, 1, 2].forEach((i) => {
+    const el = $('rc' + i)
+    if (!vis(el, codaOn && (i > 0 || t >= T.coda))) return
+    taglioDa(el, d2, D2.coda[i], 1920, 1080)
+    const kk = molla(t - T.coda, 2.3, 0.78)
+    const slot = i === 0 ? 0 : lerp(i - 1, i, kk)
+    el.style.transformOrigin = '50% 50%'
+    el.style.transform = `translate(${(1920 * (1 - kv)).toFixed(1)}px, ${(D2.coda[0].y + slot * passo - D2.coda[i].y).toFixed(2)}px) scale(${(i === 0 ? sp(t, T.coda, 0.9, 1, 2.6, 0.6) : 1).toFixed(4)})`
+    op(el, i === 0 ? fase(t, T.coda, 0.12) : 1)
+    el.style.borderRadius = '10px'
+    el.style.boxShadow = i === 0 ? `0 0 0 ${(2 + 8 * fuori3(fase(t, T.coda, 1.2))).toFixed(1)}px rgba(255,106,61,${(0.6 * (1 - fase(t, T.coda, 1.2))).toFixed(3)})` : 'none'
+  })
+  const ev = (el, r, t0) => {
+    if (!vis(el, t >= t0 && t < T.indietro)) return
+    rett(el, { x: r.x - 6, y: r.y - 4, w: r.w + 12, h: r.h + 8 })
+    el.style.transform = `scale(${sp(t, t0, 1.06, 1, 2.6, 0.6).toFixed(4)})`
+    el.style.transformOrigin = '50% 50%'
+    op(el, fase(t, t0, 0.1) * (t > T.versoCert ? 1 - 0.6 * fase(t, T.versoCert, 0.3) : 1))
+  }
+  ev($('ev1'), D2.conferme, T.ev1); ev($('ev2'), D2.priorita, T.ev2)
+  // cursore: scheda Segnalazioni, Certifica incendio, Vedi sulla mappa
+  const cur = $('cursore')
+  if (vis(cur, t >= T.notifica + 0.5 && t < T.vedi + 0.35)) {
+    const tab = mezzo(M.d1.schedaSegnalazioni), cert = mezzo(D2.certifica), vedi = mezzo(M.d3.vedi)
+    const c = tracce(t, [[T.notifica + 0.5, { x: 1180, y: 760 }, { salto: true }], [T.notifica + 0.5, { x: tab[0], y: tab[1] }, { f: 1.9, z: 0.95 }],
+      [T.clicScheda + 0.25, { x: 980, y: 640 }, { f: 1.0, z: 1 }], [T.versoCert, { x: cert[0] + 30, y: cert[1] + 4 }, { f: 1.4, z: 0.95 }],
+      [T.allertati, { x: vedi[0] + 10, y: vedi[1] + 4 }, { f: 1.6, z: 0.95 }]])
+    const premuto = [T.clicScheda, T.certifica, T.vedi].some((x) => t >= x && t < x + 0.14)
+    tr(cur, c.x, c.y, premuto ? 0.86 : 1)
+    op(cur, 1 - fase(t, T.vedi + 0.15, 0.2))
+  }
+  const clicD = $('clicD')
+  const tc = t >= T.vedi ? T.vedi : t >= T.certifica ? T.certifica : T.clicScheda
+  const pc = tc === T.vedi ? mezzo(M.d3.vedi) : tc === T.certifica ? mezzo(D2.certifica) : mezzo(M.d1.schedaSegnalazioni)
+  if (vis(clicD, t >= T.clicScheda && t - tc < 0.45)) { const d = t - tc; tr(clicD, pc[0], pc[1], 0.5 + 1.2 * fuori3(d / 0.45)); op(clicD, 1 - d / 0.45) }
+  if (vis($('premi'), t >= T.certifica && t < T.certifica + 0.2)) {
+    taglioDa($('premi'), d2, D2.certifica, 1920, 1080)
+    $('premi').style.transformOrigin = '50% 50%'
+    $('premi').style.transform = `scale(${t < T.certifica + 0.1 ? 0.97 : 1})`
+    $('premi').style.filter = 'brightness(.85)'
+    $('premi').style.borderRadius = '12px'
+  }
+  const toast = $('toastD')
+  if (vis(toast, t >= T.certifica + 0.08 && t < T.vedi + 0.08)) {
+    taglioDa(toast, 'schermate/d3-certificato.jpg', M.d3.avviso, 1920, 1080)
+    toast.style.transform = `translateY(${(36 * (1 - molla(t - T.certifica - 0.08, 2.4, 0.85))).toFixed(2)}px)`
+    op(toast, fase(t, T.certifica + 0.08, 0.12))
+  }
+  // D4: la mappa vola sull'incendio; i mezzi partono dalle basi (anche da fuori quadro) e arrivano sul posto
+  const d4 = $('d4')
+  if (vis(d4, t >= T.vedi)) {
+    const s = lerp(0.35, 1, molla(t - T.vedi, 1.6, 0.92))
+    d4.style.transform = `translate(${(FUOCO_D4[0] * (1 - s)).toFixed(1)}px, ${(FUOCO_D4[1] * (1 - s)).toFixed(1)}px) scale(${s.toFixed(4)})`
+    d4.style.clipPath = `circle(${lerp(4, 150, fuori3(fase(t, T.vedi, 0.5))).toFixed(1)}% at ${FUOCO_D4[0]}px ${FUOCO_D4[1]}px)`
+  }
+  const anello = $('bersaglioD')
+  if (vis(anello, t >= T.tilt && t < T.eroe)) {
+    const d = ((t - T.tilt) % 1 + 1) % 1
+    tr(anello, FUOCO_D4[0], FUOCO_D4[1], 0.6 + 0.9 * fuori3(d)); op(anello, (1 - d) * fase(t, T.tilt, 0.2))
+  }
+  const baseD = $('baseD'), b1 = MEZZI[0].p0
+  if (impulso(baseD, t, T.partenza - 0.1, 0.8, 1.6, 0.95)) { baseD.style.left = b1[0] + 'px'; baseD.style.top = (b1[1] - 26) + 'px' } else vis(baseD, false)
+  MEZZI.forEach((m, i) => {
+    const on = t >= m.parte - 0.05 && t < T.eroe
+    vis(m.img, on); vis(m.chip, on); m.scia.style.display = on ? '' : 'none'
+    if (!on) return
+    const k = entrambi3(fase(t, m.parte, m.arriva - m.parte)), arrivato = k >= 1
+    const dx = FUOCO_D4[0] - m.p0[0], dy = FUOCO_D4[1] - m.p0[1]
+    // si fermano poco prima del centro, a ventaglio attorno all'incendio
+    const fermo = Math.min(0.94, 1 - 46 / Math.hypot(dx, dy))
+    const x = m.p0[0] + dx * k * fermo, y = m.p0[1] + dy * k * fermo
+    m.img.src = arrivato ? ICONA_MEZZO[m.f + 'Posto'] : ICONA_MEZZO[m.f]
+    m.img.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${((Math.atan2(dx, -dy) * 180) / Math.PI).toFixed(1)}deg) scale(${(arrivato ? sp(t, m.arriva, 1.35, 1, 3, 0.55) : 1).toFixed(3)})`
+    m.chip.textContent = arrivato ? 'Sul posto' : `${Math.max(1, Math.ceil(m.min * (1 - k)))} min`
+    m.chip.style.background = arrivato ? 'rgba(196,54,15,.92)' : ''
+    tr(m.chip, i % 2 ? x - 34 - m.chip.offsetWidth : x + 34, y - (i < 2 ? 56 : 8), 1)
+    op(m.chip, fase(t, m.parte + 0.15, 0.2))
+    m.scia.setAttribute('x1', m.p0[0]); m.scia.setAttribute('y1', m.p0[1]); m.scia.setAttribute('x2', x); m.scia.setAttribute('y2', y)
+  })
+}
+
+// ---------------------------------------------------------------- testi e vetri delle scene
+function testi(t) {
+  riga($('tA'), t, T.tre, T.inviata - 0.05)
+  riga($('tB1'), t, T.atterra + 0.05, T.displayEntra + 0.05)
+  riga($('tB2'), t, T.verificata, T.displayEntra + 0.08)
+  riga($('tC2'), t, T.displayEntra + 0.6, T.validazione - 0.12)
+  riga($('tC1'), t, T.notifica, T.validazione - 0.1)
+  riga($('tC4'), t, T.partenza + 0.2, T.lineaB - 0.3)
+  riga($('tC3a'), t, T.mezzi, T.D - 0.12)
+  riga($('tC3b'), t, T.mezzi + 0.08, T.D - 0.1)
+  riga($('tD1'), t, T.D + 0.05, T.via - 0.1)
+  riga($('tD2'), t, T.D + 0.13, T.via - 0.08)
+  riga($('tF0'), t, T.finale + 0.25, T.libera, 2.4, 0.86)
+  // "Visto prima." / "Spento prima" con il pin come punto finale; dopo tre secondi si allargano e svaniscono
+  ;[[$('tF1'), T.finale], [$('tF2'), T.spento]].forEach(([el, t0]) => {
+    if (!vis(el, t >= t0 - 0.01 && t < T.libera + 0.3)) return
+    el.style.transformOrigin = '960px 100px'
+    el.style.transform = `scale(${(sp(t, t0, 1.16, 1, 2.0, 0.62) * (1 + 0.07 * fuori3(fase(t, T.libera, 0.3)))).toFixed(4)})`
+    el.querySelector('.dentro').style.transform = `translateY(${((1 - molla(t - t0, 2.6, 0.8)) * 112).toFixed(2)}%)`
+    op(el, 1 - fase(t, T.libera, 0.22))
+  })
+}
+function vetri(t) {
+  const passi = [[$('v1'), T.scatto], [$('v2'), T.tipo], [$('v3'), T.versoInvia]]
+  passi.forEach(([el, t0], i) => {
+    const prossimo = passi[i + 1]?.[1] ?? 999
+    const o = fase(t, t0, 0.15) * (t >= prossimo ? 0.5 : 1) * (1 - fase(t, T.inviata - 0.05, 0.25))
+    vetro(el, sp(t, t0, 140, 172, 2.4, 0.8), 500 + i * 82, sp(t, t0, 0.9, 1, 2.6, 0.7), o)
+  })
+  if (mT) {
+    const [x, y] = puntoTel(20, 420)
+    vetro($('vPos'), x - 560, y - 31, sp(t, T.posizione, 0.88, 1, 2.4, 0.7), fase(t, T.posizione, 0.15) * (1 - fase(t, T.stacco + 0.1, 0.2)))
+  } else vis($('vPos'), false)
+  const pin = STATO_PIN
+  T.chip.forEach((t0, i) => {
+    const el = $('c' + i)
+    if (!pin.vis) { vis(el, false); return }
+    const raccolta = fuori3(fase(t, T.raccolta, 0.28))
+    const x = lerp(pin.x + pin.d * 0.62, pin.x, raccolta), y = lerp(pin.y - 136 + i * 66, pin.y, raccolta)
+    vetro(el, x, y - 27, sp(t, t0, 0.6, 1, 2.6, 0.62) * (1 - 0.6 * raccolta), fase(t, t0, 0.12) * (1 - raccolta))
+  })
+  $('c4n').textContent = Math.min(7, 1 + Math.floor(fase(t, T.chip[4], 0.7) * 6))
+  if (pin.vis && t >= T.raccolta && t < T.notifica) {
+    vetro($('cPri'), pin.x + pin.d * 0.62, pin.y - 27, sp(t, T.raccolta, 0.5, 1, 2.6, 0.55), fase(t, T.raccolta, 0.12) * (1 - fase(t, T.notifica - 0.35, 0.25)))
+  } else vis($('cPri'), false)
+  if (mD && t >= T.notifica && t < T.clicScheda + 0.4) {
+    const [x, y] = puntoDis(...mezzo(M.d1.badge))
+    vetro($('vNotifica'), x + 28, y + 26, sp(t, T.notifica + 0.1, 0.8, 1, 2.4, 0.7), fase(t, T.notifica + 0.1, 0.15) * (1 - fase(t, T.clicScheda + 0.1, 0.25)))
+  } else vis($('vNotifica'), false)
+  if (mT && STATO_D.casa) {
+    const m = [(STATO_D.casa[0] + STATO_D.fuoco[0]) / 2 + DMAP.x, (STATO_D.casa[1] + STATO_D.fuoco[1]) / 2 + DMAP.y]
+    const [x, y] = puntoTel(m[0] + 16, m[1] - 6)
+    vetro($('vKm'), x, y - 18 * sT, sT * sp(t, T.casa + 0.3, 0.7, 1, 2.6, 0.7), fase(t, T.casa + 0.3, 0.12) * (1 - (STATO_D.via ?? 0)))
+  } else vis($('vKm'), false)
+}
+
+// ---------------------------------------------------------------- pin conduttore
+const STATO_PIN = { vis: false, x: 0, y: 0, d: 0 }
+const ATTESA_PIN = [960, 900] // sotto le scritte del finale, finche' non diventa il punto
+let SLOT_DOMANDA = [1400, 600], SLOT_PUNTO = [1300, 600], H2A_W = 1300, PAROLA_W = 760, VDEST_W = 300
+function pinStato(t) {
+  if (t >= T.pinCade && t < T.tuffo + 0.12) { // cade al posto del "?" e poi la camera ci entra
+    const [qx, qy] = SLOT_DOMANDA, tuffo = fase(t, T.tuffo, 0.12)
+    return { x: qx, y: qy + sp(t, T.pinCade, -720, 0, 2.6, 0.5), d: 108 * Math.pow(30, dentroExpo(tuffo) * 0.9 + tuffo * 0.1), bordo: 1 - fase(t, T.tuffo, 0.05), fiamma: 1 - fase(t, T.tuffo, 0.05) }
+  }
+  if (t >= T.inviata && t < T.stacco && mT) { // nasce dall'icona della segnalazione inviata, che arriva con la schermata
+    const [ix, iy] = mezzo(A4.icona)
+    const [x, y] = puntoTel(ix + 393 * (1 - molla(t - T.inviata, 2.1, 0.92)), iy)
+    return { x, y, d: sp(t, T.inviata + 0.02, 0, 66, 2.8, 0.55) }
+  }
+  if (t >= T.stacco && t < T.atterra + 0.02) { // vola sulla mappa
+    const a = puntoTel(...mezzo(A4.icona), statoTel(T.stacco).m), k = entrambi3(fase(t, T.stacco, 1.0))
+    const [x, y] = bezier(a, [a[0] - 260, a[1] - 420], [960, 540], k)
+    return { x, y, d: lerp(66, 74, k) + 90 * Math.sin(Math.PI * k) }
+  }
+  if (t >= T.atterra + 0.02 && t < T.displayEntra) { // viaggia verso la centrale
+    const st = statoB(t), [x, y] = schermoB(puntoPercorso(percorsoB(t)), st)
+    return { x, y, d: 74 * st.s }
+  }
+  if (t >= T.displayEntra && t < T.notifica + 0.02 && mD) { // entra nel contatore delle segnalazioni della dashboard
+    const a = schermoB(puntoPercorso(percorsoB(T.displayEntra)), statoB(T.displayEntra))
+    const b = puntoDis(...mezzo(M.d1.badge)), k = entrambi3(fase(t, T.displayEntra, T.notifica - T.displayEntra))
+    const [x, y] = bezier(a, [lerp(a[0], b[0], 0.5), Math.min(a[1], b[1]) - 260], b, k)
+    return { x, y, d: lerp(74, 20, k), o: 1 - fase(t, T.notifica - 0.08, 0.1) }
+  }
+  if (t >= T.pinLibero && t < T.finale) { // il gruppo di pin si stacca dal telefono che si allontana
+    const gd = gruppoD(T.pinLibero), g = puntoTel(gd[0] + DMAP.x, gd[1] + DMAP.y, statoTel(T.pinLibero).m)
+    const k = molla(t - T.pinLibero, 1.8, 0.9)
+    return { x: lerp(g[0], ATTESA_PIN[0], k), y: lerp(g[1], ATTESA_PIN[1], k), d: lerp(39 * 0.32, 70, k) }
+  }
+  if (t >= T.finale && t < T.logo) { // diventa il punto di "Spento prima." e poi va al centro
+    const [px, py] = SLOT_PUNTO
+    const k1 = molla(t - (T.punto - 0.45), 2.2, 0.8), k2 = molla(t - T.libera - 0.08, 1.5, 0.82)
+    return { x: lerp(lerp(ATTESA_PIN[0], px, k1), 960, k2), y: lerp(lerp(ATTESA_PIN[1], py, k1), 540, k2), d: lerp(lerp(70, 50, k1), 300, k2) }
+  }
+  if (t >= T.logo) { // logo
+    const morph = molla(t - T.logo, 1.9, 0.82), k = molla(t - T.nome, 1.6, 0.86)
+    const totale = 196 + 46 + PAROLA_W
+    return { x: lerp(960, 960 - totale / 2 + 98, k), y: 430, d: lerp(300, 196, morph), morph }
+  }
+  return null
+}
+function pin(t) {
+  const s = pinStato(t)
+  STATO_PIN.vis = !!s
+  if (!vis($('pinG'), !!s)) return
+  Object.assign(STATO_PIN, s)
+  const g = $('pinG'), d = s.d
+  g.style.transform = `translate(${(s.x - d / 2).toFixed(2)}px, ${(s.y - d / 2).toFixed(2)}px) scale(${(d / 96).toFixed(4)})`
+  op(g, s.o ?? 1)
+  const morph = s.morph ?? 0
+  $('pinCorpo').setAttribute('rx', lerp(48, 24, morph))
+  const b = $('pinBordo')
+  b.setAttribute('opacity', ((s.bordo ?? 1) * (1 - morph)).toFixed(3))
+  b.setAttribute('stroke-width', lerp(7.4, 0, morph).toFixed(2))
+  b.setAttribute('rx', lerp(44.3, 22, morph))
+  const f = $('pinFiamma')
+  f.setAttribute('transform', `translate(${lerp(23.088, 7, morph).toFixed(3)} ${lerp(23.088, 11, morph).toFixed(3)}) scale(${lerp(0.519, 0.85, morph).toFixed(4)})`)
+  f.setAttribute('stroke-width', lerp(9.2, 5.5, morph).toFixed(3))
+  f.setAttribute('opacity', (s.fiamma ?? 1).toFixed(3))
+  // impulsi dell'anello sui battiti quando il pin e' fermo
+  const battiti = [T.pinCade + 0.28, T.pinCade + 0.78, T.inviata + 0.12, T.inviata + 0.6, T.posizione, T.posizione + 0.5,
+    ...[...Array(13)].map((_, i) => T.atterra + i * 0.5), T.punto + 0.05, T.punto + 1.05, T.ultimo]
+  const ondaA = $('pinOnda'), ondaB = $('pinOnda2')
+  let usato = false
+  for (const b0 of battiti) if (!usato && impulso(ondaA, t, b0, 0.9, 1.3, 0.5)) usato = true
+  if (!usato) vis(ondaA, false)
+  ondaA.style.borderRadius = morph > 0.5 ? '25%' : '50%'
+  if (!impulso(ondaB, t, T.anello, 0.9, 7, 0.55) && !impulso(ondaB, t, T.atterra, 0.8, 3.2, 0.6)) vis(ondaB, false)
+  ondaB.style.background = 'transparent'
+  ondaB.style.boxShadow = `inset 0 0 0 ${t >= T.anello ? 1.6 : 2.4}px rgba(255,255,255,.95)`
+}
+
+// rosso del tuffo che si richiude nel pulsante SEGNALA
+function rosso(t) {
+  const el = $('rosso')
+  if (!vis(el, t >= T.tuffo + 0.11 && t < T.tuffo + 0.52 && !!mT)) return
+  const r = A1.segnala, p1 = puntoTel(r.x, r.y), p2 = puntoTel(r.x + r.w, r.y + r.h)
+  const k = fuoriExpo(fase(t, T.tuffo + 0.11, 0.34))
+  rett(el, { x: lerp(-40, p1[0], k), y: lerp(-40, p1[1], k), w: lerp(2000, p2[0] - p1[0], k), h: lerp(1160, p2[1] - p1[1], k) })
+  el.style.borderRadius = lerp(0, 24 * sT, k) + 'px'
+  op(el, 1 - fase(t, T.tuffo + 0.38, 0.12))
+}
+
+// linee dalla dashboard al telefono: la conferma e l'arrivo dei mezzi raggiungono il cittadino
+function linea(t) {
+  const finestre = [[T.lineaA, () => puntoDis(M.d3.avviso.x + 40, M.d3.avviso.y + 36), 'allertati'], [T.lineaB, () => puntoDis(...FUOCO_D4), 'mezzi']]
+  const w = finestre.find(([t0]) => t >= t0 - 0.05 && t < t0 + 0.75)
+  if (!vis($('lineaSvg'), !!w && !!mD && !!mT)) return
+  const [t0, da, stato] = w
+  const a = da(), b = puntoTel(...mezzo(A5[stato].stato))
+  const p = $('lineaP')
+  p.setAttribute('d', `M${a[0]} ${a[1]} C${a[0] + 160} ${a[1] - 360} ${b[0] - 260} ${b[1] - 300} ${b[0]} ${b[1]}`)
+  const L = p.getTotalLength(), k = fuori3(fase(t, t0 - 0.05, 0.4))
+  p.setAttribute('stroke-dasharray', `${L} ${L}`)
+  p.setAttribute('stroke-dashoffset', (L * (1 - k)).toFixed(1))
+  const pt = p.getPointAtLength(L * k)
+  $('lineaDot').setAttribute('cx', pt.x); $('lineaDot').setAttribute('cy', pt.y)
+  op($('lineaSvg'), 1 - fase(t, t0 + 0.4, 0.3))
+}
+
+// chiusura: logo, nome, frase, invito, crediti. L'ultimo fotogramma e' il quadro completo.
+function finale(t) {
+  const par = $('parola')
+  if (vis(par, t >= T.nome)) {
+    const ps = pinStato(t)
+    par.style.transform = `translate(${(ps.x + ps.d / 2 + 46).toFixed(2)}px, ${(430 - 80).toFixed(1)}px)`
+    par.style.clipPath = `inset(-20% ${(100 - 100 * fuori3(fase(t, T.nome + 0.05, 0.5))).toFixed(2)}% -30% 0)`
+  }
+  riga($('tag'), t, T.tag)
+  riga($('cta'), t, T.cta)
+  riga($('crediti'), t, T.crediti)
+  riga($('evento'), t, T.evento)
+  vis($('fonti'), t >= T.fonti); op($('fonti'), fase(t, T.fonti, 0.3))
+}
+
+// ---------------------------------------------------------------- render
+function disegna(t) {
+  apertura(t)
+  telefono(t)
+  schermoTelefono(t)
+  mappaB(t)
+  display(t)
+  testi(t)
+  pin(t)
+  vetri(t)
+  rosso(t)
+  linea(t)
+  finale(t)
+}
+async function render(t) {
+  t = clamp(t, 0, DUR)
+  await introVideo(t)
+  disegna(t)
+}
+window.render = render
+window.DURATA = DUR
+
+async function prepara() {
+  await document.fonts.ready
+  await Promise.all([...document.images].map((i) => i.decode().catch(() => {})))
+  const v = $('introV')
+  if (v.readyState < 2) await new Promise((ok) => v.addEventListener('loadeddata', ok, { once: true }))
+  const palco = $('palco').getBoundingClientRect()
+  const sd = $('slotDomanda').getBoundingClientRect(), fs = parseFloat(getComputedStyle($('h2b')).fontSize)
+  SLOT_DOMANDA = [sd.left - palco.left + sd.width * 0.58, sd.top - palco.top - fs * 0.26]
+  const sp2 = $('slotPunto').getBoundingClientRect(), fs2 = parseFloat(getComputedStyle($('tF2')).fontSize)
+  SLOT_PUNTO = [sp2.left - palco.left + sp2.width * 0.5, sp2.top - palco.top - fs2 * 0.01]
+  H2A_W = $('h2a').getBoundingClientRect().width
+  PAROLA_W = $('parola').getBoundingClientRect().width
+  VDEST_W = $('vDest').getBoundingClientRect().width
+  $('ora').textContent = M.ora ?? '13:16'
+  document.querySelectorAll('.vetro').forEach((el) => vis(el, false))
+  window.pronto = true
+}
+
+// ---------------------------------------------------------------- colonna sonora (Web Audio, OfflineAudioContext)
+// 120 BPM, re minore, 30 battute; cassa su ogni battito; colpi sui cambi scena; finale in Re maggiore.
+async function componiColonna(sr = 48000) {
+  const ac = new OfflineAudioContext(2, Math.ceil(DUR * sr), sr)
+  const bt = (n, b = 1) => (n - 1) * 2 + (b - 1) * BEAT
+  const rumore = ac.createBuffer(1, sr * 2, sr)
+  { const d = rumore.getChannelData(0); let s = 1234567; for (let i = 0; i < d.length; i++) { s = (s * 1103515245 + 12345) % 2147483648; d[i] = (s / 1073741824) - 1 } }
+  const master = ac.createGain(); master.gain.value = 0.9
+  const comp = ac.createDynamicsCompressor()
+  comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3.2; comp.attack.value = 0.005; comp.release.value = 0.18
+  // dinamica della forma, dopo il compressore: apertura trattenuta, D piu' intimo, finale pieno
+  const forma = ac.createGain()
+  master.connect(comp).connect(forma).connect(ac.destination)
+  for (const [t, v] of [[0, 0.55], [9.98, 0.62], [10.0, 0.88], [41.98, 0.88], [42.0, 0.78], [48.0, 0.8], [49.98, 0.92], [50.0, 1], [55.98, 1], [56.0, 0.9]]) forma.gain.linearRampToValueAtTime(v, t)
+  const ir = ac.createBuffer(2, sr * 2.8, sr)
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); let s = 99 + c * 7; for (let i = 0; i < d.length; i++) { s = (s * 1103515245 + 12345) % 2147483648; d[i] = ((s / 1073741824) - 1) * Math.pow(1 - i / d.length, 2.6) } }
+  const riverbero = ac.createConvolver(); riverbero.buffer = ir
+  const ritorno = ac.createGain(); ritorno.gain.value = 0.32
+  riverbero.connect(ritorno).connect(master)
+  const bus = ac.createGain()
+  // respiro prima del finale: basso e pad quasi muti nell'ultimo mezzo battito della battuta 25
+  const pausa = ac.createGain(); bus.connect(pausa).connect(master)
+  pausa.gain.setValueAtTime(1, 49.45); pausa.gain.linearRampToValueAtTime(0.1, 49.5); pausa.gain.setValueAtTime(0.1, 49.97); pausa.gain.linearRampToValueAtTime(1, 50.0)
+  const filtroKick = ac.createBiquadFilter(); filtroKick.type = 'lowpass'; filtroKick.frequency.setValueAtTime(380, 0)
+  filtroKick.frequency.setValueAtTime(380, 9.99); filtroKick.frequency.exponentialRampToValueAtTime(16000, 10.02)
+  filtroKick.connect(master)
+
+  const env = (g, t, a, v, d, fine = 0.0001) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(fine, t + a + d) }
+  const rum = (t, dur, dest, filtro, freq, q = 0.8, v = 0.3, a = 0.002) => {
+    const s = ac.createBufferSource(); s.buffer = rumore; s.loop = true
+    const f = ac.createBiquadFilter(); f.type = filtro; f.frequency.value = freq; f.Q.value = q
+    const g = ac.createGain(); env(g, t, a, v, dur)
+    s.connect(f).connect(g).connect(dest); s.start(t, (t * 0.618) % 1.5); s.stop(t + a + dur + 0.05)
+  }
+  const tono = (t, freq, dur, dest, tipo = 'sine', v = 0.3, a = 0.004) => {
+    const o = ac.createOscillator(); o.type = tipo; o.frequency.value = freq
+    const g = ac.createGain(); env(g, t, a, v, dur)
+    o.connect(g).connect(dest); o.start(t); o.stop(t + a + dur + 0.05)
+    return o
+  }
+  const kick = (t, v = 1) => {
+    const o = ac.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.12)
+    const g = ac.createGain(); env(g, t, 0.002, 0.95 * v, 0.42)
+    o.connect(g).connect(filtroKick); o.start(t); o.stop(t + 0.5)
+    rum(t, 0.012, filtroKick, 'highpass', 2500, 0.7, 0.18 * v)
+  }
+  const hat = (t, v = 0.12) => rum(t, 0.035, master, 'highpass', 7600, 0.7, v)
+  const clap = (t, v = 0.32) => {
+    for (const [dt, vv] of [[0, 0.7], [0.011, 0.6], [0.022, 1]]) rum(t + dt, dt < 0.02 ? 0.01 : 0.17, master, 'bandpass', 1500, 0.9, v * vv)
+    rum(t + 0.022, 0.4, riverbero, 'bandpass', 1800, 0.8, v * 0.5)
+  }
+  const pluck = (t, f, v = 0.22) => { tono(t, f, 0.32, master, 'triangle', v); tono(t, f * 2, 0.12, master, 'sine', v * 0.35); tono(t, f, 0.6, riverbero, 'triangle', v * 0.5) }
+  const campana = (t, f, v = 0.2, dur = 1.6) => {
+    const car = ac.createOscillator(); car.frequency.value = f
+    const mod = ac.createOscillator(); mod.frequency.value = f * 3.5
+    const mg = ac.createGain(); mg.gain.setValueAtTime(f * 2.2, t); mg.gain.exponentialRampToValueAtTime(f * 0.05, t + dur)
+    mod.connect(mg).connect(car.frequency)
+    const g = ac.createGain(); env(g, t, 0.003, v, dur)
+    car.connect(g); g.connect(master); g.connect(riverbero)
+    car.start(t); mod.start(t); car.stop(t + dur + 0.1); mod.stop(t + dur + 0.1)
+  }
+  const impatto = (t, v = 1) => {
+    const o = ac.createOscillator(); o.frequency.setValueAtTime(96, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.7)
+    const g = ac.createGain(); env(g, t, 0.003, 0.85 * v, 1.5)
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 1.6)
+    rum(t, 0.7, master, 'lowpass', 900, 0.6, 0.45 * v)
+    rum(t, 1.6, riverbero, 'lowpass', 2400, 0.5, 0.35 * v)
+  }
+  const crash = (t, v = 0.2) => { rum(t, 1.9, master, 'highpass', 5200, 0.5, v); rum(t, 1.4, riverbero, 'highpass', 4000, 0.5, v * 0.6) }
+  const riser = (t0, t1, v = 0.3) => {
+    const s = ac.createBufferSource(); s.buffer = rumore; s.loop = true
+    const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.4
+    f.frequency.setValueAtTime(350, t0); f.frequency.exponentialRampToValueAtTime(7500, t1)
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t1 - 0.02); g.gain.linearRampToValueAtTime(0, t1)
+    s.connect(f).connect(g); g.connect(master); g.connect(riverbero); s.start(t0); s.stop(t1 + 0.05)
+    const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(110, t0); o.frequency.exponentialRampToValueAtTime(880, t1)
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800
+    const g2 = ac.createGain(); g2.gain.setValueAtTime(0.0001, t0); g2.gain.exponentialRampToValueAtTime(v * 0.25, t1 - 0.02); g2.gain.linearRampToValueAtTime(0, t1)
+    o.connect(lp).connect(g2).connect(master); o.start(t0); o.stop(t1 + 0.05)
+  }
+  const fruscio = (t, dur, v = 0.16) => {
+    const s = ac.createBufferSource(); s.buffer = rumore; s.loop = true
+    const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.1
+    f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(2600, t + dur * 0.6); f.frequency.exponentialRampToValueAtTime(700, t + dur)
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur * 0.55); g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur + 0.05)
+  }
+  const tick = (t, v = 0.08, f = 2600) => tono(t, f, 0.018, master, 'sine', v, 0.001)
+  const tap = (t, v = 0.18) => { const o = tono(t, 1250, 0.05, master, 'sine', v, 0.001); o.frequency.exponentialRampToValueAtTime(650, t + 0.05); rum(t, 0.01, master, 'highpass', 3000, 0.7, v * 0.4) }
+  // crepitio e rombo del fuoco sotto il video d'apertura
+  for (let i = 0; i < 90; i++) { const t = 0.15 + ((i * 0.618034) % 1) * 6.0; rum(t, 0.015 + (i % 3) * 0.01, master, 'bandpass', 900 + (i * 397) % 2600, 1.6, 0.05 + (i % 5) * 0.012) }
+  { const s = ac.createBufferSource(); s.buffer = rumore; s.loop = true; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 240
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, 0); g.gain.exponentialRampToValueAtTime(0.22, 1.2); g.gain.setValueAtTime(0.22, 4.5); g.gain.exponentialRampToValueAtTime(0.0001, 6.8)
+    s.connect(f).connect(g).connect(master); s.start(0); s.stop(7) }
+
+  const N = { D1: 36.71, Bb1: 58.27, C2: 65.41, D2: 73.42, F2: 87.31, Bb2: 116.54, C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, Fd3: 185, G3: 196, A3: 220, C4: 261.63, D4: 293.66, A4: 440, D5: 587.33, F5: 698.46, G5: 783.99, A5: 880, C6: 1046.5, D6: 1174.66 }
+  const ACC = [null, 'Dm', 'Dm', 'Dm', 'Dm', 'Bb', 'Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'F', 'C', 'Dm', 'Bb', 'F', 'F', 'Dm', 'Bb', 'Dm', 'Bb', 'Dm', 'Bb', 'F', 'C', 'D']
+  const VOCI = { Dm: [N.D3, N.F3, N.A3], Bb: [N.Bb2, N.D3, N.F3], F: [N.F3, N.A3, N.C4], C: [N.C3, N.E3, N.G3], D: [N.D3, N.Fd3, N.A3] }
+  const BASSO = { Dm: N.D2, Bb: N.Bb1, F: N.F2, C: N.C2, D: N.D2 }
+  const filtroPad = ac.createBiquadFilter(); filtroPad.type = 'lowpass'; filtroPad.Q.value = 0.7
+  filtroPad.frequency.setValueAtTime(260, 0)
+  for (const [t, f] of [[10, 700], [27, 1500], [41, 1500], [42, 900], [50, 3200], [60, 1800]]) filtroPad.frequency.linearRampToValueAtTime(f, t)
+  const gPad = ac.createGain(); gPad.gain.value = 0.06
+  filtroPad.connect(gPad); gPad.connect(bus); gPad.connect(riverbero)
+  for (let b = 1; b <= 30; b++) {
+    const t0 = bt(b), ultima = b === 30
+    for (const f of VOCI[ACC[b]]) for (const det of [-6, 6]) {
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det
+      const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.25)
+      g.gain.setValueAtTime(0.5, t0 + (ultima ? 1.4 : 1.85)); g.gain.exponentialRampToValueAtTime(0.0001, t0 + (ultima ? 2.0 : 2.3))
+      o.connect(g).connect(filtroPad); o.start(t0); o.stop(t0 + 2.4)
+    }
+  }
+  { const o = ac.createOscillator(); o.frequency.value = N.D1; const g = ac.createGain(); g.gain.setValueAtTime(0.0001, 0); g.gain.exponentialRampToValueAtTime(0.11, 2); g.gain.setValueAtTime(0.11, 9.9); g.gain.exponentialRampToValueAtTime(0.0001, 10.6); o.connect(g).connect(master); o.start(0); o.stop(10.7) }
+
+  for (let i = 0; i < 120; i++) {
+    const t = i * BEAT
+    kick(t, t < 6 ? 0.6 : t < 10 ? 0.85 : t >= 56 ? 0.9 - (t - 56) * 0.13 : t >= 50 && t < 52 ? 1.12 : 1)
+    bus.gain.setValueAtTime(1, t); bus.gain.linearRampToValueAtTime(0.32, t + 0.012); bus.gain.linearRampToValueAtTime(1, t + 0.3)
+  }
+  const energia = (t) => t >= 10 && t < 56 && !(t >= 49.5 && t < 50)
+  for (let i = 0; i < 240; i++) {
+    const t = i * 0.25
+    if (!energia(t)) continue
+    const intimo = t >= 42 && t < 46
+    if (i % 2 === 1) hat(t, intimo ? 0.06 : t >= 50 && t < 52 ? 0.16 : 0.11)
+    else if ((t >= 25 && t < 28) || (t >= 47 && t < 49.5)) hat(t, 0.06)
+    if (i % 4 === 2 && Math.floor(t / 0.5) % 2 === 1 && !intimo) clap(t, t >= 50 ? 0.4 : 0.3)
+  }
+  for (let b = 6; b <= 28; b++) {
+    const f = BASSO[ACC[b]]
+    for (let k = 0; k < 8; k++) {
+      const t = bt(b) + k * 0.25
+      if ((k % 2 === 0 && b !== 26) || (t >= 49.5 && t < 50)) continue
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f
+      const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.value = f / 2
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = b >= 22 && b <= 24 ? 320 : 520
+      const g = ac.createGain(); env(g, t, 0.006, 0.34, 0.2)
+      o.connect(lp); o2.connect(lp); lp.connect(g).connect(bus); o.start(t); o2.start(t); o.stop(t + 0.3); o2.stop(t + 0.3)
+    }
+  }
+  for (let i = 0; i < 16; i++) { const t = 48 + i * 0.125; if (t < 49.875) rum(t, 0.07, master, 'bandpass', 1900, 0.9, 0.05 + i * 0.012) }
+  for (let i = 0; i < 16; i++) rum(49 + i * 0.0625, 0.04, master, 'bandpass', 2100, 0.9, 0.08 + i * 0.01)
+  riser(8.2, 10.0, 0.2); riser(48.0, 50.0, 0.34)
+  for (let i = 0; i < 16; i++) pluck(50 + i * 0.125, [N.D5, N.F5, N.A5, N.D6][i % 4], 0.055)
+  for (let k = 0; k < 8; k++) {
+    const t = 50 + k * 0.25, o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = N.D3
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100
+    const g = ac.createGain(); env(g, t, 0.005, 0.16, 0.2)
+    o.connect(lp).connect(g).connect(bus); o.start(t); o.stop(t + 0.3)
+  }
+
+  // colpi sui cambi scena
+  impatto(10.0, 1); crash(10.0, 0.16)
+  impatto(20.0, 0.75); impatto(28.0, 0.8); crash(28.0, 0.12); impatto(36.0, 0.55); impatto(42.0, 0.7)
+  impatto(50.0, 1.15); crash(50.0, 0.24)
+  impatto(54.0, 0.9); impatto(56.0, 0.7)
+  // apertura: contatore, pin
+  for (let i = 0; i < 18; i++) tick(2.0 + 0.8 * (1 - Math.pow(1 - i / 18, 2)), 0.05, 2800 + i * 40)
+  pluck(9.0, N.D4, 0.3); tick(9.12, 0.1, 1800)
+  // A: tocchi, scatto, dettatura, invio
+  tap(11.0); rum(11.5, 0.03, master, 'highpass', 2000, 0.6, 0.22); rum(11.55, 0.05, master, 'bandpass', 1200, 0.8, 0.16); tap(13.5)
+  for (let i = 0; i < 20; i++) tick(14.55 + i * 0.018, 0.025, 3400)
+  tap(16.5)
+  campana(17.0, N.D5, 0.2); campana(17.0, N.A5, 0.1)
+  fruscio(19.0, 0.9, 0.18); fruscio(27.5, 0.6, 0.14); fruscio(35.5, 0.5, 0.12); fruscio(41.5, 0.4, 0.1); fruscio(46.5, 0.4, 0.1); fruscio(48.5, 0.5, 0.14)
+  // B: controlli che si agganciano al pin, priorita' alta
+  ;[[21.5, N.D5], [22.5, N.F5], [23.5, N.G5], [24.5, N.A5], [25.5, N.C6]].forEach(([t, f]) => pluck(t, f, 0.16))
+  campana(26.5, N.D6, 0.14); campana(26.5, N.A5, 0.12)
+  // C: notifica, clic, coda, certificazione, soccorsi, stati sul telefono
+  campana(29.0, N.A5, 0.16, 1.2); campana(29.12, N.D6, 0.12, 1.2)
+  tap(30.0, 0.14); pluck(30.5, N.D4, 0.22); pluck(32.0, N.A5, 0.1); pluck(32.75, N.C6, 0.1); tap(34.0, 0.16); campana(34.08, N.F5, 0.12)
+  rum(34.55, 0.35, master, 'bandpass', 2400, 1.2, 0.06); campana(34.9, N.A4, 0.14)
+  tap(35.5, 0.14)
+  // partenza dei mezzi: motore che sale e si allontana
+  { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(70, 36.0); o.frequency.exponentialRampToValueAtTime(150, 38.6)
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, 36); lp.frequency.exponentialRampToValueAtTime(900, 38.6)
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, 36); g.gain.exponentialRampToValueAtTime(0.09, 36.6); g.gain.setValueAtTime(0.09, 38.2); g.gain.exponentialRampToValueAtTime(0.0001, 39.2)
+    o.connect(lp).connect(g).connect(master); o.start(36); o.stop(39.3) }
+  ;[37.9, 38.3, 38.75, 39.0].forEach((t, i) => pluck(t, [N.D5, N.F5, N.A5, N.D6][i], 0.1))
+  rum(39.35, 0.35, master, 'bandpass', 2400, 1.2, 0.06)
+  campana(39.7, N.F5, 0.16); campana(39.7, N.A5, 0.12); campana(39.7, N.C6, 0.1)
+  // D: avviso nel banner come una notifica, tocco, righe
+  tono(42.5, N.A5, 0.12, master, 'sine', 0.12); tono(42.66, N.F5, 0.18, master, 'sine', 0.12)
+  pluck(43.0, N.D5, 0.1); tap(46.0, 0.14); pluck(47.2, N.D5, 0.08); pluck(47.9, N.F5, 0.08)
+  // finale
+  tick(51.25, 0.14, 1600); pluck(51.25, N.A3, 0.2)
+  campana(54.0, N.D5, 0.22, 2.2); campana(54.0, N.A5, 0.14, 2.2)
+  campana(56.5, N.F5, 0.1, 1.6)
+  for (const f of [N.D3, N.Fd3, N.A3, N.D4]) tono(58.0, f, 1.9, riverbero, 'triangle', 0.08, 0.02)
+  campana(58.0, N.D5, 0.16, 2.0); campana(58.0, N.Fd3 * 4, 0.1, 2.0); campana(59.5, N.A5, 0.07, 0.5)
+
+  const buf = await ac.startRendering()
+  let picco = 0
+  for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) picco = Math.max(picco, Math.abs(d[i])) }
+  const g = 0.891 / (picco || 1)
+  for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c), n = d.length, nf = Math.floor(0.3 * sr); for (let i = 0; i < n; i++) d[i] *= g * (i > n - nf ? (n - i) / nf : 1) }
+  return buf
+}
+function wav(buf) {
+  const n = buf.length, ch = buf.numberOfChannels, sr = buf.sampleRate
+  const dv = new DataView(new ArrayBuffer(44 + n * ch * 2))
+  const s = (o, t) => [...t].forEach((c, i) => dv.setUint8(o + i, c.charCodeAt(0)))
+  s(0, 'RIFF'); dv.setUint32(4, 36 + n * ch * 2, true); s(8, 'WAVE'); s(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true)
+  dv.setUint16(22, ch, true); dv.setUint32(24, sr, true); dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true)
+  s(36, 'data'); dv.setUint32(40, n * ch * 2, true)
+  const dati = [...Array(ch)].map((_, c) => buf.getChannelData(c))
+  let o = 44
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { dv.setInt16(o, Math.round(clamp(dati[c][i], -1, 1) * 32767), true); o += 2 }
+  return new Uint8Array(dv.buffer)
+}
+window.esportaWav = async () => {
+  const b = wav(await componiColonna())
+  let bin = ''
+  for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000))
+  return btoa(bin)
+}
+
+// ---------------------------------------------------------------- anteprima nel browser (spazio = play, #t=12.5 = salta)
+prepara().then(() => {
+  if (RESA) return
+  const adatta = () => { $('palco').style.transform = `scale(${Math.min(innerWidth / 1920, innerHeight / 1080)})` }
+  adatta(); addEventListener('resize', adatta)
+  let partenza = Number((location.hash.match(/t=([\d.]+)/) || [])[1] || 0)
+  const v = $('introV')
+  v.currentTime = Math.min(partenza, 7.1)
+  disegna(partenza)
+  let ac = null, sorgente = null, inizio = 0, inPlay = false, buffer = null
+  const avvio = document.createElement('div'); avvio.id = 'avvio'; avvio.textContent = 'Spazio o clic per avviare'
+  document.body.appendChild(avvio)
+  async function play() {
+    if (!buffer) { avvio.textContent = 'Preparo la musica...'; buffer = await componiColonna() }
+    ac = ac || new AudioContext()
+    sorgente = ac.createBufferSource(); sorgente.buffer = buffer; sorgente.connect(ac.destination)
+    sorgente.start(0, partenza); inizio = ac.currentTime - partenza; inPlay = true; avvio.style.display = 'none'
+    if (partenza < VIDEO_FINE) { v.currentTime = partenza; v.play() }
+    const giro = () => { if (!inPlay) return; const t = ac.currentTime - inizio; disegna(t); if (t < DUR) requestAnimationFrame(giro); else { inPlay = false; partenza = 0 } }
+    requestAnimationFrame(giro)
+  }
+  function pausa() { if (!inPlay) return; inPlay = false; partenza = ac.currentTime - inizio; sorgente.stop(); v.pause() }
+  avvio.addEventListener('click', play)
+  addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); inPlay ? pausa() : play() }
+    if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') { pausa(); partenza = clamp(partenza + (e.code === 'ArrowRight' ? 1 : -1) / FPS, 0, DUR); v.currentTime = Math.min(partenza, 7.1); disegna(partenza) }
+  })
+})
+</script>
+</body>
+</html>

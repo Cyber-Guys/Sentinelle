@@ -1,5 +1,5 @@
 <inputs>
-Project: "Nurax" (precedentemente "Sentinelle"). Un prodotto reale e funzionante orientato alla prevenzione e geolocalizzazione degli incendi in Sardegna:
+Project: "Sentinelle". Un prodotto reale e funzionante orientato alla prevenzione e geolocalizzazione degli incendi in Sardegna:
 App mobile citizen-centric (interfaccia mobile, lingua italiana) e dashboard operatori COP.
 Fonti di verità e specifiche di progetto incentrate su: UX ad attrito zero, validazione incrociata contro falsi allarmi, bollettini CFD Protezione Civile, geofencing domestico.
 Audience: Giuria dell'hackathon, film proiettato in sala. Punteggio 1-5 su idea, prototipo, novità, impatto sociale, team, presentazione.

@@ -3,6 +3,11 @@
 File ufficiali ricevuti dagli organizzatori (sola lettura):
 
 - `Elenco dataset.xlsx`: fonti dati per area tematica (3 fogli).
+- `Vedemecum_hackathon.pdf`: vademecum dell'evento.
+- `criteri/criteri-di-valutazione.pdf`: criteri con cui la giuria ha valutato i progetti.
+- `dataset/`: l'elenco dataset nella versione del pacchetto finale e la scheda della challenge 4 (acque).
+- `pitch/`: slide "Come si prepara un pitch" (CIIRCLE).
+- `template/`: template PowerPoint CIIRCLE per la presentazione.
 - Due email di Open Campus (iscrizione, dataset e webinar), sintetizzate sotto.
 
 ## Sintesi
