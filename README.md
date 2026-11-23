@@ -5,7 +5,10 @@
 <p align="center">
   <b>I cittadini segnalano incendi e completano missioni di prevenzione; gli operatori ricevono le segnalazioni già verificate e ordinate per priorità.</b><br>
   <sub>GreenLab Sardegna Hackathon · Cagliari · Challenge 2, prevenzione incendi · realizzato il 16 e 17 ottobre 2026 dal team CyberGuys</sub><br>
-  <a href="docs/pitch/trailer/sentinelle-trailer.mp4">▶ Guarda il trailer (30 s)</a>
+</p>
+
+<p align="center">
+  <a href="docs/pitch/trailer/sentinelle-trailer.mp4"><img src="docs/pitch/trailer/sentinelle-trailer.gif" width="100%" alt="Trailer di Sentinelle (clicca per il video completo con audio)"></a>
 </p>
 
 <p align="center">
